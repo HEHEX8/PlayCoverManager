@@ -341,8 +341,8 @@ extract_ipa_info() {
         exit_with_cleanup 1 "アプリ名取得エラー"
     fi
     
-    # Clean up app name (remove spaces, convert to ASCII-safe name)
-    APP_VOLUME_NAME=$(echo "$APP_NAME" | tr -d ' ' | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || echo "$APP_NAME" | tr -d ' ')
+    # Clean up app name (remove spaces and symbols, keep only alphanumeric)
+    APP_VOLUME_NAME=$(echo "$APP_NAME" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g')
     
     # Cleanup
     rm -rf "$temp_dir"
@@ -370,15 +370,21 @@ select_installation_disk() {
         playcover_disk=$(echo "$PLAYCOVER_VOLUME_DEVICE" | sed -E 's|/dev/(disk[0-9]+).*|\1|')
         
         print_info "PlayCover ボリュームが存在するディスク: ${playcover_disk}"
+        print_info "PlayCover ボリュームデバイス: ${PLAYCOVER_VOLUME_DEVICE}"
         
         # Find APFS container for this disk
-        local container=$(find_apfs_container "/dev/${playcover_disk}")
+        local container=$(find_apfs_container "${playcover_disk}")
         
         if [[ -n "$container" ]]; then
             SELECTED_DISK="$container"
             print_success "インストール先を自動選択しました: ${SELECTED_DISK}"
         else
             print_error "APFS コンテナの検出に失敗しました"
+            print_info "デバッグ: diskutil list の出力を確認中..."
+            diskutil list | grep -A 5 "$playcover_disk"
+            echo ""
+            print_info "デバッグ: diskutil info の出力を確認中..."
+            diskutil info "$PLAYCOVER_VOLUME_DEVICE" | grep -E "(Container|Type|APFS)"
             exit_with_cleanup 1 "APFS コンテナ検出エラー"
         fi
     else
@@ -393,28 +399,42 @@ find_apfs_container() {
     local physical_disk=$1
     local container=""
     
-    # Method 1: Look for synthesized disk
+    # Extract disk number (e.g., /dev/disk5 -> 5, disk5 -> 5)
+    local disk_num=$(echo "$physical_disk" | sed -E 's|.*/disk([0-9]+).*|\1|')
+    
+    # Method 1: Check if the disk itself is already a container (synthesized)
+    local disk_type=$(diskutil info "$physical_disk" 2>/dev/null | grep "Type (Bundle)")
+    if [[ "$disk_type" =~ "apfs" ]]; then
+        # This is already an APFS container
+        container=$(echo "$physical_disk" | sed -E 's|/dev/||' | sed -E 's|s[0-9]+$||')
+        echo "$container"
+        return 0
+    fi
+    
+    # Method 2: Look for synthesized disk with same base number
     while IFS= read -r line; do
-        if [[ "$line" =~ /dev/(disk[0-9]+).*synthesized ]]; then
-            local synth_disk=$(echo "$line" | sed -E 's|^/dev/(disk[0-9]+).*|\1|')
-            local parent=$(diskutil info "/dev/$synth_disk" 2>/dev/null | grep "PV UUID" | head -n 1)
-            if [[ -n "$parent" ]]; then
-                container="$synth_disk"
+        if [[ "$line" =~ /dev/(disk${disk_num})[[:space:]] ]]; then
+            local found_disk=$(echo "$line" | grep -oE 'disk[0-9]+' | head -n 1)
+            local disk_info=$(diskutil info "/dev/$found_disk" 2>/dev/null)
+            if echo "$disk_info" | grep -q "synthesized"; then
+                container="$found_disk"
                 break
             fi
         fi
     done < <(diskutil list)
     
-    # Method 2: Use diskutil apfs list
+    # Method 3: Use diskutil apfs list to find container
     if [[ -z "$container" ]]; then
-        local disk_num=$(echo "$physical_disk" | sed -E 's|/dev/disk([0-9]+)|\1|')
         while IFS= read -r line; do
-            if [[ "$line" =~ "APFS Container" ]] && [[ "$line" =~ disk[0-9]+ ]]; then
+            if [[ "$line" =~ "APFS Container" ]]; then
                 local found_container=$(echo "$line" | grep -oE 'disk[0-9]+')
-                local container_info=$(diskutil info "$found_container" 2>/dev/null)
-                if echo "$container_info" | grep -q "APFS Physical Store.*disk${disk_num}"; then
-                    container="$found_container"
-                    break
+                if [[ -n "$found_container" ]]; then
+                    local container_info=$(diskutil info "$found_container" 2>/dev/null)
+                    # Check if this container is on the same physical disk
+                    if echo "$container_info" | grep -q "disk${disk_num}"; then
+                        container="$found_container"
+                        break
+                    fi
                 fi
             fi
         done < <(diskutil apfs list)
