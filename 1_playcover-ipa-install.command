@@ -399,46 +399,57 @@ find_apfs_container() {
     local physical_disk=$1
     local container=""
     
-    # Extract disk number (e.g., /dev/disk5 -> 5, disk5 -> 5)
-    local disk_num=$(echo "$physical_disk" | sed -E 's|.*/disk([0-9]+).*|\1|')
+    # Method 1: Get APFS Container directly from the volume device
+    if [[ "$physical_disk" =~ disk[0-9]+ ]]; then
+        # If input is a volume device (e.g., disk5s1), get info from PLAYCOVER_VOLUME_DEVICE
+        local volume_info=$(diskutil info "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null)
+        
+        # Extract APFS Container from volume info
+        container=$(echo "$volume_info" | grep "APFS Container:" | awk '{print $NF}')
+        
+        if [[ -n "$container" ]]; then
+            echo "$container"
+            return 0
+        fi
+    fi
     
-    # Method 1: Check if the disk itself is already a container (synthesized)
-    local disk_type=$(diskutil info "$physical_disk" 2>/dev/null | grep "Type (Bundle)")
-    if [[ "$disk_type" =~ "apfs" ]]; then
-        # This is already an APFS container
-        container=$(echo "$physical_disk" | sed -E 's|/dev/||' | sed -E 's|s[0-9]+$||')
+    # Method 2: Check if the disk itself is already a container
+    local disk_num=$(echo "$physical_disk" | sed -E 's|.*/disk([0-9]+).*|\1|')
+    local disk_device="/dev/disk${disk_num}"
+    
+    local disk_info=$(diskutil info "$disk_device" 2>/dev/null)
+    if echo "$disk_info" | grep -q "APFS Container Scheme"; then
+        # This disk is an APFS container
+        container="disk${disk_num}"
         echo "$container"
         return 0
     fi
     
-    # Method 2: Look for synthesized disk with same base number
+    # Method 3: Look for synthesized disk with same base number
     while IFS= read -r line; do
-        if [[ "$line" =~ /dev/(disk${disk_num})[[:space:]] ]]; then
+        if [[ "$line" =~ /dev/(disk${disk_num})[[:space:]].*synthesized ]]; then
             local found_disk=$(echo "$line" | grep -oE 'disk[0-9]+' | head -n 1)
-            local disk_info=$(diskutil info "/dev/$found_disk" 2>/dev/null)
-            if echo "$disk_info" | grep -q "synthesized"; then
-                container="$found_disk"
-                break
-            fi
+            container="$found_disk"
+            echo "$container"
+            return 0
         fi
     done < <(diskutil list)
     
-    # Method 3: Use diskutil apfs list to find container
-    if [[ -z "$container" ]]; then
-        while IFS= read -r line; do
-            if [[ "$line" =~ "APFS Container" ]]; then
-                local found_container=$(echo "$line" | grep -oE 'disk[0-9]+')
-                if [[ -n "$found_container" ]]; then
-                    local container_info=$(diskutil info "$found_container" 2>/dev/null)
-                    # Check if this container is on the same physical disk
-                    if echo "$container_info" | grep -q "disk${disk_num}"; then
-                        container="$found_container"
-                        break
-                    fi
+    # Method 4: Use diskutil apfs list to find container
+    while IFS= read -r line; do
+        if [[ "$line" =~ "APFS Container" ]]; then
+            local found_container=$(echo "$line" | grep -oE 'disk[0-9]+')
+            if [[ -n "$found_container" ]]; then
+                local container_info=$(diskutil info "$found_container" 2>/dev/null)
+                # Check if this container is on the same physical disk
+                if echo "$container_info" | grep -q "disk${disk_num}"; then
+                    container="$found_container"
+                    echo "$container"
+                    return 0
                 fi
             fi
-        done < <(diskutil apfs list)
-    fi
+        fi
+    done < <(diskutil apfs list)
     
     echo "$container"
 }
