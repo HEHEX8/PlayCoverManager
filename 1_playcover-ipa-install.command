@@ -346,9 +346,22 @@ extract_ipa_info() {
         APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$info_plist" 2>/dev/null)
     fi
     
+    # Extract English App Name first (always needed for volume naming)
+    local app_name_en=""
+    app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$info_plist" 2>/dev/null)
+    
+    if [[ -z "$app_name_en" ]]; then
+        app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "$info_plist" 2>/dev/null)
+    fi
+    
+    if [[ -z "$app_name_en" ]]; then
+        print_error "アプリ名の取得に失敗しました"
+        rm -rf "$temp_dir"
+        exit_with_cleanup 1 "アプリ名取得エラー"
+    fi
+    
     # Extract Japanese App Name (priority: ja_JP localization)
     local app_name_ja=""
-    local app_name_en=""
     
     # Try to get localized Japanese name from InfoPlist.strings
     local strings_path=$(unzip -l "$SELECTED_IPA" 2>/dev/null | grep -E "Payload/.*\.app/ja\.lproj/InfoPlist\.strings" | head -n 1 | awk '{print $NF}')
@@ -362,30 +375,15 @@ extract_ipa_info() {
         fi
     fi
     
-    # Fallback: Try CFBundleDisplayName from main Info.plist
-    if [[ -z "$app_name_ja" ]]; then
-        app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$info_plist" 2>/dev/null)
-    fi
-    
-    # Further fallback: CFBundleName
-    if [[ -z "$app_name_en" ]]; then
-        app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "$info_plist" 2>/dev/null)
-    fi
-    
     # Set APP_NAME (Japanese first, then English fallback)
     if [[ -n "$app_name_ja" ]]; then
         APP_NAME="$app_name_ja"
-        APP_NAME_EN="$app_name_en"  # Keep English name for volume naming
     else
         APP_NAME="$app_name_en"
-        APP_NAME_EN="$app_name_en"
     fi
     
-    if [[ -z "$APP_NAME" ]]; then
-        print_error "アプリ名の取得に失敗しました"
-        rm -rf "$temp_dir"
-        exit_with_cleanup 1 "アプリ名取得エラー"
-    fi
+    # Always set APP_NAME_EN for volume naming
+    APP_NAME_EN="$app_name_en"
     
     # Clean up English name for volume naming (remove spaces and symbols, keep only alphanumeric)
     APP_VOLUME_NAME=$(echo "$APP_NAME_EN" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME_EN" | sed 's/[^a-zA-Z0-9]//g')
@@ -936,16 +934,26 @@ install_ipa_to_playcover() {
     # Check if app is already installed
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Data/Library/Application Support/io.playcover.PlayCover/PlayChain"
     
+    print_info "既存アプリを検索中..."
+    
     if [[ -d "$playcover_apps" ]]; then
         # Find app by Bundle ID
         local existing_app_path=""
         local existing_app_version=""
         local existing_app_name=""
         
+        # Debug: Count apps
+        local app_count=$(find "$playcover_apps" -type d -name "*.app" 2>/dev/null | wc -l | xargs)
+        print_info "PlayChain 内のアプリ数: ${app_count}"
+        
         # Search for app with matching Bundle ID
         while IFS= read -r app_path; do
             if [[ -f "${app_path}/Info.plist" ]]; then
                 local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                
+                # Debug: Show found apps
+                print_info "検索中: ${bundle_id}"
+                
                 if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
                     existing_app_path="$app_path"
                     existing_app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
@@ -956,10 +964,11 @@ install_ipa_to_playcover() {
                     if [[ -z "$existing_app_name" ]]; then
                         existing_app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
                     fi
+                    print_success "一致するアプリを発見しました"
                     break
                 fi
             fi
-        done < <(find "$playcover_apps" -type d -name "*.app" 2>/dev/null)
+        done < <(find "$playcover_apps" -maxdepth 1 -type d -name "*.app" 2>/dev/null)
         
         if [[ -n "$existing_app_path" ]]; then
             print_warning "アプリは既にインストールされています"
@@ -985,7 +994,11 @@ install_ipa_to_playcover() {
             fi
             
             print_info "既存のアプリを上書きします"
+        else
+            print_info "既存アプリは見つかりませんでした（新規インストール）"
         fi
+    else
+        print_info "PlayChain ディレクトリが見つかりません（新規インストール）"
     fi
     
     # Use PlayCover CLI or open with PlayCover
