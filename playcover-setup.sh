@@ -322,7 +322,7 @@ select_destination_disk() {
 #######################################################
 
 confirm_installations() {
-    print_header "08. 追加インストール項目の確認"
+    print_header "08. 追加インストール項目の一括承認"
     
     local need_install=false
     local install_items=()
@@ -423,6 +423,21 @@ mount_volume_to_container() {
     if [[ -z "$volume_device" ]]; then
         print_error "ボリュームデバイスが見つかりません"
         exit_with_cleanup 1 "ボリュームマウントエラー"
+    fi
+    
+    # Check if volume is already mounted at the target location
+    local current_mount=$(diskutil info "${VOLUME_NAME}" | grep "Mount Point:" | sed 's/.*: *//')
+    if [[ "$current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
+        print_success "ボリュームは既にマウントされています"
+        print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
+        echo ""
+        return 0
+    fi
+    
+    # If volume is mounted elsewhere, unmount it first
+    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
+        print_info "ボリュームを一時的にアンマウント中..."
+        sudo diskutil unmount "$volume_device" 2>/dev/null || true
     fi
     
     # Check if container directory exists and has data
@@ -542,7 +557,7 @@ mount_volume_to_container() {
 }
 
 #######################################################
-# 11. Install Required Software
+# 11. Install Required Software (After Mount)
 #######################################################
 
 install_xcode_tools() {
@@ -587,7 +602,7 @@ install_playcover() {
 }
 
 perform_installations() {
-    print_header "11. 追加ソフトウェアのインストール"
+    print_header "11. 追加インストール項目の一括インストール処理"
     
     if $NEED_XCODE_TOOLS; then
         install_xcode_tools
@@ -657,18 +672,18 @@ main() {
     echo ""
     
     # Execute setup steps
-    check_architecture
-    check_full_disk_access
-    check_xcode_tools
-    check_homebrew
-    check_playcover
-    authenticate_sudo
-    select_destination_disk
-    confirm_installations
-    create_playcover_volume
-    mount_volume_to_container
-    perform_installations
-    create_mapping_data
+    check_architecture              # 01
+    check_full_disk_access          # 02
+    check_xcode_tools               # 03
+    check_homebrew                  # 04
+    check_playcover                 # 05
+    authenticate_sudo               # 06
+    select_destination_disk         # 07
+    confirm_installations           # 08
+    create_playcover_volume         # 09
+    mount_volume_to_container       # 10
+    perform_installations           # 11
+    create_mapping_data             # 12
     
     # Final success message
     print_header "セットアップ完了"
