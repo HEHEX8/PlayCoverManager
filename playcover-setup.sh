@@ -212,36 +212,72 @@ authenticate_sudo() {
 select_destination_disk() {
     print_header "07. コンテナボリューム作成先の選択"
     
-    # Get list of mounted volumes excluding internal storage
-    local internal_disk=$(diskutil info / | grep "Device Node:" | awk '{print $3}' | sed 's/s[0-9]*$//')
+    # Get root volume's physical disk identifier
+    local root_device=$(diskutil info / | grep "Device Node:" | awk '{print $3}')
+    local internal_disk=$(echo "$root_device" | sed -E 's/disk([0-9]+).*/disk\1/')
     
     print_info "利用可能な外部ストレージを検索中..."
     echo ""
     
-    # List all physical disks
+    # List all physical disks (disk0, disk1, disk2, etc. - not partitions)
     local -a external_disks
     local -a disk_info
+    local -a seen_disks
     local index=1
     
-    while IFS= read -r disk; do
-        local disk_name=$(echo "$disk" | awk '{print $1}')
-        
-        # Skip internal disk
-        if [[ "$disk_name" == "$internal_disk" ]]; then
-            continue
+    # Get unique physical disk identifiers from diskutil list
+    while IFS= read -r line; do
+        # Match lines like "/dev/disk0 (internal, physical):"
+        if [[ "$line" =~ ^/dev/(disk[0-9]+) ]]; then
+            local disk_id="${BASH_REMATCH[1]}"
+            local full_line="$line"
+            
+            # Skip if already processed (avoid duplicates)
+            local already_seen=false
+            for seen in "${seen_disks[@]}"; do
+                if [[ "$seen" == "$disk_id" ]]; then
+                    already_seen=true
+                    break
+                fi
+            done
+            
+            if $already_seen; then
+                continue
+            fi
+            
+            seen_disks+=("$disk_id")
+            
+            # Check if this is internal storage
+            if [[ "$disk_id" == "$internal_disk" ]]; then
+                continue
+            fi
+            
+            # Skip if marked as internal
+            if [[ "$full_line" =~ "internal" ]]; then
+                continue
+            fi
+            
+            # Get disk information
+            local device_name=$(diskutil info "/dev/$disk_id" | grep "Device / Media Name:" | sed 's/.*: *//')
+            local total_size=$(diskutil info "/dev/$disk_id" | grep "Disk Size:" | sed 's/.*: *//' | awk '{print $1, $2}')
+            
+            # Skip if couldn't get device name or size
+            if [[ -z "$device_name" ]] || [[ -z "$total_size" ]]; then
+                continue
+            fi
+            
+            # Check for removable/external property
+            local is_external=$(diskutil info "/dev/$disk_id" | grep "Removable Media:" | grep "Yes")
+            local protocol=$(diskutil info "/dev/$disk_id" | grep "Protocol:" | sed 's/.*: *//')
+            
+            # Include only external/removable disks or USB/Thunderbolt
+            if [[ -n "$is_external" ]] || [[ "$protocol" =~ (USB|Thunderbolt) ]]; then
+                external_disks+=("/dev/$disk_id")
+                disk_info+=("${index}. ${device_name} (${total_size}) [${protocol}]")
+                ((index++))
+            fi
         fi
-        
-        # Get disk information
-        local device_name=$(diskutil info "$disk_name" | grep "Device / Media Name:" | sed 's/.*: *//')
-        local total_size=$(diskutil info "$disk_name" | grep "Disk Size:" | sed 's/.*: *//' | awk '{print $1, $2}')
-        local volume_name=$(diskutil info "$disk_name" | grep "Volume Name:" | sed 's/.*: *//' || echo "名称なし")
-        
-        if [[ -n "$device_name" ]]; then
-            external_disks+=("$disk_name")
-            disk_info+=("${index}. ${device_name} (${total_size}) - ${volume_name}")
-            ((index++))
-        fi
-    done < <(diskutil list | grep "^/dev/disk" | grep -v "disk image")
+    done < <(diskutil list)
     
     if [[ ${#external_disks[@]} -eq 0 ]]; then
         print_error "外部ストレージが見つかりません"
