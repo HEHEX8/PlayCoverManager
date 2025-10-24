@@ -18,7 +18,8 @@ readonly NC='\033[0m' # No Color
 readonly PLAYCOVER_BUNDLE_ID="io.playcover.PlayCover"
 readonly PLAYCOVER_CONTAINER="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
 readonly VOLUME_NAME="PlayCover"
-readonly MAPPING_FILE="${HOME}/playcover-map.txt"
+readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 
 # Global variables
 SELECTED_DISK=""
@@ -389,23 +390,47 @@ create_playcover_volume() {
     print_info "新しいAPFSボリュームを作成中..."
     
     # Get APFS container from the selected disk
-    # Look for synthesized volumes which point to the container
-    local container=$(diskutil apfs list | grep -A 20 "$SELECTED_DISK" | grep "APFS Container Reference" | awk '{print $NF}' | head -n 1)
+    # Physical disk (e.g., disk4) has synthesized container volume (e.g., disk5)
+    local container=""
     
-    if [[ -z "$container" ]]; then
-        # Alternative: Find container disk (diskNs2 format)
-        local container_candidates=$(diskutil list "$SELECTED_DISK" | grep "Container" | awk '{print $NF}')
-        for candidate in $container_candidates; do
-            if diskutil info "$candidate" | grep -q "APFS Container"; then
-                container="$candidate"
+    # Method 1: Look for synthesized disk that references the physical disk
+    while IFS= read -r line; do
+        if [[ "$line" =~ /dev/(disk[0-9]+).*synthesized ]]; then
+            local synth_disk=$(echo "$line" | sed -E 's|^/dev/(disk[0-9]+).*|\1|')
+            # Check if this synthesized disk is for our physical disk
+            local parent=$(diskutil info "/dev/$synth_disk" | grep "PV UUID" | head -n 1)
+            if [[ -n "$parent" ]]; then
+                # This is likely our APFS container
+                container="$synth_disk"
                 break
             fi
-        done
+        fi
+    done < <(diskutil list)
+    
+    # Method 2: Use diskutil apfs list to find container
+    if [[ -z "$container" ]]; then
+        # Extract disk number from selected disk (e.g., disk4 -> 4)
+        local disk_num=$(echo "$SELECTED_DISK" | sed -E 's|/dev/disk([0-9]+)|\1|')
+        
+        # Look for APFS containers and find the one that matches
+        while IFS= read -r line; do
+            if [[ "$line" =~ "APFS Container" ]] && [[ "$line" =~ disk[0-9]+ ]]; then
+                local found_container=$(echo "$line" | grep -oE 'disk[0-9]+')
+                # Check if this container is on our physical disk
+                local container_info=$(diskutil info "$found_container" 2>/dev/null)
+                if echo "$container_info" | grep -q "APFS Physical Store.*disk${disk_num}"; then
+                    container="$found_container"
+                    break
+                fi
+            fi
+        done < <(diskutil apfs list)
     fi
     
     if [[ -z "$container" ]]; then
         print_error "APFSコンテナが見つかりません"
         print_info "選択されたディスク: $SELECTED_DISK"
+        print_info "以下の情報を確認してください:"
+        diskutil list "$SELECTED_DISK"
         exit_with_cleanup 1 "ボリューム作成エラー"
     fi
     
