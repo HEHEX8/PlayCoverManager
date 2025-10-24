@@ -1,27 +1,48 @@
-# PlayCover 外部ストレージ環境構築スクリプト
+# PlayCover 外部ストレージ管理スクリプト集
 
 ## プロジェクト概要
 
-macOS Tahoe 26.0.1 (2025年9月15日リリース) 向けに最適化されたPlayCoverの外部ストレージ環境構築スクリプトです。PlayCoverのコンテナデータを外部ストレージに移行し、効率的なストレージ管理を実現します。
+macOS Tahoe 26.0.1 (2025年9月15日リリース) 向けに最適化されたPlayCoverの外部ストレージ管理スクリプト集です。PlayCoverとアプリのコンテナデータを外部ストレージに移行し、効率的なストレージ管理を実現します。
 
-## 主要機能
+## スクリプト一覧
 
-### 実装済み機能
+### 0_playcover-initial-setup.command
+**PlayCover初期環境構築スクリプト**
 
-1. ✅ **アーキテクチャ検証** - Apple Silicon Mac専用
-2. ✅ **フルディスクアクセス確認** - 必須権限の検証
-3. ✅ **依存関係チェック**
-   - Xcode Command Line Tools
-   - Homebrew
-   - PlayCover Community Edition
-4. ✅ **スーパーユーザー権限取得** - 事前認証による円滑な処理
-5. ✅ **外部ストレージ選択** - 内蔵ストレージを除外した選択UI
-6. ✅ **インストール確認プロンプト** - 不足コンポーネントの一括承認
-7. ✅ **APFSボリューム作成** - 重複チェック付き
-8. ✅ **データ移行とマウント** - データ競合の自動解決
-9. ✅ **自動インストール** - 不足コンポーネントの自動セットアップ
-10. ✅ **マッピングデータ管理** - `playcover-map.txt`への記録
-11. ✅ **自動終了処理** - 5秒後のターミナル自動クローズ
+PlayCover本体を外部ストレージに配置するための初期セットアップを行います。
+
+**実装機能:**
+1. ✅ Apple Silicon Mac専用アーキテクチャ検証
+2. ✅ フルディスクアクセス確認
+3. ✅ 依存関係チェック (Xcode CLI Tools, Homebrew, PlayCover)
+4. ✅ スーパーユーザー権限取得
+5. ✅ 外部ストレージ選択（内蔵ストレージ除外）
+6. ✅ インストール確認プロンプト
+7. ✅ PlayCover APFSボリューム作成
+8. ✅ データ移行とマウント（競合自動解決）
+9. ✅ 不足コンポーネント自動インストール
+10. ✅ マッピングデータ管理 (`playcover-map.txt`)
+11. ✅ 5秒後自動終了
+
+### 1_playcover-ipa-install.command
+**IPAインストールスクリプト**
+
+選択したIPAファイルから情報を自動抽出し、専用の外部ストレージボリュームを作成してインストールします。
+
+**実装機能:**
+1. ✅ PlayCover アプリ存在確認
+2. ✅ PlayCover マッピング登録確認
+3. ✅ フルディスクアクセスチェック
+4. ✅ スーパーユーザー権限取得
+5. ✅ PlayCover ボリュームマウント確認/自動マウント
+6. ✅ IPA ファイル選択（GUIダイアログ）
+7. ✅ IPA 情報自動取得（Bundle ID, アプリ名）
+8. ✅ インストール先ディスク自動選択
+9. ✅ アプリ専用ボリューム作成（重複時は既存使用）
+10. ✅ データ競合処理（内部/外部選択プロンプト）
+11. ✅ マッピングデータ自動登録
+12. ✅ PlayCover へ IPA インストール要求（上書き確認）
+13. ✅ 完了後自動終了
 
 ## 使用方法
 
@@ -30,7 +51,7 @@ macOS Tahoe 26.0.1 (2025年9月15日リリース) 向けに最適化されたPla
 macOSのGatekeeperにより、初回実行時に以下の警告が表示される場合があります：
 
 ```
-Appleは、"playcover-setup.command"にMacに損害を与えたり、
+Appleは、"*.command"にMacに損害を与えたり、
 プライバシーを侵害する可能性のあるマルウェアが含まれていないことを検証できませんでした。
 ```
 
@@ -38,7 +59,7 @@ Appleは、"playcover-setup.command"にMacに損害を与えたり、
 
 #### 方法1: 右クリックから開く（推奨）
 
-1. `playcover-setup.command` を **右クリック**
+1. `.command` ファイルを **右クリック**
 2. **「開く」** を選択
 3. 確認ダイアログで **「開く」** をクリック
 4. 以降は通常のダブルクリックで起動可能になります
@@ -47,7 +68,8 @@ Appleは、"playcover-setup.command"にMacに損害を与えたり、
 
 ```bash
 cd /path/to/script
-./playcover-setup.command
+./0_playcover-initial-setup.command  # 初期セットアップ
+./1_playcover-ipa-install.command    # IPAインストール
 ```
 
 ターミナルから実行する場合、Gatekeeperの警告は表示されません。
@@ -55,7 +77,8 @@ cd /path/to/script
 #### 方法3: 隔離属性を削除（上級者向け）
 
 ```bash
-xattr -d com.apple.quarantine playcover-setup.command
+# すべての.commandファイルから隔離属性を削除
+xattr -d com.apple.quarantine *.command
 ```
 
 ### 実行前の準備
@@ -68,41 +91,81 @@ xattr -d com.apple.quarantine playcover-setup.command
    - USB/Thunderbolt接続の外部ドライブを準備
    - APFS対応ストレージを推奨
 
-### 実行フロー
+## 使用ワークフロー
 
-1. Apple Silicon Macの確認
-2. フルディスクアクセス権限の検証
-3. 依存ソフトウェアの存在確認
-4. 管理者パスワードの入力
-5. 外部ストレージの選択（内蔵・論理ボリュームを除外）
-6. 不足コンポーネントのインストール承認
-7. PlayCoverボリュームの作成（既存時はスキップ）
-8. データ競合時の選択プロンプト
-   - 内部データを外部にコピー
-   - 外部データを使用（内部を削除）
-9. ボリュームのマウント
-10. 不足コンポーネントの自動インストール
-11. マッピングデータの記録
-12. 5秒後に自動終了
+### ステップ1: 初期セットアップ（初回のみ）
+
+```bash
+# または Finder からダブルクリック
+./0_playcover-initial-setup.command
+```
+
+**処理内容:**
+1. Apple Silicon Mac確認
+2. フルディスクアクセス権限検証
+3. 依存ソフトウェア確認
+4. 管理者パスワード入力
+5. 外部ストレージ選択
+6. 不足コンポーネントインストール承認
+7. PlayCover ボリューム作成
+8. データ競合処理（内部/外部選択）
+9. ボリュームマウント
+10. 不足ソフトウェア自動インストール
+11. マッピングデータ記録
+12. 5秒後自動終了
+
+### ステップ2: IPAインストール（必要に応じて繰り返し）
+
+```bash
+# または Finder からダブルクリック
+./1_playcover-ipa-install.command
+```
+
+**処理内容:**
+1. PlayCover アプリ確認
+2. PlayCover マッピング確認
+3. フルディスクアクセス確認
+4. 管理者パスワード入力
+5. PlayCover ボリュームマウント確認
+6. IPA ファイル選択（GUI）
+7. IPA 情報自動抽出
+8. インストール先ディスク自動選択
+9. アプリ専用ボリューム作成
+10. データ競合処理
+11. マッピングデータ登録
+12. PlayCover へインストール要求
+13. 完了後自動終了
 
 ## データ構造
 
 ### マッピングファイル形式
 
-**ファイル名**: `~/playcover-map.txt`
+**ファイル名**: `playcover-map.txt` (スクリプトと同じディレクトリ)
 
 **形式**: `VolumeName [TAB] BundleID`
 
 **例**:
 ```
 PlayCover	io.playcover.PlayCover
+GenshinImpact	com.miHoYo.GenshinImpact
+HonkaiStarRail	com.HoYoverse.HonkaiStarRail
 ```
 
 ### ディレクトリ構成
 
 ```
-~/Library/Containers/io.playcover.PlayCover/  ← 外部ボリュームマウント先
-/Volumes/PlayCover/                            ← 直接アクセス可能
+外部ストレージ (例: /dev/disk5)
+├── PlayCover (APFS Volume)
+│   └── マウント先: ~/Library/Containers/io.playcover.PlayCover/
+├── GenshinImpact (APFS Volume)
+│   └── マウント先: ~/Library/Containers/com.miHoYo.GenshinImpact/
+└── HonkaiStarRail (APFS Volume)
+    └── マウント先: ~/Library/Containers/com.HoYoverse.HonkaiStarRail/
+
+直接アクセス:
+/Volumes/PlayCover/
+/Volumes/GenshinImpact/
+/Volumes/HonkaiStarRail/
 ```
 
 ## 技術仕様
