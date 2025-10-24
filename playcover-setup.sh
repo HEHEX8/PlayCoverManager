@@ -267,13 +267,20 @@ select_destination_disk() {
             fi
             
             # Check for removable/external property
-            local is_external=$(diskutil info "/dev/$disk_id" | grep "Removable Media:" | grep "Yes")
+            local is_removable=$(diskutil info "/dev/$disk_id" | grep "Removable Media:" | grep "Yes")
             local protocol=$(diskutil info "/dev/$disk_id" | grep "Protocol:" | sed 's/.*: *//')
+            local location=$(diskutil info "/dev/$disk_id" | grep "Device Location:" | sed 's/.*: *//')
             
-            # Include only external/removable disks or USB/Thunderbolt
-            if [[ -n "$is_external" ]] || [[ "$protocol" =~ (USB|Thunderbolt) ]]; then
+            # Include disk if:
+            # 1. Marked as removable media, OR
+            # 2. Protocol is USB/Thunderbolt/USB4, OR
+            # 3. Location is External (excludes internal connections)
+            if [[ -n "$is_removable" ]] || \
+               [[ "$protocol" =~ (USB|Thunderbolt|PCI-Express) ]] || \
+               [[ "$location" =~ External ]]; then
                 external_disks+=("/dev/$disk_id")
-                disk_info+=("${index}. ${device_name} (${total_size}) [${protocol}]")
+                local display_protocol="${protocol:-不明}"
+                disk_info+=("${index}. ${device_name} (${total_size}) [${display_protocol}]")
                 ((index++))
             fi
         fi
