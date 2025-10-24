@@ -247,6 +247,11 @@ select_destination_disk() {
             
             seen_disks+=("$disk_id")
             
+            # Only process physical disks (skip synthesized volumes)
+            if [[ ! "$full_line" =~ "physical" ]]; then
+                continue
+            fi
+            
             # Check if this is internal storage
             if [[ "$disk_id" == "$internal_disk" ]]; then
                 continue

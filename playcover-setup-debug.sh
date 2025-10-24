@@ -45,6 +45,13 @@ while IFS= read -r line; do
         
         seen_disks+=("$disk_id")
         
+        # Only process physical disks (skip synthesized volumes)
+        if [[ ! "$full_line" =~ "physical" ]]; then
+            echo "  → スキップ: 物理ディスクではありません (synthesized等)"
+            echo ""
+            continue
+        fi
+        
         # Check if this is internal storage
         if [[ "$disk_id" == "$internal_disk" ]]; then
             echo "  → スキップ: 内蔵ストレージ ($internal_disk と一致)"
