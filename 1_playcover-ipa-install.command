@@ -12,6 +12,7 @@ readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
 readonly NC='\033[0m' # No Color
 
 # Constants
@@ -68,17 +69,19 @@ exit_with_cleanup() {
     if [[ $exit_code -eq 0 ]]; then
         print_success "$message"
         echo ""
-        print_info "5秒後にターミナルを閉じます..."
-        sleep 5
-        osascript -e 'tell application "Terminal" to close first window' 2>/dev/null || true
+        print_info "3秒後にターミナルを自動で閉じます..."
+        sleep 3
+        # Close terminal window without confirmation prompt
+        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
     else
         print_error "$message"
         echo ""
-        print_info "5秒後にターミナルを閉じます..."
-        sleep 5
-        osascript -e 'tell application "Terminal" to close first window' 2>/dev/null || true
+        print_warning "エラーが発生しました。ログを確認してください。"
+        echo ""
+        echo -n "Enterキーを押すとターミナルを閉じます..."
+        read
+        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit $exit_code
     fi
-    exit $exit_code
 }
 
 #######################################################
@@ -231,9 +234,9 @@ mount_playcover_volume() {
         fi
     fi
     
-    # Mount to container path
+    # Mount to container path with nobrowse option (hide from Finder/Desktop)
     print_info "PlayCover ボリュームをマウント中..."
-    if sudo mount -t apfs "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
+    if sudo mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
         print_success "ボリュームを正常にマウントしました"
         sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
     else
@@ -766,7 +769,7 @@ mount_app_volume() {
     # Check if external volume has data
     local external_has_data=false
     local temp_mount=$(mktemp -d)
-    if sudo mount -t apfs "$volume_device" "$temp_mount" 2>/dev/null; then
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
         if [[ -n "$(ls -A "$temp_mount" 2>/dev/null)" ]]; then
             external_has_data=true
         fi
@@ -791,7 +794,7 @@ mount_app_volume() {
                 
                 # Mount external volume temporarily
                 local temp_mount=$(mktemp -d)
-                if sudo mount -t apfs "$volume_device" "$temp_mount"; then
+                if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                     # Clear external data
                     sudo rm -rf "$temp_mount"/* 2>/dev/null || true
                     
@@ -825,7 +828,7 @@ mount_app_volume() {
         print_info "内部ストレージのデータを外部にコピーします..."
         
         local temp_mount=$(mktemp -d)
-        if sudo mount -t apfs "$volume_device" "$temp_mount"; then
+        if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
             if sudo cp -a "$app_container"/* "$temp_mount"/ 2>/dev/null; then
                 print_success "データのコピーが完了しました"
             else
@@ -866,9 +869,9 @@ mount_app_volume() {
         exit_with_cleanup 1 "マウントポイント作成失敗"
     }
     
-    # Attempt mount with detailed error reporting
+    # Attempt mount with nobrowse option (hide from Finder/Desktop) and detailed error reporting
     print_info "マウントを実行中: ${volume_device} → ${app_container}"
-    if sudo mount -t apfs "$volume_device" "$app_container" 2>&1 | tee /tmp/mount_error.log; then
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$app_container" 2>&1 | tee /tmp/mount_error.log; then
         print_success "ボリュームを正常にマウントしました"
         print_info "マウント先: ${app_container}"
         
@@ -910,15 +913,21 @@ mount_app_volume() {
 register_mapping() {
     print_header "11. マッピングデータの登録"
     
-    local mapping_entry="${APP_VOLUME_NAME}	${APP_BUNDLE_ID}"
+    # Format: VolumeName	BundleID	DisplayName(Japanese/English)
+    local mapping_entry="${APP_VOLUME_NAME}	${APP_BUNDLE_ID}	${APP_NAME}"
     
-    # Check for duplicate
-    if grep -q "^${APP_VOLUME_NAME}[[:space:]]${APP_BUNDLE_ID}$" "$MAPPING_FILE" 2>/dev/null; then
+    # Check for duplicate (by volume name and bundle ID)
+    if grep -q "^${APP_VOLUME_NAME}[[:space:]]${APP_BUNDLE_ID}[[:space:]]" "$MAPPING_FILE" 2>/dev/null; then
         print_warning "マッピングは既に登録されています"
+        # Update the display name in case it changed
+        sed -i.bak "s|^${APP_VOLUME_NAME}[[:space:]]${APP_BUNDLE_ID}[[:space:]].*|${mapping_entry}|" "$MAPPING_FILE" 2>/dev/null
+        print_info "表示名を更新しました: ${APP_NAME}"
     else
         echo "$mapping_entry" >> "$MAPPING_FILE"
         print_success "マッピングデータを登録しました"
-        print_info "データ: ${mapping_entry}"
+        print_info "ボリューム: ${APP_VOLUME_NAME}"
+        print_info "Bundle ID: ${APP_BUNDLE_ID}"
+        print_info "表示名: ${APP_NAME}"
     fi
     
     echo ""
@@ -1043,10 +1052,23 @@ complete_installation() {
 # Main Execution
 #######################################################
 
+show_title() {
+    clear
+    
+    echo "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║                                                           ║"
+    echo "║           ${GREEN}PlayCover IPA インストール${CYAN}                   ║"
+    echo "║                                                           ║"
+    echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
+    echo "║                                                           ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo "${NC}"
+    echo ""
+}
+
 main() {
-    echo ""
-    print_header "PlayCover IPA インストールスクリプト"
-    echo ""
+    show_title
     
     check_playcover_app
     check_playcover_mapping

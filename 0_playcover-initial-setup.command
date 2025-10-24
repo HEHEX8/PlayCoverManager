@@ -12,6 +12,7 @@ readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
 readonly NC='\033[0m' # No Color
 
 # Constants
@@ -63,17 +64,19 @@ exit_with_cleanup() {
     if [[ $exit_code -eq 0 ]]; then
         print_success "$message"
         echo ""
-        print_info "5秒後にターミナルを閉じます..."
-        sleep 5
-        osascript -e 'tell application "Terminal" to close first window' 2>/dev/null || true
+        print_info "3秒後にターミナルを自動で閉じます..."
+        sleep 3
+        # Close terminal window without confirmation prompt
+        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
     else
         print_error "$message"
         echo ""
-        print_info "5秒後にターミナルを閉じます..."
-        sleep 5
-        osascript -e 'tell application "Terminal" to close first window' 2>/dev/null || true
+        print_warning "エラーが発生しました。ログを確認してください。"
+        echo ""
+        echo -n "Enterキーを押すとターミナルを閉じます..."
+        read
+        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit $exit_code
     fi
-    exit $exit_code
 }
 
 #######################################################
@@ -493,7 +496,7 @@ mount_volume_to_container() {
     local temp_mount="/tmp/playcover_temp_mount_$$"
     mkdir -p "$temp_mount"
     
-    if sudo mount -t apfs "$volume_device" "$temp_mount" 2>/dev/null; then
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
         if [[ $(find "$temp_mount" -mindepth 1 -maxdepth 1 ! -name ".*" 2>/dev/null | wc -l) -gt 0 ]]; then
             has_external_data=true
         fi
@@ -518,7 +521,7 @@ mount_volume_to_container() {
                 
                 # Mount volume temporarily
                 mkdir -p "$temp_mount"
-                sudo mount -t apfs "$volume_device" "$temp_mount"
+                sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
                 
                 # Clear external data
                 print_info "外部ストレージをクリア中..."
@@ -554,7 +557,7 @@ mount_volume_to_container() {
         
         # Mount volume temporarily
         mkdir -p "$temp_mount"
-        sudo mount -t apfs "$volume_device" "$temp_mount"
+        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
         
         # Copy data
         print_info "データをコピー中..."
@@ -578,9 +581,9 @@ mount_volume_to_container() {
     # Create mount point
     sudo mkdir -p "$PLAYCOVER_CONTAINER"
     
-    # Mount volume
+    # Mount volume with nobrowse option (hide from Finder/Desktop)
     print_info "ボリュームをマウント中..."
-    if sudo mount -t apfs "$volume_device" "$PLAYCOVER_CONTAINER"; then
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
         print_success "ボリュームを正常にマウントしました"
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
         
@@ -695,19 +698,23 @@ create_mapping_data() {
 # Main Execution
 #######################################################
 
-main() {
+show_title() {
     clear
     
-    echo "${GREEN}"
+    echo "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                                                           ║"
-    echo "║        PlayCover 外部ストレージ環境構築スクリプト         ║"
+    echo "║        ${GREEN}PlayCover 外部ストレージ環境構築${CYAN}               ║"
     echo "║                                                           ║"
-    echo "║              macOS Tahoe 26.0.1 対応版                    ║"
+    echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
     echo ""
+}
+
+main() {
+    show_title
     
     # Execute setup steps
     check_architecture              # 01
