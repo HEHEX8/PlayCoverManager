@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-macOS Sequoia 15.0.1 (Darwin Kernel 26.0.1) 向けに最適化されたPlayCoverの外部ストレージ環境構築スクリプトです。PlayCoverのコンテナデータを外部ストレージに移行し、効率的なストレージ管理を実現します。
+macOS Tahoe 26.0.1 (2025年9月15日リリース) 向けに最適化されたPlayCoverの外部ストレージ環境構築スクリプトです。PlayCoverのコンテナデータを外部ストレージに移行し、効率的なストレージ管理を実現します。
 
 ## 主要機能
 
@@ -84,7 +84,7 @@ PlayCover	io.playcover.PlayCover
 
 ### 対応環境
 
-- **OS**: macOS Sequoia 15.0.1 (Darwin Kernel 26.0.1)
+- **OS**: macOS Tahoe 26.0.1 (2025年9月15日リリース)
 - **アーキテクチャ**: Apple Silicon (arm64) のみ
 - **シェル**: zsh (macOS標準)
 - **ファイルシステム**: APFS
@@ -171,7 +171,7 @@ PlayCover	io.playcover.PlayCover
 
 - **作成日**: 2025年10月24日
 - **バージョン**: 1.0.0
-- **対応OS**: macOS Sequoia 15.0.1
+- **対応OS**: macOS Tahoe 26.0.1
 
 ### 使用上の注意
 
@@ -185,5 +185,5 @@ PlayCover	io.playcover.PlayCover
 
 - 初回リリース
 - 全11ステップの実装完了
-- macOS Sequoia 15.0.1 完全対応
+- macOS Tahoe 26.0.1 完全対応
 - zsh構文への完全準拠

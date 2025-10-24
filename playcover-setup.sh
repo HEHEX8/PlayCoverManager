@@ -2,7 +2,7 @@
 
 #######################################################
 # PlayCover External Storage Setup Script
-# macOS Sequoia 15.0.1 (Tahoe 26.0.1) Compatible
+# macOS Tahoe 26.0.1 Compatible
 #######################################################
 
 set -e
@@ -650,7 +650,7 @@ main() {
     echo "║                                                           ║"
     echo "║        PlayCover 外部ストレージ環境構築スクリプト         ║"
     echo "║                                                           ║"
-    echo "║              macOS Sequoia 15.0.1 対応版                  ║"
+    echo "║              macOS Tahoe 26.0.1 対応版                    ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
