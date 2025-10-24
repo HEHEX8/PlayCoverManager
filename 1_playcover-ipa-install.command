@@ -248,18 +248,40 @@ select_ipa_file() {
     print_header "06. インストールする IPA ファイルの選択"
     
     # Use AppleScript to select IPA file
-    local selected=$(osascript <<EOF 2>/dev/null
-tell application "System Events"
-    activate
-    set theFile to choose file with prompt "インストールする IPA ファイルを選択してください:" of type {"com.apple.ipa"}
-    return POSIX path of theFile
-end tell
+    # Try multiple type identifiers for IPA files
+    local selected=$(osascript <<'EOF' 2>/dev/null
+try
+    tell application "System Events"
+        activate
+        -- Try with multiple type identifiers
+        set theFile to choose file with prompt "インストールする IPA ファイルを選択してください:" of type {"ipa", "public.archive", "public.data"}
+        return POSIX path of theFile
+    end tell
+on error
+    -- Fallback: allow all files
+    tell application "System Events"
+        activate
+        set theFile to choose file with prompt "インストールする IPA ファイルを選択してください (.ipa):"
+        set filePath to POSIX path of theFile
+        if filePath does not end with ".ipa" then
+            error "選択されたファイルは IPA ファイルではありません"
+        end if
+        return filePath
+    end tell
+end try
 EOF
 )
     
     if [[ -z "$selected" ]] || [[ ! -f "$selected" ]]; then
         print_error "IPA ファイルが選択されませんでした"
         exit_with_cleanup 1 "IPA ファイル未選択"
+    fi
+    
+    # Verify file extension
+    if [[ ! "$selected" =~ \.ipa$ ]]; then
+        print_error "選択されたファイルは IPA ファイルではありません"
+        print_error "ファイル: ${selected}"
+        exit_with_cleanup 1 "無効なファイル形式"
     fi
     
     SELECTED_IPA="$selected"
