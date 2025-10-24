@@ -931,10 +931,11 @@ register_mapping() {
 install_ipa_to_playcover() {
     print_header "12. PlayCover への IPA インストール"
     
-    # Check if app is already installed
-    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Data/Library/Application Support/io.playcover.PlayCover/PlayChain"
+    # Check if app is already installed - correct path
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     
     print_info "既存アプリを検索中..."
+    print_info "検索パス: ${playcover_apps}"
     
     if [[ -d "$playcover_apps" ]]; then
         # Find app by Bundle ID
