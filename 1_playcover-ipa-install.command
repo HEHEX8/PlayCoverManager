@@ -25,6 +25,8 @@ readonly INITIAL_SETUP_SCRIPT="${SCRIPT_DIR}/0_playcover-initial-setup.command"
 # Global variables
 SELECTED_IPA=""
 APP_NAME=""
+APP_NAME_EN=""
+APP_VERSION=""
 APP_BUNDLE_ID=""
 APP_VOLUME_NAME=""
 SELECTED_DISK=""
@@ -338,11 +340,45 @@ extract_ipa_info() {
         exit_with_cleanup 1 "Bundle ID 取得エラー"
     fi
     
-    # Extract App Name (CFBundleDisplayName or CFBundleName)
-    APP_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$info_plist" 2>/dev/null)
+    # Extract App Version
+    APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$info_plist" 2>/dev/null)
+    if [[ -z "$APP_VERSION" ]]; then
+        APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$info_plist" 2>/dev/null)
+    fi
     
-    if [[ -z "$APP_NAME" ]]; then
-        APP_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "$info_plist" 2>/dev/null)
+    # Extract Japanese App Name (priority: ja_JP localization)
+    local app_name_ja=""
+    local app_name_en=""
+    
+    # Try to get localized Japanese name from InfoPlist.strings
+    local strings_path=$(unzip -l "$SELECTED_IPA" 2>/dev/null | grep -E "Payload/.*\.app/ja\.lproj/InfoPlist\.strings" | head -n 1 | awk '{print $NF}')
+    if [[ -n "$strings_path" ]]; then
+        # Extract Japanese strings file
+        unzip -q "$SELECTED_IPA" "$strings_path" -d "$temp_dir" 2>/dev/null || true
+        local ja_strings="${temp_dir}/${strings_path}"
+        if [[ -f "$ja_strings" ]]; then
+            # Try to extract CFBundleDisplayName from Japanese strings
+            app_name_ja=$(plutil -convert xml1 -o - "$ja_strings" 2>/dev/null | grep -A 1 "CFBundleDisplayName" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/' || true)
+        fi
+    fi
+    
+    # Fallback: Try CFBundleDisplayName from main Info.plist
+    if [[ -z "$app_name_ja" ]]; then
+        app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$info_plist" 2>/dev/null)
+    fi
+    
+    # Further fallback: CFBundleName
+    if [[ -z "$app_name_en" ]]; then
+        app_name_en=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "$info_plist" 2>/dev/null)
+    fi
+    
+    # Set APP_NAME (Japanese first, then English fallback)
+    if [[ -n "$app_name_ja" ]]; then
+        APP_NAME="$app_name_ja"
+        APP_NAME_EN="$app_name_en"  # Keep English name for volume naming
+    else
+        APP_NAME="$app_name_en"
+        APP_NAME_EN="$app_name_en"
     fi
     
     if [[ -z "$APP_NAME" ]]; then
@@ -351,14 +387,17 @@ extract_ipa_info() {
         exit_with_cleanup 1 "アプリ名取得エラー"
     fi
     
-    # Clean up app name (remove spaces and symbols, keep only alphanumeric)
-    APP_VOLUME_NAME=$(echo "$APP_NAME" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME" | sed 's/[^a-zA-Z0-9]//g')
+    # Clean up English name for volume naming (remove spaces and symbols, keep only alphanumeric)
+    APP_VOLUME_NAME=$(echo "$APP_NAME_EN" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME_EN" | sed 's/[^a-zA-Z0-9]//g')
     
     # Cleanup
     rm -rf "$temp_dir"
     
     print_success "IPA 情報を取得しました"
     print_info "アプリ名: ${APP_NAME}"
+    if [[ -n "$APP_VERSION" ]]; then
+        print_info "バージョン: ${APP_VERSION}"
+    fi
     print_info "Bundle ID: ${APP_BUNDLE_ID}"
     print_info "ボリューム名: ${APP_VOLUME_NAME}"
     
@@ -516,6 +555,28 @@ create_app_volume() {
     fi
     
     if [[ -z "$existing_volume" ]]; then
+        # Confirmation prompt before creating volume
+        echo ""
+        echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo "${BLUE}  ボリューム作成の確認${NC}"
+        echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo "  ${GREEN}アプリ名:${NC} ${APP_NAME}"
+        if [[ -n "$APP_VERSION" ]]; then
+            echo "  ${GREEN}バージョン:${NC} ${APP_VERSION}"
+        fi
+        echo "  ${GREEN}Bundle ID:${NC} ${APP_BUNDLE_ID}"
+        echo "  ${GREEN}ボリューム名:${NC} ${APP_VOLUME_NAME}"
+        echo "  ${GREEN}作成先:${NC} ${SELECTED_DISK}"
+        echo ""
+        echo -n "このボリュームを作成しますか？ (Y/n): "
+        read create_choice
+        
+        if [[ "$create_choice" =~ ^[Nn] ]]; then
+            print_info "ボリューム作成をキャンセルしました"
+            exit_with_cleanup 0 "ユーザーキャンセル"
+        fi
+        
         print_info "ボリューム「${APP_VOLUME_NAME}」を作成中..."
         
         # Create volume WITH -nomount to prevent auto-mounting to /Volumes/
@@ -876,10 +937,44 @@ install_ipa_to_playcover() {
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Data/Library/Application Support/io.playcover.PlayCover/PlayChain"
     
     if [[ -d "$playcover_apps" ]]; then
-        local existing_app=$(find "$playcover_apps" -type d -name "*.app" -exec /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "{}/Info.plist" \; 2>/dev/null | grep -l "$APP_BUNDLE_ID" | head -n 1)
+        # Find app by Bundle ID
+        local existing_app_path=""
+        local existing_app_version=""
+        local existing_app_name=""
         
-        if [[ -n "$existing_app" ]]; then
+        # Search for app with matching Bundle ID
+        while IFS= read -r app_path; do
+            if [[ -f "${app_path}/Info.plist" ]]; then
+                local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                    existing_app_path="$app_path"
+                    existing_app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                    if [[ -z "$existing_app_version" ]]; then
+                        existing_app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${app_path}/Info.plist" 2>/dev/null)
+                    fi
+                    existing_app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "${app_path}/Info.plist" 2>/dev/null)
+                    if [[ -z "$existing_app_name" ]]; then
+                        existing_app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
+                    fi
+                    break
+                fi
+            fi
+        done < <(find "$playcover_apps" -type d -name "*.app" 2>/dev/null)
+        
+        if [[ -n "$existing_app_path" ]]; then
             print_warning "アプリは既にインストールされています"
+            echo ""
+            echo "  ${YELLOW}インストール済み:${NC}"
+            echo "    アプリ名: ${existing_app_name}"
+            if [[ -n "$existing_app_version" ]]; then
+                echo "    バージョン: ${existing_app_version}"
+            fi
+            echo ""
+            echo "  ${GREEN}インストール予定:${NC}"
+            echo "    アプリ名: ${APP_NAME}"
+            if [[ -n "$APP_VERSION" ]]; then
+                echo "    バージョン: ${APP_VERSION}"
+            fi
             echo ""
             echo -n "上書き（アップデート）しますか？ (Y/n): "
             read update_choice
@@ -888,6 +983,8 @@ install_ipa_to_playcover() {
                 print_info "インストールをスキップしました"
                 exit_with_cleanup 0 "インストールスキップ"
             fi
+            
+            print_info "既存のアプリを上書きします"
         fi
     fi
     
@@ -917,6 +1014,9 @@ complete_installation() {
     echo ""
     print_info "アプリ情報:"
     echo "  アプリ名: ${APP_NAME}"
+    if [[ -n "$APP_VERSION" ]]; then
+        echo "  バージョン: ${APP_VERSION}"
+    fi
     echo "  Bundle ID: ${APP_BUNDLE_ID}"
     echo "  ボリューム名: ${APP_VOLUME_NAME}"
     echo "  マウント先: ${HOME}/Library/Containers/${APP_BUNDLE_ID}"
