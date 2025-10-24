@@ -177,6 +177,36 @@ HonkaiStarRail	com.HoYoverse.HonkaiStarRail
 - **シェル**: zsh (macOS標準)
 - **ファイルシステム**: APFS
 
+### ボリューム検出の技術詳細
+
+**v1.1.0 での重要な改善**
+
+1. **`-nomount` フラグの使用**
+   ```bash
+   # ボリューム作成時に自動マウントを防止
+   diskutil apfs addVolume "$CONTAINER" APFS "$VOLUME_NAME" -nomount
+   ```
+   - `/Volumes/` への自動マウントを防ぐ
+   - 後続の検索処理を簡素化
+   - `0_playcover-initial-setup.command` と統一
+
+2. **`diskutil info` による直接検索**
+   ```bash
+   # ボリューム名から直接デバイスノードを取得（最優先）
+   volume_device=$(diskutil info "$VOLUME_NAME" | grep "Device Node:" | awk '{print $NF}')
+   ```
+   - 最も確実な検出方法
+   - マウント状態に依存しない
+   - `diskutil list` の grep より信頼性が高い
+
+3. **多段階フォールバック**
+   - Method 1: `diskutil info` で直接検索
+   - Method 2: `/Volumes/` マウントポイント検索
+   - Method 3: `diskutil list` 全体検索
+   - Method 4: コンテナ内検索
+   - Method 5: `diskutil apfs list` 検索
+   - Method 6: 全APFSボリューム検索
+
 ### 依存ソフトウェア
 
 - Xcode Command Line Tools
@@ -297,20 +327,28 @@ HonkaiStarRail	com.HoYoverse.HonkaiStarRail
 
 ### v1.1.0 (2025-10-24)
 
-- ✅ マウント処理の改善
+- ✅ **ボリューム作成の改善**（重要）
+  - `-nomount` フラグの追加で自動マウントを防止
+  - `0_playcover-initial-setup.command` と同じロジックに統一
+  - `/Volumes/` への自動マウントによる検出失敗を解決
+- ✅ **ボリューム検出の強化**
+  - `diskutil info` による直接検索を最優先（最も確実）
+  - 6つの検出メソッドによる多段階フォールバック
+  - ボリューム名からデバイスノードを直接取得
+  - ボリューム作成後の待機処理追加
+- ✅ **マウント処理の改善**
   - 既存マウント競合の自動検出とアンマウント
   - 内蔵コンテナ干渉の自動削除
   - 詳細なエラーログ出力
-- ✅ ボリューム検出の強化
-  - `/Volumes/` マウントポイントからの検出追加
-  - 5つの検出メソッドによる確実な発見
-  - ボリューム作成後の待機処理追加
-- ✅ 診断スクリプトの追加
+  - マウント状態の厳密な検証
+- ✅ **診断・ユーティリティスクリプトの追加**
   - `diagnose-mount.sh` - マウント問題の診断
   - `diagnose-volume-creation.sh` - ボリューム作成問題の診断
-- ✅ ボリューム整合性チェック
+  - `remount-volume.sh` - クイック再マウントツール
+- ✅ **ボリューム整合性チェック**
   - 既存ボリュームのAPFS検証
   - 破損ボリュームの再作成オプション
+  - マウント前の最終確認処理
 
 ### v1.0.0 (2025-10-24)
 
