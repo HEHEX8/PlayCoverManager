@@ -228,8 +228,8 @@ select_destination_disk() {
     # Get unique physical disk identifiers from diskutil list
     while IFS= read -r line; do
         # Match lines like "/dev/disk0 (internal, physical):"
-        if [[ "$line" =~ ^/dev/(disk[0-9]+) ]]; then
-            local disk_id="${BASH_REMATCH[1]}"
+        if [[ "$line" =~ ^/dev/disk[0-9]+ ]]; then
+            local disk_id=$(echo "$line" | sed -E 's|^/dev/(disk[0-9]+).*|\1|')
             local full_line="$line"
             
             # Skip if already processed (avoid duplicates)
