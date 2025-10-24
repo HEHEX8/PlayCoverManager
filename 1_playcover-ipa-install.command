@@ -470,6 +470,18 @@ create_app_volume() {
         
         if sudo diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
             print_success "ボリュームを作成しました"
+            
+            # Wait for system to register the new volume
+            print_info "ボリュームの登録を待機中..."
+            sleep 2
+            
+            # Verify volume was created
+            if ! diskutil list | grep -q "${APP_VOLUME_NAME}"; then
+                print_error "ボリュームは作成されましたが、システムに登録されていません"
+                print_info "ログ内容:"
+                cat /tmp/apfs_create_app.log
+                exit_with_cleanup 1 "ボリューム登録エラー"
+            fi
         else
             print_error "ボリュームの作成に失敗しました"
             cat /tmp/apfs_create_app.log
@@ -488,10 +500,34 @@ mount_app_volume() {
     print_header "10. アプリボリュームのマウント"
     
     local app_container="${HOME}/Library/Containers/${APP_BUNDLE_ID}"
-    local volume_device=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+    
+    # Try multiple methods to find the volume device
+    local volume_device=""
+    
+    # Method 1: Search by volume name in diskutil list
+    volume_device=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+    
+    # Method 2: If not found, use diskutil apfs list
+    if [[ -z "$volume_device" ]]; then
+        print_info "代替方法でボリュームを検索中..."
+        volume_device=$(diskutil apfs list | grep -A 10 "${SELECTED_DISK}" | grep -A 5 "${APP_VOLUME_NAME}" | grep "disk" | head -n 1 | grep -oE 'disk[0-9]+s[0-9]+')
+    fi
+    
+    # Method 3: Search in the specific container
+    if [[ -z "$volume_device" ]]; then
+        print_info "コンテナ内でボリュームを検索中..."
+        while IFS= read -r line; do
+            if [[ "$line" =~ ${APP_VOLUME_NAME} ]]; then
+                volume_device=$(echo "$line" | awk '{print $NF}')
+                break
+            fi
+        done < <(diskutil list "${SELECTED_DISK}")
+    fi
     
     if [[ -z "$volume_device" ]]; then
         print_error "ボリュームデバイスが見つかりません"
+        print_info "デバッグ: 作成されたボリューム一覧"
+        diskutil list "${SELECTED_DISK}"
         exit_with_cleanup 1 "ボリュームデバイス不在"
     fi
     
