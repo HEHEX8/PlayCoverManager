@@ -722,6 +722,33 @@ main() {
     authenticate_sudo               # 06
     select_destination_disk         # 07
     confirm_installations           # 08
+    
+    # Final confirmation before actual operations
+    print_header "最終確認"
+    print_warning "以下の操作を実行します:"
+    echo "  1. 外部ストレージに PlayCover ボリュームを作成"
+    echo "  2. PlayCover コンテナを外部ストレージにマウント"
+    if $NEED_XCODE_TOOLS || $NEED_HOMEBREW || $NEED_PLAYCOVER; then
+        echo "  3. 不足しているソフトウェアをインストール"
+    fi
+    echo ""
+    print_info "選択されたディスク: ${SELECTED_DISK}"
+    print_info "マウント先: ${PLAYCOVER_CONTAINER}"
+    echo ""
+    echo -n "続行してもよろしいですか? (Y/n): "
+    read final_confirm
+    
+    case "$final_confirm" in
+        [nN]|[nN][oO])
+            print_info "ユーザーにより処理がキャンセルされました"
+            exit_with_cleanup 0 "処理をキャンセルしました"
+            ;;
+        *)
+            print_success "処理を開始します"
+            echo ""
+            ;;
+    esac
+    
     create_playcover_volume         # 09
     mount_volume_to_container       # 10
     perform_installations           # 11
