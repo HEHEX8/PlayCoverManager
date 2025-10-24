@@ -505,29 +505,38 @@ mount_app_volume() {
     local volume_device=""
     
     # Method 1: Search by volume name in diskutil list
-    volume_device=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+    volume_device=$(diskutil list 2>/dev/null | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
     
-    # Method 2: If not found, use diskutil apfs list
-    if [[ -z "$volume_device" ]]; then
-        print_info "代替方法でボリュームを検索中..."
-        volume_device=$(diskutil apfs list | grep -A 10 "${SELECTED_DISK}" | grep -A 5 "${APP_VOLUME_NAME}" | grep "disk" | head -n 1 | grep -oE 'disk[0-9]+s[0-9]+')
-    fi
-    
-    # Method 3: Search in the specific container
+    # Method 2: Search in the specific container
     if [[ -z "$volume_device" ]]; then
         print_info "コンテナ内でボリュームを検索中..."
-        while IFS= read -r line; do
-            if [[ "$line" =~ ${APP_VOLUME_NAME} ]]; then
-                volume_device=$(echo "$line" | awk '{print $NF}')
-                break
-            fi
-        done < <(diskutil list "${SELECTED_DISK}")
+        volume_device=$(diskutil list "${SELECTED_DISK}" 2>/dev/null | grep "${APP_VOLUME_NAME}" | head -n 1 | awk '{print $NF}')
+    fi
+    
+    # Method 3: Use diskutil info to find volumes in container
+    if [[ -z "$volume_device" ]]; then
+        print_info "コンテナのボリューム一覧から検索中..."
+        # Get all volumes in the container
+        local container_volumes=$(diskutil apfs list "${SELECTED_DISK}" 2>/dev/null | grep -E "APFS Volume.*${APP_VOLUME_NAME}" -A 2 | grep "disk" | head -n 1)
+        if [[ -n "$container_volumes" ]]; then
+            volume_device=$(echo "$container_volumes" | grep -oE 'disk[0-9]+s[0-9]+' | head -n 1)
+        fi
     fi
     
     if [[ -z "$volume_device" ]]; then
         print_error "ボリュームデバイスが見つかりません"
-        print_info "デバッグ: 作成されたボリューム一覧"
-        diskutil list "${SELECTED_DISK}"
+        echo ""
+        print_info "デバッグ情報:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "検索したボリューム名: ${APP_VOLUME_NAME}"
+        echo "対象コンテナ: ${SELECTED_DISK}"
+        echo ""
+        print_info "diskutil list の出力:"
+        diskutil list 2>/dev/null | grep -i "${APP_VOLUME_NAME}" || echo "  (見つかりませんでした)"
+        echo ""
+        print_info "コンテナのボリューム一覧:"
+        diskutil list "${SELECTED_DISK}" 2>/dev/null || echo "  (コンテナ情報の取得に失敗)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         exit_with_cleanup 1 "ボリュームデバイス不在"
     fi
     
