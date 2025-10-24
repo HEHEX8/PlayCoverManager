@@ -303,15 +303,25 @@ extract_ipa_info() {
     
     print_info "IPA ファイルを解析中..."
     
-    # Extract IPA (it's just a zip file)
-    if ! unzip -q "$SELECTED_IPA" -d "$temp_dir" 2>/dev/null; then
-        print_error "IPA ファイルの解凍に失敗しました"
+    # Extract only Info.plist for faster processing
+    # Find Info.plist path in zip without extracting everything
+    local plist_path=$(unzip -l "$SELECTED_IPA" 2>/dev/null | grep -E "Payload/.*\.app/Info\.plist" | head -n 1 | awk '{print $NF}')
+    
+    if [[ -z "$plist_path" ]]; then
+        print_error "IPA 内に Info.plist が見つかりません"
+        rm -rf "$temp_dir"
+        exit_with_cleanup 1 "Info.plist 不在"
+    fi
+    
+    # Extract only the Info.plist file
+    if ! unzip -q "$SELECTED_IPA" "$plist_path" -d "$temp_dir" 2>/dev/null; then
+        print_error "Info.plist の解凍に失敗しました"
         rm -rf "$temp_dir"
         exit_with_cleanup 1 "IPA 解凍エラー"
     fi
     
     # Find Info.plist
-    local info_plist=$(find "$temp_dir" -name "Info.plist" -path "*/Payload/*.app/Info.plist" | head -n 1)
+    local info_plist="${temp_dir}/${plist_path}"
     
     if [[ -z "$info_plist" ]]; then
         print_error "Info.plist が見つかりません"
@@ -468,19 +478,14 @@ create_app_volume() {
     else
         print_info "ボリューム「${APP_VOLUME_NAME}」を作成中..."
         
-        if sudo diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
+        # Create volume WITHOUT -nomount to ensure it's properly formatted
+        if sudo diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" > /tmp/apfs_create_app.log 2>&1; then
             print_success "ボリュームを作成しました"
             
-            # Wait for system to register the new volume
-            print_info "ボリュームの登録を待機中..."
-            sleep 2
-            
-            # Verify volume was created
-            if ! diskutil list | grep -q "${APP_VOLUME_NAME}"; then
-                print_error "ボリュームは作成されましたが、システムに登録されていません"
-                print_info "ログ内容:"
-                cat /tmp/apfs_create_app.log
-                exit_with_cleanup 1 "ボリューム登録エラー"
+            # Unmount the auto-mounted volume
+            local new_volume=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+            if [[ -n "$new_volume" ]]; then
+                sudo diskutil unmount "/dev/${new_volume}" 2>/dev/null || true
             fi
         else
             print_error "ボリュームの作成に失敗しました"
