@@ -434,10 +434,15 @@ mount_volume_to_container() {
         return 0
     fi
     
-    # If volume is mounted elsewhere, unmount it first
+    # If volume is mounted elsewhere (like /Volumes/PlayCover), unmount it
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
-        print_info "ボリュームを一時的にアンマウント中..."
-        sudo diskutil unmount "$volume_device" 2>/dev/null || true
+        print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
+        print_info "アンマウント中..."
+        if ! sudo diskutil unmount force "$volume_device" 2>/dev/null; then
+            print_error "ボリュームのアンマウントに失敗しました"
+            exit_with_cleanup 1 "ボリュームアンマウントエラー"
+        fi
+        print_success "アンマウントしました"
     fi
     
     # Check if container directory exists and has data
