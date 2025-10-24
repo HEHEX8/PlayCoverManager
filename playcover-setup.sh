@@ -388,23 +388,35 @@ create_playcover_volume() {
     
     print_info "新しいAPFSボリュームを作成中..."
     
-    # Create APFS volume on selected disk
-    if sudo diskutil apfs addVolume "$SELECTED_DISK" APFS "${VOLUME_NAME}" -nomount 2>/dev/null; then
+    # Get APFS container from the selected disk
+    # Look for synthesized volumes which point to the container
+    local container=$(diskutil apfs list | grep -A 20 "$SELECTED_DISK" | grep "APFS Container Reference" | awk '{print $NF}' | head -n 1)
+    
+    if [[ -z "$container" ]]; then
+        # Alternative: Find container disk (diskNs2 format)
+        local container_candidates=$(diskutil list "$SELECTED_DISK" | grep "Container" | awk '{print $NF}')
+        for candidate in $container_candidates; do
+            if diskutil info "$candidate" | grep -q "APFS Container"; then
+                container="$candidate"
+                break
+            fi
+        done
+    fi
+    
+    if [[ -z "$container" ]]; then
+        print_error "APFSコンテナが見つかりません"
+        print_info "選択されたディスク: $SELECTED_DISK"
+        exit_with_cleanup 1 "ボリューム作成エラー"
+    fi
+    
+    print_info "APFSコンテナを検出: ${container}"
+    
+    # Create APFS volume on the container
+    if sudo diskutil apfs addVolume "$container" APFS "${VOLUME_NAME}" -nomount; then
         print_success "ボリューム「${VOLUME_NAME}」を作成しました"
     else
-        # Try with container identifier
-        local container=$(diskutil list "$SELECTED_DISK" | grep "Container" | awk '{print $NF}' | head -n 1)
-        if [[ -n "$container" ]]; then
-            if sudo diskutil apfs addVolume "$container" APFS "${VOLUME_NAME}" -nomount; then
-                print_success "ボリューム「${VOLUME_NAME}」を作成しました"
-            else
-                print_error "ボリュームの作成に失敗しました"
-                exit_with_cleanup 1 "ボリューム作成エラー"
-            fi
-        else
-            print_error "APFSコンテナが見つかりません"
-            exit_with_cleanup 1 "ボリューム作成エラー"
-        fi
+        print_error "ボリュームの作成に失敗しました"
+        exit_with_cleanup 1 "ボリューム作成エラー"
     fi
     
     echo ""
