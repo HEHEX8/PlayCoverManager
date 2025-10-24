@@ -25,12 +25,37 @@ macOS Tahoe 26.0.1 (2025年9月15日リリース) 向けに最適化されたPla
 
 ## 使用方法
 
-### 実行方法
+### 初回実行時のセキュリティ警告について
+
+macOSのGatekeeperにより、初回実行時に以下の警告が表示される場合があります：
+
+```
+Appleは、"playcover-setup.command"にMacに損害を与えたり、
+プライバシーを侵害する可能性のあるマルウェアが含まれていないことを検証できませんでした。
+```
+
+**これは正常な動作です。** 以下の方法で実行できます：
+
+#### 方法1: 右クリックから開く（推奨）
+
+1. `playcover-setup.command` を **右クリック**
+2. **「開く」** を選択
+3. 確認ダイアログで **「開く」** をクリック
+4. 以降は通常のダブルクリックで起動可能になります
+
+#### 方法2: ターミナルから実行
 
 ```bash
-# ターミナルで実行
 cd /path/to/script
-./playcover-setup.sh
+./playcover-setup.command
+```
+
+ターミナルから実行する場合、Gatekeeperの警告は表示されません。
+
+#### 方法3: 隔離属性を削除（上級者向け）
+
+```bash
+xattr -d com.apple.quarantine playcover-setup.command
 ```
 
 ### 実行前の準備
