@@ -472,20 +472,117 @@ create_app_volume() {
     print_header "09. アプリボリュームの作成"
     
     # Check if volume already exists
-    if diskutil list | grep -q "${APP_VOLUME_NAME}"; then
+    local existing_volume=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+    
+    if [[ -n "$existing_volume" ]]; then
         print_warning "ボリューム「${APP_VOLUME_NAME}」は既に存在します"
-        print_info "既存のボリュームを使用します"
-    else
+        
+        # Verify the volume is valid
+        print_info "ボリュームの整合性を確認中..."
+        if diskutil info "/dev/${existing_volume}" 2>/dev/null | grep -q "File System Personality.*APFS"; then
+            print_success "既存のボリュームは有効です"
+            
+            # Unmount if currently mounted
+            local mount_point=$(diskutil info "/dev/${existing_volume}" 2>/dev/null | grep "Mount Point:" | awk -F: '{print $2}' | xargs)
+            if [[ -n "$mount_point" ]]; then
+                print_info "既存のマウントをアンマウント中: ${mount_point}"
+                sudo diskutil unmount "/dev/${existing_volume}" 2>/dev/null || {
+                    print_warning "アンマウントに失敗しました（強制アンマウントを試行）"
+                    sudo umount -f "$mount_point" 2>/dev/null || true
+                }
+            fi
+        else
+            print_error "既存のボリュームが破損している可能性があります"
+            echo ""
+            echo "ボリュームを再作成しますか？ (y/n): "
+            read recreate_choice
+            if [[ "$recreate_choice" == "y" ]]; then
+                print_info "既存のボリュームを削除中..."
+                sudo diskutil apfs deleteVolume "/dev/${existing_volume}" 2>/dev/null || {
+                    print_error "ボリュームの削除に失敗しました"
+                    exit_with_cleanup 1 "ボリューム削除失敗"
+                }
+                existing_volume=""
+            else
+                exit_with_cleanup 1 "ユーザーキャンセル"
+            fi
+        fi
+    fi
+    
+    if [[ -z "$existing_volume" ]]; then
         print_info "ボリューム「${APP_VOLUME_NAME}」を作成中..."
         
         # Create volume WITHOUT -nomount to ensure it's properly formatted
         if sudo diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" > /tmp/apfs_create_app.log 2>&1; then
             print_success "ボリュームを作成しました"
             
-            # Unmount the auto-mounted volume
-            local new_volume=$(diskutil list | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+            # Wait a moment for the system to register the new volume
+            sleep 1
+            
+            # Get the newly created volume device - try multiple methods
+            local new_volume=""
+            
+            # Method 1: Check if mounted at /Volumes/
+            if [[ -d "/Volumes/${APP_VOLUME_NAME}" ]]; then
+                new_volume=$(diskutil info "/Volumes/${APP_VOLUME_NAME}" 2>/dev/null | grep "Device Node:" | awk '{print $NF}' | sed 's|/dev/||')
+                if [[ -n "$new_volume" ]]; then
+                    print_info "新規ボリュームデバイス: /dev/${new_volume} (/Volumes から検出)"
+                fi
+            fi
+            
+            # Method 2: Search in diskutil list
+            if [[ -z "$new_volume" ]]; then
+                new_volume=$(diskutil list 2>/dev/null | grep "${APP_VOLUME_NAME}" | grep "APFS" | head -n 1 | awk '{print $NF}')
+                if [[ -n "$new_volume" ]]; then
+                    print_info "新規ボリュームデバイス: /dev/${new_volume} (diskutil list から検出)"
+                fi
+            fi
+            
+            # Method 3: Search in specific container
+            if [[ -z "$new_volume" ]]; then
+                new_volume=$(diskutil list "${SELECTED_DISK}" 2>/dev/null | grep "${APP_VOLUME_NAME}" | head -n 1 | awk '{print $NF}')
+                if [[ -n "$new_volume" ]]; then
+                    print_info "新規ボリュームデバイス: /dev/${new_volume} (コンテナから検出)"
+                fi
+            fi
+            
+            # Method 4: Search in diskutil apfs list
+            if [[ -z "$new_volume" ]]; then
+                new_volume=$(diskutil apfs list 2>/dev/null | grep -B 5 "${APP_VOLUME_NAME}" | grep "APFS Volume Disk" | head -n 1 | grep -oE 'disk[0-9]+s[0-9]+')
+                if [[ -n "$new_volume" ]]; then
+                    print_info "新規ボリュームデバイス: /dev/${new_volume} (APFS list から検出)"
+                fi
+            fi
+            
             if [[ -n "$new_volume" ]]; then
+                # Verify the new volume
+                if diskutil info "/dev/${new_volume}" 2>/dev/null | grep -q "File System Personality.*APFS"; then
+                    print_success "ボリュームの検証: OK"
+                else
+                    print_error "ボリュームの検証: 失敗"
+                    exit_with_cleanup 1 "ボリューム検証失敗"
+                fi
+                
+                # Unmount the auto-mounted volume
                 sudo diskutil unmount "/dev/${new_volume}" 2>/dev/null || true
+            else
+                print_error "作成したボリュームが見つかりません"
+                echo ""
+                print_info "デバッグ情報:"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "ボリューム名: ${APP_VOLUME_NAME}"
+                echo "対象コンテナ: ${SELECTED_DISK}"
+                echo ""
+                print_info "/Volumes/ の確認:"
+                ls -la /Volumes/ | grep -i "$(echo ${APP_VOLUME_NAME} | cut -c1-10)" || echo "  (見つかりません)"
+                echo ""
+                print_info "diskutil list の出力:"
+                diskutil list 2>/dev/null | grep -i "$(echo ${APP_VOLUME_NAME} | cut -c1-10)" || echo "  (見つかりません)"
+                echo ""
+                print_info "作成ログ:"
+                cat /tmp/apfs_create_app.log
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                exit_with_cleanup 1 "ボリューム作成後の確認失敗"
             fi
         else
             print_error "ボリュームの作成に失敗しました"
@@ -509,16 +606,27 @@ mount_app_volume() {
     # Try multiple methods to find the volume device
     local volume_device=""
     
-    # Method 1: Search by volume name in diskutil list
-    volume_device=$(diskutil list 2>/dev/null | grep -E "${APP_VOLUME_NAME}.*APFS" | head -n 1 | awk '{print $NF}')
+    # Method 1: Check if volume is mounted at /Volumes/ and get device from there
+    if [[ -d "/Volumes/${APP_VOLUME_NAME}" ]]; then
+        print_info "ボリュームは /Volumes/${APP_VOLUME_NAME} にマウントされています"
+        volume_device=$(diskutil info "/Volumes/${APP_VOLUME_NAME}" 2>/dev/null | grep "Device Node:" | awk '{print $NF}' | sed 's|/dev/||')
+        if [[ -n "$volume_device" ]]; then
+            print_info "デバイスノードを取得: ${volume_device}"
+        fi
+    fi
     
-    # Method 2: Search in the specific container
+    # Method 2: Search by volume name in diskutil list
+    if [[ -z "$volume_device" ]]; then
+        volume_device=$(diskutil list 2>/dev/null | grep -E "${APP_VOLUME_NAME}" | grep "APFS" | head -n 1 | awk '{print $NF}')
+    fi
+    
+    # Method 3: Search in the specific container
     if [[ -z "$volume_device" ]]; then
         print_info "コンテナ内でボリュームを検索中..."
         volume_device=$(diskutil list "${SELECTED_DISK}" 2>/dev/null | grep "${APP_VOLUME_NAME}" | head -n 1 | awk '{print $NF}')
     fi
     
-    # Method 3: Use diskutil info to find volumes in container
+    # Method 4: Use diskutil apfs list to find volumes in container
     if [[ -z "$volume_device" ]]; then
         print_info "コンテナのボリューム一覧から検索中..."
         # Get all volumes in the container
@@ -526,6 +634,12 @@ mount_app_volume() {
         if [[ -n "$container_volumes" ]]; then
             volume_device=$(echo "$container_volumes" | grep -oE 'disk[0-9]+s[0-9]+' | head -n 1)
         fi
+    fi
+    
+    # Method 5: Search all APFS volumes
+    if [[ -z "$volume_device" ]]; then
+        print_info "全 APFS ボリュームから検索中..."
+        volume_device=$(diskutil apfs list 2>/dev/null | grep -B 5 "${APP_VOLUME_NAME}" | grep "APFS Volume Disk" | head -n 1 | grep -oE 'disk[0-9]+s[0-9]+')
     fi
     
     if [[ -z "$volume_device" ]]; then
