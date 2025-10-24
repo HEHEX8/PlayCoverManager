@@ -548,6 +548,23 @@ mount_app_volume() {
     volume_device="/dev/${volume_device}"
     print_info "ボリュームデバイス: ${volume_device}"
     
+    # Check if volume is already mounted elsewhere
+    local current_mount=$(mount | grep "$volume_device" | awk '{print $3}')
+    if [[ -n "$current_mount" ]]; then
+        if [[ "$current_mount" == "$app_container" ]]; then
+            print_success "ボリュームは既に正しい場所にマウントされています"
+            echo ""
+            return 0
+        else
+            print_warning "ボリュームが他の場所にマウントされています: ${current_mount}"
+            print_info "既存のマウントをアンマウント中..."
+            sudo umount "$current_mount" 2>/dev/null || {
+                print_error "アンマウントに失敗しました"
+                exit_with_cleanup 1 "アンマウント失敗"
+            }
+        fi
+    fi
+    
     # Check if internal container exists
     local internal_exists=false
     if [[ -d "$app_container" ]] && [[ ! $(mount | grep " on ${app_container} ") ]]; then
@@ -636,12 +653,58 @@ mount_app_volume() {
     # Ensure parent directory exists
     sudo mkdir -p "$(dirname "$app_container")" 2>/dev/null || true
     
-    if sudo mount -t apfs "$volume_device" "$app_container"; then
+    # Final check: ensure container path doesn't exist or is empty
+    if [[ -e "$app_container" ]]; then
+        if [[ -d "$app_container" ]]; then
+            print_warning "コンテナディレクトリが残っています: ${app_container}"
+            print_info "削除してから再マウントします..."
+            sudo rm -rf "$app_container" 2>/dev/null || {
+                print_error "コンテナディレクトリの削除に失敗しました"
+                exit_with_cleanup 1 "ディレクトリ削除失敗"
+            }
+        else
+            print_error "コンテナパスがディレクトリではありません: ${app_container}"
+            exit_with_cleanup 1 "無効なパス"
+        fi
+    fi
+    
+    # Create mount point
+    sudo mkdir -p "$app_container" 2>/dev/null || {
+        print_error "マウントポイントの作成に失敗しました"
+        exit_with_cleanup 1 "マウントポイント作成失敗"
+    }
+    
+    # Attempt mount with detailed error reporting
+    print_info "マウントを実行中: ${volume_device} → ${app_container}"
+    if sudo mount -t apfs "$volume_device" "$app_container" 2>&1 | tee /tmp/mount_error.log; then
         print_success "ボリュームを正常にマウントしました"
         print_info "マウント先: ${app_container}"
-        sudo chown -R $(id -u):$(id -g) "$app_container" 2>/dev/null || true
+        
+        # Verify mount
+        if mount | grep -q " on ${app_container} "; then
+            print_success "マウント確認: OK"
+            sudo chown -R $(id -u):$(id -g) "$app_container" 2>/dev/null || true
+        else
+            print_error "マウントコマンドは成功しましたが、実際にはマウントされていません"
+            exit_with_cleanup 1 "マウント検証失敗"
+        fi
     else
         print_error "ボリュームのマウントに失敗しました"
+        echo ""
+        print_info "エラー詳細:"
+        cat /tmp/mount_error.log 2>/dev/null || echo "(エラー情報なし)"
+        echo ""
+        print_info "デバッグ情報:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "ボリュームデバイス: $volume_device"
+        echo "マウント先: $app_container"
+        echo ""
+        echo "ディスク情報:"
+        diskutil info "$volume_device" 2>/dev/null | grep -E "(Volume Name|File System|Owners|Bootable|Encrypted)" || echo "(情報取得失敗)"
+        echo ""
+        echo "現在のマウント状態:"
+        mount | grep -i "$(basename ${volume_device})" || echo "(マウントなし)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         exit_with_cleanup 1 "ボリュームマウントエラー"
     fi
     
