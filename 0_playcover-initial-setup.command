@@ -3,6 +3,7 @@
 #######################################################
 # PlayCover External Storage Setup Script
 # macOS Tahoe 26.0.1 Compatible
+# Version: 1.1.0 - Mapping File Lock Support
 #######################################################
 
 set -e
@@ -32,6 +33,29 @@ SUDO_AUTHENTICATED=false
 #######################################################
 # Utility Functions
 #######################################################
+
+# Mapping file lock functions (compatible with playcover-manager.command)
+acquire_mapping_lock() {
+    local lock_file="${MAPPING_FILE}.lock"
+    local max_wait=30
+    local waited=0
+    
+    while ! mkdir "$lock_file" 2>/dev/null; do
+        if [[ $waited -ge $max_wait ]]; then
+            print_error "マッピングファイルのロック取得がタイムアウトしました"
+            print_info "他のスクリプトが実行中の可能性があります"
+            return 1
+        fi
+        sleep 0.1
+        ((waited++))
+    done
+    return 0
+}
+
+release_mapping_lock() {
+    local lock_file="${MAPPING_FILE}.lock"
+    rmdir "$lock_file" 2>/dev/null || true
+}
 
 print_header() {
     echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -673,6 +697,12 @@ perform_installations() {
 create_mapping_data() {
     print_header "12. マッピングデータの作成"
     
+    # Acquire lock to prevent conflicts with playcover-manager.command
+    if ! acquire_mapping_lock; then
+        print_error "マッピングファイルのロック取得に失敗しました"
+        exit_with_cleanup 1 "ロック取得エラー"
+    fi
+    
     # Check if mapping file exists
     local mapping_exists=false
     if [[ -f "$MAPPING_FILE" ]]; then
@@ -690,6 +720,9 @@ create_mapping_data() {
         print_info "ファイル: ${MAPPING_FILE}"
         print_info "データ: ${VOLUME_NAME} → ${PLAYCOVER_BUNDLE_ID}"
     fi
+    
+    # Release lock
+    release_mapping_lock
     
     echo ""
 }
@@ -770,8 +803,14 @@ main() {
     exit_with_cleanup 0 "すべての処理が正常に完了しました"
 }
 
-# Handle Ctrl+C
-trap 'echo ""; exit_with_cleanup 0 "ユーザーによりキャンセルされました"' INT
+# Handle Ctrl+C and ensure lock cleanup
+cleanup_on_exit() {
+    release_mapping_lock
+    echo ""
+    exit_with_cleanup 0 "ユーザーによりキャンセルされました"
+}
+
+trap cleanup_on_exit INT
 
 # Run main function
 main
