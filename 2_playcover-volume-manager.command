@@ -291,9 +291,11 @@ is_on_external_volume() {
 # Get storage type (internal/external/none)
 get_storage_type() {
     local path=$1
+    local debug=${2:-false}  # Optional debug flag
     
     # If path doesn't exist, return unknown
     if [[ ! -e "$path" ]]; then
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Path does not exist: $path" >&2
         echo "unknown"
         return
     fi
@@ -303,17 +305,25 @@ get_storage_type() {
     local mount_check=$(/sbin/mount | /usr/bin/grep " on ${path} ")
     if [[ -n "$mount_check" ]] && [[ "$mount_check" =~ "apfs" ]]; then
         # This path is mounted as an APFS volume = external storage
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Detected as mount point (external)" >&2
         echo "external"
         return
     fi
     
     # If it's a directory but not a mount point, check if it has content
     if [[ -d "$path" ]]; then
-        if [[ -z "$(ls -A "$path" 2>/dev/null)" ]]; then
+        local content_check=$(ls -A "$path" 2>/dev/null)
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Content check: '$content_check'" >&2
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
+        
+        if [[ -z "$content_check" ]]; then
             # Directory exists but is empty = no actual data
             # This is just an empty mount point directory left after unmount
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty (none)" >&2
             echo "none"
             return
+        else
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory has content, checking disk location..." >&2
         fi
     fi
     
@@ -322,8 +332,12 @@ get_storage_type() {
     local device=$(/bin/df "$path" | /usr/bin/tail -1 | /usr/bin/awk '{print $1}')
     local disk_id=$(echo "$device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
     
+    [[ "$debug" == "true" ]] && echo "[DEBUG] Device: $device, Disk ID: $disk_id" >&2
+    
     # Check the disk location
     local disk_location=$(diskutil info "/dev/$disk_id" 2>/dev/null | /usr/bin/grep "Device Location:" | /usr/bin/awk -F: '{print $2}' | /usr/bin/sed 's/^ *//')
+    
+    [[ "$debug" == "true" ]] && echo "[DEBUG] Disk location: $disk_location" >&2
     
     if [[ "$disk_location" == "Internal" ]]; then
         echo "internal"
@@ -332,8 +346,10 @@ get_storage_type() {
     else
         # Fallback: check if it's on the main system disk (disk0 or disk1 usually)
         if [[ "$disk_id" == "disk0" ]] || [[ "$disk_id" == "disk1" ]] || [[ "$disk_id" == "disk3" ]]; then
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Fallback to internal (system disk)" >&2
             echo "internal"
         else
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Fallback to external (non-system disk)" >&2
             echo "external"
         fi
     fi
@@ -1322,6 +1338,8 @@ show_quick_status() {
         
         if [[ "$storage_type" == "external" ]]; then
             ((mounted_count++))
+        elif [[ "$storage_type" == "internal" ]]; then
+            ((mounted_count++))  # Internal storage also counts as "has data"
         else
             ((unmounted_count++))
         fi
@@ -1334,8 +1352,8 @@ show_quick_status() {
     if [[ $total_count -eq 0 ]]; then
         echo "  ${YELLOW}⚠${NC} 登録されているアプリがありません"
     else
-        echo "  ${GREEN}🔌 マウント中:${NC} ${mounted_count}/${total_count}"
-        echo "  ${YELLOW}⚪ アンマウント:${NC} ${unmounted_count}/${total_count}"
+        echo "  ${GREEN}✓ データあり:${NC} ${mounted_count}/${total_count}  ${BLUE}(🔌外部 / 💾内蔵)${NC}"
+        echo "  ${YELLOW}⚪ データなし:${NC} ${unmounted_count}/${total_count}"
         
         # Show individual status (compact)
         echo ""
@@ -1384,7 +1402,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.1${CYAN}                              ║"
+    echo "║                 ${BLUE}Version 1.5.3${CYAN}                              ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"

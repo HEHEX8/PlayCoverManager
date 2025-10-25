@@ -172,3 +172,20 @@ After:
   - Updated `BUGFIX_SUMMARY_V1.5.1.md` to reflect correct rsync options
   - Created `BUGFIX_SUMMARY_V1.5.2.md` with compatibility details
 - **Note**: No code changes needed - implementation was already correct
+
+### Phase 15: Storage Detection Display Fix (v1.5.3)
+- **Fixed Critical Display Bug**: Internal storage incorrectly shown as "unmounted" (アンマウント済み)
+- **User Report**: Directory with subdirectory content detected as empty
+  - Example: `/Users/user/Library/Containers/com.HoYoverse.hkrpgoversea/com.HoYoverse.hkrpgoversea/`
+  - `ls` shows content, but script displayed as "⚪ アンマウント済み"
+  - Expected: "💾 内蔵ストレージ"
+- **Root Cause**: `show_quick_status()` counted internal storage as unmounted
+- **Solution**:
+  - Fixed counting logic in `show_quick_status()` to treat internal storage as "has data"
+  - Added debug option to `get_storage_type()` for troubleshooting
+  - Improved display labels: "データあり / データなし" instead of "マウント / アンマウント"
+- **Debug Tool**: Created `debug_storage_detection.sh` for user environment diagnosis
+- **Impact**: 
+  - Correct display of internal storage status in main menu
+  - Better understanding of data location for users
+  - Mount protection still works correctly (verified by user)
