@@ -1,4 +1,4 @@
-# PlayCover Complete Manager v4.2.0
+# PlayCover Complete Manager v4.2.1
 
 ## 📋 概要
 
@@ -138,10 +138,10 @@ PlayCover 統合管理ツール
 | `is_playcover_environment_ready()` | 環境が整っているか判定 |
 | `run_initial_setup()` | 初期セットアップを実行 |
 
-### IPA インストール検出ロジック (v4.2.0)
+### IPA インストール検出ロジック (v4.2.1)
 
 ```bash
-# 3段階検証による堅牢な完了検出
+# 3段階検証による堅牢な完了検出（実環境に基づく修正版）
 
 Phase 1: 構造検証
 ├─ Info.plist の存在確認
@@ -149,10 +149,10 @@ Phase 1: 構造検証
 ├─ CFBundleShortVersionString の有効性確認
 └─ _CodeSignature ディレクトリの存在確認
 
-Phase 2: PlayCover データベース確認 (MOST RELIABLE)
-├─ PlayCover.sqlite へのアクセス
-├─ Bundle ID での登録確認
-└─ SELECT COUNT(*) FROM apps WHERE bundleIdentifier='...'
+Phase 2: PlayCover 設定ファイル確認 (MOST RELIABLE)
+├─ パス: ~/Library/Containers/io.playcover.PlayCover/App Settings/
+├─ ファイル: [Bundle ID].plist の存在確認
+└─ PlayCover によるアプリ登録の確認
 
 Phase 3: ファイル安定性確認 (短縮版)
 ├─ 最新ファイルの mtime 取得
@@ -163,10 +163,11 @@ Phase 3: ファイル安定性確認 (短縮版)
 ```
 
 **検出ロジックの利点**:
-- **最高の信頼性**: PlayCover の内部状態を直接確認
-- **高速検出**: DB登録確認で即座に完了判定（6秒待機不要）
-- **フォールバック対応**: DB確認失敗時は構造+安定性で判定
+- **最高の信頼性**: PlayCover の実際のファイル構造に基づく検証
+- **高速検出**: 設定ファイル確認で即座に完了判定（6秒待機不要）
+- **フォールバック対応**: 設定ファイル未作成時は構造+安定性で判定
 - **短縮された待機時間**: mtime安定確認が9秒→6秒に短縮
+- **実環境ベース**: ユーザー環境の `tree` 出力に基づく正確な実装
 
 ### 環境判定ロジック
 

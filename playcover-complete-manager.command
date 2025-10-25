@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.2.0 - Robust Installation Detection
+# Version: 4.2.1 - Fixed: Correct PlayCover Settings Detection
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -925,7 +925,7 @@ install_ipa_to_playcover() {
     
     # Wait for installation to complete
     print_info "インストールの完了を待機中..."
-    print_info "（PlayCoverデータベースとアプリ構造を監視しています）"
+    print_info "（PlayCover設定ファイルとアプリ構造を監視しています）"
     echo ""
     
     local max_wait=300  # 5 minutes
@@ -933,17 +933,19 @@ install_ipa_to_playcover() {
     local check_interval=3
     local initial_check_done=false
     
-    # PlayCover database path
-    local playcover_db="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Data/Library/Application Support/PlayCover/PlayCover.sqlite"
+    # PlayCover app settings path
+    local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
+    local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
     
     # Track file modification stability (shortened from 9s to 6s)
     local last_mtime=0
     local stable_count=0
     local required_stable_checks=2  # Shortened to 6 seconds (2 checks * 3 seconds)
     
-    # Detection Method (v4.2.0 - Robust Triple Verification):
+    # Detection Method (v4.2.1 - Correct Implementation):
     # Phase 1: Structure validation (Info.plist + _CodeSignature)
-    # Phase 2: PlayCover database registration check (MOST RELIABLE)
+    # Phase 2: PlayCover App Settings file check (MOST RELIABLE)
+    #          File: ~/Library/Containers/io.playcover.PlayCover/App Settings/[BundleID].plist
     # Phase 3: File stability confirmation (shortened to 6 seconds)
     # Success criteria: Phase 1 + (Phase 2 OR Phase 3)
     
@@ -972,15 +974,12 @@ install_ipa_to_playcover() {
                                 if [[ -d "${app_path}/_CodeSignature" ]]; then
                                     local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
                                     if [[ -n "$app_name" ]]; then
-                                        # Check PlayCover database registration
-                                        if [[ -f "$playcover_db" ]]; then
-                                            local db_entry=$(sqlite3 "$playcover_db" "SELECT COUNT(*) FROM apps WHERE bundleIdentifier='$APP_BUNDLE_ID'" 2>/dev/null || echo "0")
-                                            if [[ "$db_entry" -gt 0 ]]; then
-                                                installation_succeeded=true
-                                                break
-                                            fi
+                                        # Check PlayCover settings file creation
+                                        if [[ -f "$app_settings_plist" ]]; then
+                                            installation_succeeded=true
+                                            break
                                         fi
-                                        # If database check fails, accept structure validity as fallback
+                                        # If settings file doesn't exist yet, accept structure validity as fallback
                                         installation_succeeded=true
                                         break
                                     fi
@@ -1058,14 +1057,11 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: PlayCover database check (most reliable)
-                        local db_registered=false
-                        if [[ -f "$playcover_db" ]]; then
-                            # Check if app is registered in PlayCover's database
-                            local db_entry=$(sqlite3 "$playcover_db" "SELECT COUNT(*) FROM apps WHERE bundleIdentifier='$APP_BUNDLE_ID'" 2>/dev/null || echo "0")
-                            if [[ "$db_entry" -gt 0 ]]; then
-                                db_registered=true
-                            fi
+                        # Phase 2: PlayCover settings file check (most reliable)
+                        local settings_created=false
+                        if [[ -f "$app_settings_plist" ]]; then
+                            # App settings file was created by PlayCover
+                            settings_created=true
                         fi
                         
                         # Phase 3: Stability check (shortened to 6 seconds)
@@ -1079,8 +1075,8 @@ install_ipa_to_playcover() {
                                     # No new changes in this check - increment stability counter
                                     ((stable_count++))
                                     
-                                    # Combined check: structure + (database OR stability)
-                                    if [[ "$structure_valid" == true ]] && { [[ "$db_registered" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
+                                    # Combined check: structure + (settings file OR stability)
+                                    if [[ "$structure_valid" == true ]] && { [[ "$settings_created" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
                                         # Installation confirmed by multiple indicators
                                         found=true
                                         break
@@ -1098,8 +1094,8 @@ install_ipa_to_playcover() {
                                 if [[ $current_app_mtime -eq $last_mtime ]]; then
                                     ((stable_count++))
                                     
-                                    # Combined check: structure + (database OR stability)
-                                    if [[ "$structure_valid" == true ]] && { [[ "$db_registered" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
+                                    # Combined check: structure + (settings file OR stability)
+                                    if [[ "$structure_valid" == true ]] && { [[ "$settings_created" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
                                         found=true
                                         break
                                     fi
