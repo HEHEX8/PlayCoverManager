@@ -43,10 +43,15 @@ if [[ ! -d "$path" ]]; then
     exit 1
 fi
 
-echo "  生のls -A出力:"
-ls -A "$path" | while read line; do
+echo "  生のls -A1出力（1行ずつ）:"
+/bin/ls -A1 "$path" | while read line; do
     echo "    - $line"
 done
+echo ""
+
+# Store raw list for later use (use -A1 to ensure one item per line)
+raw_list=$(/bin/ls -A1 "$path" 2>/dev/null)
+echo "  [DEBUG] Raw list captured: $(echo "$raw_list" | wc -l | xargs) items"
 echo ""
 
 echo "  フィルタリング処理:"
@@ -59,7 +64,7 @@ echo "      - .TemporaryItems"
 echo "      - .com.apple.containermanagerd.metadata.plist"
 echo ""
 
-content_check=$(ls -A "$path" 2>/dev/null | \
+content_check=$(echo "$raw_list" | \
     /usr/bin/grep -v -x -F '.DS_Store' | \
     /usr/bin/grep -v -x -F '.Spotlight-V100' | \
     /usr/bin/grep -v -x -F '.Trashes' | \
@@ -67,15 +72,24 @@ content_check=$(ls -A "$path" 2>/dev/null | \
     /usr/bin/grep -v -x -F '.TemporaryItems' | \
     /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
 
+echo "  [DEBUG] After filtering: $(echo "$content_check" | grep -v '^$' | wc -l | xargs) items"
+echo ""
+
 echo "  フィルタリング後のコンテンツ:"
 if [[ -z "$content_check" ]]; then
     echo "    （空 - メタデータのみ）"
     echo ""
     echo "⚪ 判定結果: アンマウント済み（データなし）"
+    echo ""
+    echo "【詳細】"
+    echo "  生のリスト内容:"
+    echo "$raw_list" | while read line; do
+        echo "    - '$line'"
+    done
     exit 0
 else
     echo "$content_check" | while read line; do
-        echo "    - $line"
+        [[ -n "$line" ]] && echo "    - $line"
     done
 fi
 echo ""
