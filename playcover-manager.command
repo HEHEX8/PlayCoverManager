@@ -1972,6 +1972,14 @@ show_mapping_info() {
 install_workflow() {
     clear
     
+    # Reset global arrays at the start of workflow
+    SELECTED_IPAS=()
+    INSTALL_SUCCESS=()
+    INSTALL_FAILED=()
+    BATCH_MODE=false
+    CURRENT_IPA_INDEX=0
+    TOTAL_IPAS=0
+    
     check_playcover_app
     check_mapping_file
     check_full_disk_access
