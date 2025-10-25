@@ -1409,12 +1409,14 @@ individual_volume_control() {
 
 # Get drive name for display (v4.7.0)
 get_drive_name() {
-    if [[ -z "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+    local playcover_device=$1
+    
+    if [[ -z "$playcover_device" ]]; then
         echo "不明なドライブ"
         return
     fi
     
-    local disk_id=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
+    local disk_id=$(echo "$playcover_device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
     local drive_info=$(/usr/sbin/diskutil info "$disk_id" 2>/dev/null)
     
     if [[ -n "$drive_info" ]]; then
@@ -1435,7 +1437,16 @@ get_drive_name() {
 eject_disk() {
     clear
     
-    if [[ -z "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+    # Get current PlayCover volume device dynamically
+    local playcover_device=""
+    if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+        local volume_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+        if [[ -n "$volume_device" ]]; then
+            playcover_device="/dev/${volume_device}"
+        fi
+    fi
+    
+    if [[ -z "$playcover_device" ]]; then
         print_header "ディスク取り外し"
         print_error "PlayCoverボリュームが見つかりません"
         echo ""
@@ -1444,8 +1455,8 @@ eject_disk() {
         return
     fi
     
-    local disk_id=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
-    local drive_name=$(get_drive_name)
+    local disk_id=$(echo "$playcover_device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
+    local drive_name=$(get_drive_name "$playcover_device")
     
     print_header "「${drive_name}」の取り外し"
     
@@ -2270,9 +2281,15 @@ show_menu() {
     
     # Dynamic eject menu label (v4.7.0)
     local eject_label="ディスク全体を取り外し"
-    if [[ -n "$PLAYCOVER_VOLUME_DEVICE" ]]; then
-        local drive_name=$(get_drive_name)
-        eject_label="「${drive_name}」の取り外し"
+    
+    # Get current PlayCover volume device dynamically for menu display
+    if volume_exists "$PLAYCOVER_VOLUME_NAME" 2>/dev/null; then
+        local volume_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" 2>/dev/null)
+        if [[ -n "$volume_device" ]]; then
+            local playcover_device="/dev/${volume_device}"
+            local drive_name=$(get_drive_name "$playcover_device")
+            eject_label="「${drive_name}」の取り外し"
+        fi
     fi
     
     echo "  ${RED}【システム】${NC}"
