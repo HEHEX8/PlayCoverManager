@@ -394,10 +394,12 @@ mount_volume() {
         sudo /bin/mkdir -p "$target_path"
     fi
     
-    # Mount the volume
+    # Mount the volume with nobrowse option to hide from Finder/Desktop
     local device=$(get_volume_device "$volume_name")
     
-    if sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
+    # Use mount command directly with nobrowse option
+    # diskutil doesn't support nobrowse directly, so we use mount -o nobrowse
+    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
         print_success "マウント成功: $target_path"
         return 0
     else
@@ -1630,10 +1632,10 @@ switch_storage_location() {
         local temp_mount="/tmp/playcover_temp_$$"
         sudo /bin/mkdir -p "$temp_mount"
         
-        # Mount volume temporarily
+        # Mount volume temporarily (with nobrowse to hide from Finder)
         local volume_device=$(get_volume_device "$volume_name")
         print_info "ボリュームを一時マウント中..."
-        if ! sudo /sbin/mount -t apfs "$volume_device" "$temp_mount"; then
+        if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
             print_error "ボリュームのマウントに失敗しました"
             sudo /bin/rm -rf "$temp_mount"
             echo ""
@@ -1726,7 +1728,7 @@ switch_storage_location() {
             local temp_mount="/tmp/playcover_temp_$$"
             sudo /bin/mkdir -p "$temp_mount"
             local volume_device=$(get_volume_device "$volume_name")
-            if ! sudo /sbin/mount -t apfs "$volume_device" "$temp_mount"; then
+            if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                 print_error "ボリュームのマウントに失敗しました"
                 sudo /bin/rm -rf "$temp_mount"
                 echo ""
@@ -1781,7 +1783,7 @@ switch_storage_location() {
             
             local temp_mount="/tmp/playcover_temp_$$"
             sudo /bin/mkdir -p "$temp_mount"
-            if ! sudo /sbin/mount -t apfs "$volume_device" "$temp_mount"; then
+            if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                 print_error "一時マウントに失敗しました"
                 sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
                 sudo /bin/rm -rf "$temp_mount"
