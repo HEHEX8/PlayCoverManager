@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.4.3 - Fix Lock Mechanism + Duplicate Prevention
+# Version: 4.4.4 - Complete PlayCover Removal + Terminal Exit
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2639,6 +2639,33 @@ uninstall_workflow() {
     
     print_success "マッピング情報を削除しました"
     
+    # Step 10: If PlayCover volume, remove PlayCover.app and exit
+    if [[ "$selected_volume" == "PlayCover" ]]; then
+        echo ""
+        print_info "PlayCover本体を削除中..."
+        
+        local playcover_app="/Applications/PlayCover.app"
+        if [[ -d "$playcover_app" ]]; then
+            if rm -rf "$playcover_app" 2>/dev/null; then
+                print_success "PlayCover.appを削除しました"
+            else
+                print_warning "PlayCover.appの削除に失敗しました（手動削除が必要です）"
+            fi
+        else
+            print_warning "PlayCover.appが見つかりませんでした"
+        fi
+        
+        echo ""
+        print_success "PlayCoverのアンインストールが完了しました"
+        echo ""
+        print_warning "PlayCoverを削除したため、このスクリプトは今後使用できません"
+        echo "再度使用するには、PlayCoverを再インストールしてください"
+        echo ""
+        echo -n "Enterキーでターミナルを終了します..."
+        read
+        exit 0
+    fi
+    
     echo ""
     print_success "アンインストールが完了しました"
     echo ""
@@ -2829,6 +2856,21 @@ uninstall_all_apps() {
         print_warning "マッピングファイルのロック取得に失敗しました"
     fi
     
+    # Step 8: Remove PlayCover.app
+    echo ""
+    print_info "PlayCover本体を削除中..."
+    
+    local playcover_app="/Applications/PlayCover.app"
+    if [[ -d "$playcover_app" ]]; then
+        if rm -rf "$playcover_app" 2>/dev/null; then
+            print_success "PlayCover.appを削除しました"
+        else
+            print_warning "PlayCover.appの削除に失敗しました（手動削除が必要です）"
+        fi
+    else
+        print_warning "PlayCover.appが見つかりませんでした"
+    fi
+    
     # Summary
     echo ""
     echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
@@ -2840,8 +2882,12 @@ uninstall_all_apps() {
         echo "  ${RED}失敗: ${fail_count} 個${NC}"
     fi
     echo ""
-    echo -n "Enterキーでメニューに戻る..."
+    print_warning "PlayCoverを削除したため、このスクリプトは今後使用できません"
+    echo "再度使用するには、PlayCoverを再インストールしてください"
+    echo ""
+    echo -n "Enterキーでターミナルを終了します..."
     read
+    exit 0
 }
 
 #######################################################
