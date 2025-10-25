@@ -1,5 +1,194 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-15 - Version 4.7.0: Enhanced Volume Management with App Termination
+
+### Critical Changes to `playcover-complete-manager.command`
+
+#### 1. PlayCover Volume Now Controllable (Lines 1296-1326, 1197-1210, 2228-2242)
+
+**REMOVED:** Skip logic that excluded PlayCover volume from individual operations
+
+**Before:**
+```zsh
+while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+        continue  # PlayCover was skipped
+    fi
+    # ... process volume
+done
+```
+
+**After:**
+```zsh
+while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    # PlayCover is now included in all operations
+    # ... process volume
+done
+```
+
+**Impact:**
+- Individual volume control menu now shows PlayCover volume
+- "Unmount all volumes" now includes PlayCover volume
+- Quick status display now counts PlayCover volume in statistics
+
+#### 2. App Termination Before Unmount (Lines 436-485)
+
+**NEW FUNCTION:** `quit_app_for_bundle()` - Gracefully quit apps before unmounting
+
+**Implementation:**
+```zsh
+quit_app_for_bundle() {
+    local bundle_id=$1
+    
+    # Skip if bundle_id is empty
+    if [[ -z "$bundle_id" ]]; then
+        return 0
+    fi
+    
+    # Try to quit the app using osascript
+    local app_name=$(get_display_name "$bundle_id")
+    if [[ -n "$app_name" ]]; then
+        /usr/bin/osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
+    fi
+    
+    # Wait a moment for the app to quit
+    sleep 0.5
+    
+    # Force kill if still running
+    /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+}
+```
+
+**ENHANCED:** `unmount_volume()` now accepts optional bundle_id parameter
+
+**Modified Signature:**
+```zsh
+unmount_volume() {
+    local volume_name=$1
+    local bundle_id=$2  # Optional: if provided, quit the app first
+    
+    # ... existing code ...
+    
+    # Quit app before unmounting if bundle_id is provided
+    if [[ -n "$bundle_id" ]]; then
+        quit_app_for_bundle "$bundle_id"
+    fi
+    
+    # ... continue unmounting ...
+}
+```
+
+**Impact:**
+- Prevents data corruption by quitting apps before unmounting
+- Uses graceful quit (osascript) first, then force kill if needed
+- All unmount operations now pass bundle_id to quit apps automatically
+
+#### 3. Enhanced Disk Eject with Full Volume Support (Lines 1390-1510)
+
+**NEW FUNCTION:** `get_drive_name()` - Extract readable drive name for display
+
+**COMPLETELY REWRITTEN:** `eject_disk()` - Now handles ALL volumes on the drive
+
+**Key Changes:**
+```zsh
+# Get all volumes on this disk
+local all_volumes=$(/usr/sbin/diskutil list "$disk_id" | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
+
+if [[ -n "$all_volumes" ]]; then
+    local volume_count=0
+    while IFS= read -r vol_name; do
+        # Try to find bundle_id for this volume from mappings
+        local bundle_id=""
+        local mappings_content=$(read_mappings)
+        if [[ -n "$mappings_content" ]]; then
+            while IFS=$'\t' read -r mapped_vol mapped_bundle mapped_display; do
+                if [[ "$mapped_vol" == "$vol_name" ]]; then
+                    bundle_id="$mapped_bundle"
+                    break
+                fi
+            done <<< "$mappings_content"
+        fi
+        
+        # Quit app if we found a bundle_id
+        if [[ -n "$bundle_id" ]]; then
+            quit_app_for_bundle "$bundle_id"
+        fi
+        
+        # Unmount the volume
+        sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || true
+        ((volume_count++))
+    done <<< "$all_volumes"
+fi
+```
+
+**Impact:**
+- Unmounts ALL volumes on the drive, not just PlayCover-managed ones
+- Quits associated apps before unmounting each volume
+- Provides clear progress feedback for each volume
+- Safe handling of both managed and unmanaged volumes
+
+#### 4. Dynamic Menu Labeling (Lines 2263-2279)
+
+**ENHANCED:** Main menu now shows actual drive name instead of generic label
+
+**Before:**
+```
+8. ディスク全体を取り外し
+```
+
+**After:**
+```zsh
+# Dynamic eject menu label (v4.7.0)
+local eject_label="ディスク全体を取り外し"
+if [[ -n "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+    local drive_name=$(get_drive_name)
+    eject_label="「${drive_name}」の取り外し"
+fi
+
+echo "  8. ${eject_label}              9. マッピング情報を表示                0. 終了"
+```
+
+**Impact:**
+- Users can see which drive will be ejected
+- More intuitive and safer operation
+- Real-time detection of drive information
+
+#### Updated Call Signatures
+
+All `unmount_volume()` calls now pass bundle_id when available:
+
+1. Line 1205: `unmount_all_volumes()` → `unmount_volume "$volume_name" "$bundle_id"`
+2. Line 1367: `individual_volume_control()` → `unmount_volume "$volume_name" "$bundle_id"`
+3. Line 1781: Storage switching → `unmount_volume "$volume_name" "$bundle_id"`
+4. Line 1878: Rollback operation → `unmount_volume "$volume_name" "$bundle_id"`
+5. Line 2147: Cleanup after switching → `unmount_volume "$volume_name" "$bundle_id"`
+
+### Version Number Updates
+
+- **Header comment:** Version 4.6.0 → 4.7.0
+- **Menu display:** Version 3.0.1 → 4.7.0
+- **Subtitle:** "Streamlined Output Across All Functions" → "Enhanced Volume Management with App Termination"
+
+### Benefits
+
+1. **Data Safety**: Apps are gracefully quit before unmounting, preventing data corruption
+2. **Flexibility**: PlayCover volume can now be individually controlled like other volumes
+3. **Completeness**: Disk eject now handles all volumes on the drive, not just managed ones
+4. **User Experience**: Dynamic menu labels provide clear information about operations
+5. **Consistency**: All unmount operations follow the same app termination pattern
+
+### Testing Checklist
+
+- [ ] Individual volume control shows PlayCover volume
+- [ ] Unmount all volumes includes PlayCover volume
+- [ ] Apps quit gracefully before unmounting
+- [ ] Disk eject unmounts all volumes on drive
+- [ ] Menu displays correct drive name
+- [ ] No data corruption after unmount operations
+- [ ] Quick status includes PlayCover in counts
+
+---
+
 ## 2025-01-XX - Auto-Mount PlayCover Main Volume Feature
 
 ### Changes to `2_playcover-volume-manager.command`

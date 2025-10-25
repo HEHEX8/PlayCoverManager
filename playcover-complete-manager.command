@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.6.0 - Streamlined Output Across All Functions
+# Version: 4.7.0 - Enhanced Volume Management with App Termination
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -433,8 +433,31 @@ mount_volume() {
     fi
 }
 
+# Quit application before unmounting (v4.7.0)
+quit_app_for_bundle() {
+    local bundle_id=$1
+    
+    # Skip if bundle_id is empty
+    if [[ -z "$bundle_id" ]]; then
+        return 0
+    fi
+    
+    # Try to quit the app using osascript
+    local app_name=$(get_display_name "$bundle_id")
+    if [[ -n "$app_name" ]]; then
+        /usr/bin/osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
+    fi
+    
+    # Wait a moment for the app to quit
+    sleep 0.5
+    
+    # Force kill if still running
+    /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+}
+
 unmount_volume() {
     local volume_name=$1
+    local bundle_id=$2  # Optional: if provided, quit the app first
     
     if ! volume_exists "$volume_name"; then
         print_warning "ボリューム '${volume_name}' が見つかりません"
@@ -446,6 +469,11 @@ unmount_volume() {
     if [[ -z "$current_mount" ]]; then
         print_info "既にアンマウント済みです"
         return 0
+    fi
+    
+    # Quit app before unmounting if bundle_id is provided
+    if [[ -n "$bundle_id" ]]; then
+        quit_app_for_bundle "$bundle_id"
     fi
     
     local device=$(get_volume_device "$volume_name")
@@ -1195,14 +1223,10 @@ unmount_all_volumes() {
     local fail_count=0
     
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
         echo ""
         print_info "アンマウント中: ${display_name}"
         
-        if unmount_volume "$volume_name"; then
+        if unmount_volume "$volume_name" "$bundle_id"; then
             ((success_count++))
         else
             ((fail_count++))
@@ -1291,10 +1315,6 @@ individual_volume_control() {
     declare -a mappings_array=()
     local index=1
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
@@ -1364,7 +1384,7 @@ individual_volume_control() {
         
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
             echo ""
-            unmount_volume "$volume_name"
+            unmount_volume "$volume_name" "$bundle_id"
         fi
     else
         echo "${CYAN}現在: アンマウント済み${NC}"
@@ -1387,13 +1407,51 @@ individual_volume_control() {
     individual_volume_control
 }
 
+# Get drive name for display (v4.7.0)
+get_drive_name() {
+    if [[ -z "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+        echo "不明なドライブ"
+        return
+    fi
+    
+    local disk_id=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
+    local drive_info=$(/usr/sbin/diskutil info "$disk_id" 2>/dev/null)
+    
+    if [[ -n "$drive_info" ]]; then
+        # Try to get device name
+        local device_name=$(echo "$drive_info" | /usr/bin/grep "Device / Media Name:" | /usr/bin/sed 's/.*: *//')
+        if [[ -n "$device_name" ]]; then
+            echo "$device_name"
+            return
+        fi
+        
+        # Fallback to disk identifier
+        echo "$disk_id"
+    else
+        echo "不明なドライブ"
+    fi
+}
+
 eject_disk() {
     clear
-    print_header "ディスク全体を取り外し"
+    
+    if [[ -z "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+        print_header "ディスク取り外し"
+        print_error "PlayCoverボリュームが見つかりません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    local disk_id=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
+    local drive_name=$(get_drive_name)
+    
+    print_header "「${drive_name}」の取り外し"
     
     authenticate_sudo
     
-    print_warning "この操作により、全てのPlayCoverボリュームがアンマウントされます"
+    print_warning "このドライブの全てのボリュームをアンマウントします"
     echo ""
     echo -n "続行しますか？ (y/N): "
     read confirm
@@ -1409,24 +1467,50 @@ eject_disk() {
     echo ""
     print_info "全ボリュームをアンマウント中..."
     
-    local mappings_content=$(read_mappings)
+    # Get all volumes on this disk
+    local all_volumes=$(/usr/sbin/diskutil list "$disk_id" | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
     
-    if [[ -n "$mappings_content" ]]; then
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
-            unmount_volume "$volume_name" >/dev/null 2>&1 || true
-        done <<< "$mappings_content"
+    if [[ -n "$all_volumes" ]]; then
+        local volume_count=0
+        while IFS= read -r vol_name; do
+            if [[ -n "$vol_name" ]]; then
+                echo ""
+                print_info "アンマウント中: ${vol_name}"
+                
+                # Try to find bundle_id for this volume from mappings
+                local bundle_id=""
+                local mappings_content=$(read_mappings)
+                if [[ -n "$mappings_content" ]]; then
+                    while IFS=$'\t' read -r mapped_vol mapped_bundle mapped_display; do
+                        if [[ "$mapped_vol" == "$vol_name" ]]; then
+                            bundle_id="$mapped_bundle"
+                            break
+                        fi
+                    done <<< "$mappings_content"
+                fi
+                
+                # Quit app if we found a bundle_id
+                if [[ -n "$bundle_id" ]]; then
+                    quit_app_for_bundle "$bundle_id"
+                fi
+                
+                # Unmount the volume
+                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                ((volume_count++))
+            fi
+        done <<< "$all_volumes"
+        
+        echo ""
+        print_info "アンマウント完了 (${volume_count}個のボリューム)"
     fi
     
-    if [[ -n "$PLAYCOVER_VOLUME_DEVICE" ]]; then
-        local disk_id=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
-        
-        print_info "ディスク ${disk_id} を取り外し中..."
-        
-        if sudo /usr/sbin/diskutil eject "$disk_id"; then
-            print_success "ディスクを安全に取り外しました"
-        else
-            print_error "ディスクの取り外しに失敗しました"
-        fi
+    echo ""
+    print_info "ディスク ${disk_id} を取り外し中..."
+    
+    if sudo /usr/sbin/diskutil eject "$disk_id"; then
+        print_success "ディスクを安全に取り外しました"
+    else
+        print_error "ディスクの取り外しに失敗しました"
     fi
     
     echo ""
@@ -1694,7 +1778,7 @@ switch_storage_location() {
         local current_mount=$(get_mount_point "$volume_name")
         if [[ -n "$current_mount" ]]; then
             print_info "既存のマウントをアンマウント中..."
-            unmount_volume "$volume_name" || true
+            unmount_volume "$volume_name" "$bundle_id" || true
             sleep 1
         fi
         
@@ -1791,7 +1875,7 @@ switch_storage_location() {
                 echo ""
                 print_error "動作に問題があったため、元に戻します"
                 print_info "外部ボリュームをアンマウント中..."
-                unmount_volume "$volume_name" || true
+                unmount_volume "$volume_name" "$bundle_id" || true
                 
                 print_info "内蔵データを復元中..."
                 if sudo /bin/mv "$backup_path" "$target_path" 2>/dev/null; then
@@ -2060,7 +2144,7 @@ switch_storage_location() {
             sudo /bin/rm -rf "$source_mount"
         else
             print_info "外部ボリュームをアンマウント中..."
-            unmount_volume "$volume_name" || true
+            unmount_volume "$volume_name" "$bundle_id" || true
         fi
         
         print_success "内蔵ストレージへの切り替えが完了しました"
@@ -2142,10 +2226,6 @@ show_quick_status() {
     local total_count=0
     
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
         ((total_count++))
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
@@ -2173,7 +2253,7 @@ show_menu() {
     echo ""
     echo "                            ${GREEN}PlayCover 統合管理ツール${NC}"
     echo ""
-    echo "                      ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 3.0.1${NC}"
+    echo "                      ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
     echo ""
     echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
@@ -2187,8 +2267,16 @@ show_menu() {
     echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
     echo "                                         5. 個別ボリューム操作"
     echo ""
+    
+    # Dynamic eject menu label (v4.7.0)
+    local eject_label="ディスク全体を取り外し"
+    if [[ -n "$PLAYCOVER_VOLUME_DEVICE" ]]; then
+        local drive_name=$(get_drive_name)
+        eject_label="「${drive_name}」の取り外し"
+    fi
+    
     echo "  ${RED}【システム】${NC}"
-    echo "  8. ディスク全体を取り外し              9. マッピング情報を表示                0. 終了"
+    echo "  8. ${eject_label}              9. マッピング情報を表示                0. 終了"
     echo ""
     echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
