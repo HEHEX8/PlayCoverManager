@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Integrated Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 3.1.0 - Storage Capacity Check
+# Version: 3.1.1 - Real-time Progress Bar
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1722,12 +1722,12 @@ switch_storage_location() {
         print_info "  データサイズ: ${total_size}"
         
         # Copy data from internal to external
-        print_info "データをコピー中... (しばらくお待ちください)"
+        print_info "データをコピー中... (進捗が表示されます)"
         echo ""
         
-        local rsync_output=$(sudo /usr/bin/rsync -avH --ignore-errors --progress "$target_path/" "$temp_mount/" 2>&1)
+        # Use rsync with info=progress2 for real-time progress bar
+        sudo /usr/bin/rsync -avH --ignore-errors --info=progress2 "$target_path/" "$temp_mount/"
         local rsync_exit=$?
-        echo "$rsync_output"
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
             echo ""
@@ -2015,12 +2015,12 @@ switch_storage_location() {
         sudo /bin/mkdir -p "$target_path"
         
         # Copy data from external to internal
-        print_info "データをコピー中... (しばらくお待ちください)"
+        print_info "データをコピー中... (進捗が表示されます)"
         echo ""
         
-        local rsync_output=$(sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_mount/" "$target_path/" 2>&1)
+        # Use rsync with info=progress2 for real-time progress bar
+        sudo /usr/bin/rsync -avH --ignore-errors --info=progress2 "$source_mount/" "$target_path/"
         local rsync_exit=$?
-        echo "$rsync_output"
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
             echo ""
