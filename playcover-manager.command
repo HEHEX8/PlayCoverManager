@@ -936,6 +936,70 @@ install_ipa_to_playcover() {
         sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
+        # Check if PlayCover is still running
+        if ! pgrep -x "PlayCover" > /dev/null; then
+            echo ""
+            echo ""
+            print_error "PlayCover が終了しました"
+            print_warning "インストール中にクラッシュした可能性があります"
+            echo ""
+            
+            # Check if installation actually succeeded despite crash
+            local installation_succeeded=false
+            if [[ -d "$playcover_apps" ]]; then
+                while IFS= read -r app_path; do
+                    if [[ -f "${app_path}/Info.plist" ]]; then
+                        local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                        if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                            local current_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
+                            if [[ $current_mtime -gt $existing_mtime ]]; then
+                                installation_succeeded=true
+                                break
+                            fi
+                        fi
+                    fi
+                done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+            fi
+            
+            if [[ "$installation_succeeded" == true ]]; then
+                print_info "ただし、アプリのインストールは完了していました"
+                print_success "インストール成功"
+                INSTALL_SUCCESS+=("$APP_NAME")
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                echo ""
+                
+                # Restart PlayCover for next installation if in batch mode
+                if [[ $BATCH_MODE == true ]] && [[ $CURRENT_IPA_INDEX -lt $TOTAL_IPAS ]]; then
+                    print_info "次のインストールのため PlayCover を準備中..."
+                    sleep 2
+                fi
+                
+                return 0
+            else
+                print_error "インストールは完了していませんでした"
+                INSTALL_FAILED+=("$APP_NAME (PlayCoverクラッシュ)")
+                echo ""
+                
+                # In batch mode, offer to continue automatically
+                if [[ $BATCH_MODE == true ]] && [[ $CURRENT_IPA_INDEX -lt $TOTAL_IPAS ]]; then
+                    print_warning "残り $((TOTAL_IPAS - CURRENT_IPA_INDEX)) 個のIPAがあります"
+                    echo ""
+                    echo -n "次のIPAに進みますか？ (Y/n): "
+                    read continue_choice </dev/tty
+                    
+                    if [[ "$continue_choice" =~ ^[Nn]$ ]]; then
+                        return 1
+                    else
+                        print_info "次のインストールのため PlayCover を準備中..."
+                        sleep 2
+                        return 0
+                    fi
+                else
+                    return 1
+                fi
+            fi
+        fi
+        
         # Check if app was installed
         if [[ -d "$playcover_apps" ]]; then
             local found=false
