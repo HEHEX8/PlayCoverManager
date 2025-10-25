@@ -644,7 +644,7 @@ EOF
     if [[ $TOTAL_IPAS -gt 1 ]]; then
         BATCH_MODE=true
         echo ""
-        print_info "バッチモード: 複数の IPA ファイルを順次処理します"
+        print_info "複数の IPA ファイルを順次処理します"
     fi
     
     echo ""
@@ -1915,16 +1915,16 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【インストール】${NC}                       ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. IPA をインストール（単一）          3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. IPA を一括インストール              4. 全ボリュームをアンマウント          7. ストレージ状態確認"
-    echo "                                         5. 個別ボリューム操作"
+    echo "  1. IPA をインストール                  2. 全ボリュームをマウント              5. ストレージ切り替え（内蔵⇄外部）"
+    echo "                                         3. 全ボリュームをアンマウント          6. ストレージ状態確認"
+    echo "                                         4. 個別ボリューム操作"
     echo ""
     echo "  ${RED}【システム】${NC}"
-    echo "  8. ディスク全体を取り外し              9. マッピング情報を表示                0. 終了"
+    echo "  7. ディスク全体を取り外し              8. マッピング情報を表示                0. 終了"
     echo ""
     echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
-    echo -n "${CYAN}選択 (0-9):${NC} "
+    echo -n "${CYAN}選択 (0-8):${NC} "
 }
 
 show_mapping_info() {
@@ -2035,28 +2035,28 @@ main() {
         read choice
         
         case "$choice" in
-            1|2)
+            1)
                 install_workflow
                 ;;
-            3)
+            2)
                 mount_all_volumes
                 ;;
-            4)
+            3)
                 unmount_all_volumes
                 ;;
-            5)
+            4)
                 individual_volume_control
                 ;;
-            6)
+            5)
                 switch_storage_location
                 ;;
-            7)
+            6)
                 show_status
                 ;;
-            8)
+            7)
                 eject_disk
                 ;;
-            9)
+            8)
                 show_mapping_info
                 ;;
             0)
