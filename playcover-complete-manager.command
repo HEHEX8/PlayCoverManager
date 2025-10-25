@@ -450,22 +450,16 @@ mount_volume() {
 quit_app_for_bundle() {
     local bundle_id=$1
     
-    # Skip if bundle_id is empty
-    if [[ -z "$bundle_id" ]]; then
+    # Skip if bundle_id is empty or is PlayCover itself
+    if [[ -z "$bundle_id" ]] || [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
         return 0
     fi
     
-    # Try to quit the app using osascript
-    local app_name=$(get_display_name "$bundle_id")
-    if [[ -n "$app_name" ]]; then
-        /usr/bin/osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
-    fi
-    
-    # Wait a moment for the app to quit
-    sleep 0.5
-    
-    # Force kill if still running
+    # Force quit any process matching the bundle_id
     /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+    
+    # Wait a moment for cleanup
+    sleep 0.3
 }
 
 unmount_volume() {
@@ -2504,11 +2498,10 @@ uninstall_workflow() {
         return
     fi
     
-    # Get selected app info (array index is choice - 1)
-    local selected_index=$((app_choice - 1))
-    local selected_app="${apps_list[$selected_index]}"
-    local selected_volume="${volumes_list[$selected_index]}"
-    local selected_bundle="${bundles_list[$selected_index]}"
+    # Get selected app info (zsh arrays are 1-indexed)
+    local selected_app="${apps_list[$app_choice]}"
+    local selected_volume="${volumes_list[$app_choice]}"
+    local selected_bundle="${bundles_list[$app_choice]}"
     
     # Check if trying to delete PlayCover volume with other apps remaining
     if [[ "$selected_volume" == "PlayCover" ]] && [[ $total_apps -gt 1 ]]; then
