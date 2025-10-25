@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.4.2 - Fix Batch Uninstall Array Iteration (zsh compatibility)
+# Version: 4.4.3 - Fix Lock Mechanism + Duplicate Prevention
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -252,6 +252,34 @@ read_mappings() {
     /bin/cat "$MAPPING_FILE"
 }
 
+deduplicate_mappings() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 0
+    fi
+    
+    acquire_mapping_lock || return 1
+    
+    local temp_file="${MAPPING_FILE}.dedup"
+    local original_count=$(wc -l < "$MAPPING_FILE" 2>/dev/null || echo "0")
+    
+    # Remove duplicates based on volume_name (first column)
+    # Keep first occurrence, remove subsequent duplicates
+    /usr/bin/awk -F'\t' '!seen[$1]++' "$MAPPING_FILE" > "$temp_file"
+    
+    local new_count=$(wc -l < "$temp_file" 2>/dev/null || echo "0")
+    local removed=$((original_count - new_count))
+    
+    if [[ $removed -gt 0 ]]; then
+        /bin/mv "$temp_file" "$MAPPING_FILE"
+        print_info "重複エントリを ${removed} 件削除しました"
+    else
+        /bin/rm -f "$temp_file"
+    fi
+    
+    release_mapping_lock
+    return 0
+}
+
 add_mapping() {
     local volume_name=$1
     local bundle_id=$2
@@ -259,9 +287,15 @@ add_mapping() {
     
     acquire_mapping_lock || return 1
     
-    # Check if mapping already exists
+    # Check if mapping already exists (by volume_name OR bundle_id)
     if /usr/bin/grep -q "^${volume_name}"$'\t' "$MAPPING_FILE" 2>/dev/null; then
-        print_warning "マッピングが既に存在します: $display_name"
+        print_warning "ボリューム名が既に存在します: $volume_name"
+        release_mapping_lock
+        return 0
+    fi
+    
+    if /usr/bin/grep -q $'\t'"${bundle_id}"$'\t' "$MAPPING_FILE" 2>/dev/null; then
+        print_warning "Bundle IDが既に存在します: $bundle_id"
         release_mapping_lock
         return 0
     fi
@@ -2594,49 +2628,14 @@ uninstall_workflow() {
     # Step 9: Remove from mapping file
     print_info "マッピング情報を削除中..."
     
-    # Acquire lock with cleanup on failure
-    local lock_acquired=false
-    local lock_attempts=0
-    local max_lock_attempts=10
-    
-    while [[ $lock_acquired == false ]] && [[ $lock_attempts -lt $max_lock_attempts ]]; do
-        if mkdir "$LOCK_DIR" 2>/dev/null; then
-            lock_acquired=true
-        else
-            ((lock_attempts++))
-            if [[ $lock_attempts -ge $max_lock_attempts ]]; then
-                # Try to clean up stale lock
-                print_warning "古いロックを検出しました。クリーンアップを試みます..."
-                rmdir "$LOCK_DIR" 2>/dev/null || true
-                sleep 1
-                # One more attempt after cleanup
-                if mkdir "$LOCK_DIR" 2>/dev/null; then
-                    lock_acquired=true
-                fi
-            else
-                sleep 1
-            fi
-        fi
-    done
-    
-    if [[ $lock_acquired == false ]]; then
-        print_error "マッピングファイルのロック取得に失敗しました"
-        echo ""
-        echo "手動でロックをクリアする場合："
-        echo "  rm -rf \"$LOCK_DIR\""
+    # Use remove_mapping function for consistency
+    if ! remove_mapping "$selected_bundle"; then
+        print_error "マッピング情報の削除に失敗しました"
         echo ""
         echo -n "Enterキーで続行..."
         read
         return
     fi
-    
-    # Remove the entry
-    local temp_file="${MAPPING_FILE}.tmp"
-    grep -v "^${selected_volume}	${selected_bundle}	" "$MAPPING_FILE" > "$temp_file" 2>/dev/null || true
-    mv "$temp_file" "$MAPPING_FILE"
-    
-    # Release lock
-    rmdir "$LOCK_DIR" 2>/dev/null || true
     
     print_success "マッピング情報を削除しました"
     
@@ -2820,32 +2819,11 @@ uninstall_all_apps() {
     echo ""
     print_info "マッピング情報をクリア中..."
     
-    # Acquire lock
-    local lock_acquired=false
-    local lock_attempts=0
-    local max_lock_attempts=10
-    
-    while [[ $lock_acquired == false ]] && [[ $lock_attempts -lt $max_lock_attempts ]]; do
-        if mkdir "$LOCK_DIR" 2>/dev/null; then
-            lock_acquired=true
-        else
-            ((lock_attempts++))
-            if [[ $lock_attempts -ge $max_lock_attempts ]]; then
-                rmdir "$LOCK_DIR" 2>/dev/null || true
-                sleep 1
-                if mkdir "$LOCK_DIR" 2>/dev/null; then
-                    lock_acquired=true
-                fi
-            else
-                sleep 1
-            fi
-        fi
-    done
-    
-    if [[ $lock_acquired == true ]]; then
+    # Use acquire_mapping_lock function for consistency
+    if acquire_mapping_lock; then
         # Clear mapping file
         > "$MAPPING_FILE"
-        rmdir "$LOCK_DIR" 2>/dev/null || true
+        release_mapping_lock
         print_success "マッピング情報をクリアしました"
     else
         print_warning "マッピングファイルのロック取得に失敗しました"
@@ -3482,6 +3460,9 @@ main() {
     fi
     
     check_mapping_file
+    
+    # Clean up duplicate entries in mapping file
+    deduplicate_mappings
     
     while true; do
         show_menu
