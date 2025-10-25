@@ -213,3 +213,26 @@ After:
   - Mount protection now only blocks for actual user data
   - False positives eliminated for metadata-only directories
   - Improved user experience with clear feedback
+
+### Phase 17: Absolute Path for grep Command (v1.5.5)
+- **Fixed Critical Bug**: `grep: command not found` error in v1.5.4
+- **User Report**: 
+  - `get_storage_type:24: command not found: grep`
+  - Error appears multiple times in menu display
+  - Confirmed `.DS_Store` exists with `ls -A`
+- **Root Cause**: 
+  - Used `grep` without absolute path in metadata filtering
+  - zsh scripts require absolute paths for all external commands
+  - Line 325 and Line 200 used relative `grep`
+- **Solution**:
+  - Changed `grep` to `/usr/bin/grep` in both locations
+  - Line 325: `get_storage_type()` function
+  - Line 200: `mount_volume()` function
+- **Verification**:
+  - User confirmed `.DS_Store` presence with `ls -A`
+  - User manually deleted duplicate subdirectory
+  - Now only `.DS_Store` remains (should be filtered)
+- **Impact**:
+  - Error messages eliminated
+  - Metadata filtering now works correctly
+  - Script can properly detect storage types
