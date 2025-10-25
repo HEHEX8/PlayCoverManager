@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.3.1 - Enhanced Uninstall (Complete Cleanup + Loop)
+# Version: 4.3.2 - Protected PlayCover + Complete Cleanup
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2236,7 +2236,7 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. IPAをインストール                   3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
+    echo "  1. アプリをインストール                3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
     echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
     echo "                                         5. 個別ボリューム操作"
     echo ""
@@ -2435,6 +2435,25 @@ uninstall_workflow() {
     local selected_volume="${volumes_list[$selected_index]}"
     local selected_bundle="${bundles_list[$selected_index]}"
     
+    # Check if trying to delete PlayCover volume with other apps remaining
+    if [[ "$selected_volume" == "PlayCover" ]] && [[ $total_apps -gt 1 ]]; then
+        echo ""
+        print_error "PlayCoverボリュームは削除できません"
+        echo ""
+        echo "理由: 他のアプリがまだインストールされています"
+        echo ""
+        echo "PlayCoverボリュームを削除するには："
+        echo "  1. 他のすべてのアプリを先にアンインストール"
+        echo "  2. PlayCoverボリュームが最後に残った状態にする"
+        echo "  3. その後、PlayCoverボリュームをアンインストール"
+        echo ""
+        echo "現在インストール済み: ${total_apps} 個のアプリ"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        continue
+    fi
+    
     echo ""
     print_warning "以下のアプリをアンインストールします:"
     echo ""
@@ -2447,9 +2466,10 @@ uninstall_workflow() {
     echo "  2. アプリ設定を削除 (App Settings/)"
     echo "  3. Entitlements を削除"
     echo "  4. Keymapping を削除"
-    echo "  5. APFSボリュームをアンマウント"
-    echo "  6. APFSボリュームを削除"
-    echo "  7. マッピング情報を削除"
+    echo "  5. Containersフォルダを削除"
+    echo "  6. APFSボリュームをアンマウント"
+    echo "  7. APFSボリュームを削除"
+    echo "  8. マッピング情報を削除"
     echo ""
     print_error "この操作は取り消せません！"
     echo ""
@@ -2514,7 +2534,18 @@ uninstall_workflow() {
         print_success "Keymapping を削除しました"
     fi
     
-    # Step 5: Unmount volume if mounted
+    # Step 5: Remove Containers folder for the app
+    local containers_dir="${HOME}/Library/Containers/${selected_bundle}"
+    if [[ -d "$containers_dir" ]]; then
+        print_info "Containersフォルダを削除中..."
+        if rm -rf "$containers_dir" 2>/dev/null; then
+            print_success "Containersフォルダを削除しました"
+        else
+            print_warning "Containersフォルダの削除に失敗しました"
+        fi
+    fi
+    
+    # Step 7: Unmount volume if mounted
     local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
     if mount | grep -q "$volume_mount_point"; then
         print_info "ボリュームをアンマウント中..."
@@ -2525,7 +2556,7 @@ uninstall_workflow() {
         fi
     fi
     
-    # Step 6: Delete APFS volume
+    # Step 8: Delete APFS volume
     print_info "APFSボリュームを削除中..."
     
     # Find the volume device
@@ -2548,10 +2579,10 @@ uninstall_workflow() {
         print_warning "ボリュームが見つかりませんでした（既に削除済み）"
     fi
     
-    # Step 7: Remove from mapping file
+    # Step 9: Remove from mapping file
     print_info "マッピング情報を削除中..."
     
-    # Acquire lock
+    # Acquire lock with cleanup on failure
     local lock_acquired=false
     local lock_attempts=0
     local max_lock_attempts=10
@@ -2561,12 +2592,26 @@ uninstall_workflow() {
             lock_acquired=true
         else
             ((lock_attempts++))
-            sleep 1
+            if [[ $lock_attempts -ge $max_lock_attempts ]]; then
+                # Try to clean up stale lock
+                print_warning "古いロックを検出しました。クリーンアップを試みます..."
+                rmdir "$LOCK_DIR" 2>/dev/null || true
+                sleep 1
+                # One more attempt after cleanup
+                if mkdir "$LOCK_DIR" 2>/dev/null; then
+                    lock_acquired=true
+                fi
+            else
+                sleep 1
+            fi
         fi
     done
     
     if [[ $lock_acquired == false ]]; then
         print_error "マッピングファイルのロック取得に失敗しました"
+        echo ""
+        echo "手動でロックをクリアする場合："
+        echo "  rm -rf \"$LOCK_DIR\""
         echo ""
         echo -n "Enterキーで続行..."
         read
