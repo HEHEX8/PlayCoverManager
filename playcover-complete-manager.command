@@ -2645,15 +2645,12 @@ uninstall_workflow() {
         return
     else
         local remaining_count=$(echo "$remaining_content" | wc -l | tr -d ' ')
+        echo ""
         echo "${CYAN}残り ${remaining_count} 個のアプリがインストールされています${NC}"
         echo ""
-        echo -n "${YELLOW}続けて別のアプリをアンインストールしますか？ (y/N):${NC} "
-        read continue_uninstall
-        
-        if [[ ! "$continue_uninstall" =~ ^[Yy] ]]; then
-            return
-        fi
-        # Loop continues for next uninstallation
+        echo -n "Enterキーで続行..."
+        read
+        # Loop continues to show uninstall menu again
     fi
     done
 }
