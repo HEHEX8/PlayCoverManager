@@ -2320,18 +2320,12 @@ is_playcover_environment_ready() {
 run_initial_setup() {
     clear
     
-    echo "${CYAN}"
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║                                                           ║"
-    echo "║        ${GREEN}PlayCover 初回セットアップ${CYAN}                       ║"
-    echo "║                                                           ║"
-    echo "║    このツールを使用するには初期セットアップが必要です        ║"
-    echo "║                                                           ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
-    echo "${NC}"
+    print_header "PlayCover 初回セットアップ"
+    
+    print_warning "このツールを使用するには初期セットアップが必要です"
     echo ""
     
-    print_warning "セットアップには以下が必要です:"
+    print_info "セットアップには以下が必要です:"
     echo "  - Apple Silicon Mac"
     echo "  - ターミナルへのフルディスクアクセス権限"
     echo "  - Homebrew（未インストールの場合は自動インストール）"
