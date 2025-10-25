@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.4.1 - Unified Uninstall Menu (Individual + Batch)
+# Version: 4.4.2 - Fix Batch Uninstall Array Iteration (zsh compatibility)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2751,11 +2751,12 @@ uninstall_all_apps() {
     local success_count=0
     local fail_count=0
     
-    for i in "${!apps_list[@]}"; do
+    # Loop through all apps (zsh arrays are 1-indexed by default)
+    for ((i=1; i<=${#apps_list[@]}; i++)); do
         local app_name="${apps_list[$i]}"
         local volume_name="${volumes_list[$i]}"
         local bundle_id="${bundles_list[$i]}"
-        local current=$((i + 1))
+        local current=$i
         
         echo ""
         print_info "[${current}/${total_apps}] ${app_name} を削除中..."
