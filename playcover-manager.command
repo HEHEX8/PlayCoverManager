@@ -878,70 +878,121 @@ install_ipa_to_playcover() {
         sudo /bin/rm -rf "$installed_app_path"
     fi
     
-    print_info "PlayCover CLI を使用してインストール中..."
     print_info "ファイル: $(basename "$ipa_file")"
     echo ""
-    print_warning "PlayCover アプリが前面に表示されます"
-    print_info "インストール完了まで操作せずにお待ちください..."
+    
+    # Method 1: Try using AppleScript to open IPA with PlayCover
+    print_info "方法1: AppleScript でPlayCoverを使ってIPAを開きます"
     echo ""
     
-    local playcover_cli="/Applications/PlayCover.app/Contents/MacOS/PlayCover"
+    local applescript_result=$(osascript 2>&1 <<EOF
+tell application "PlayCover"
+    activate
+    open POSIX file "$ipa_file"
+end tell
+
+-- Wait for installation to complete (check every 2 seconds for up to 5 minutes)
+set maxAttempts to 150
+set attempts to 0
+repeat while attempts < maxAttempts
+    delay 2
+    set attempts to attempts + 1
     
-    if [[ ! -x "$playcover_cli" ]]; then
-        print_error "PlayCover CLI が見つかりません"
-        return 1
+    -- Check if app was installed
+    tell application "System Events"
+        if exists file "$installed_app_path" then
+            return "SUCCESS"
+        end if
+    end tell
+end repeat
+
+return "TIMEOUT"
+EOF
+)
+    
+    local applescript_exit=$?
+    
+    if [[ "$applescript_result" == "SUCCESS" ]]; then
+        print_success "インストールが完了しました (AppleScript経由)"
+        INSTALL_SUCCESS+=("$APP_NAME")
+        update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+        echo ""
+        return 0
+    elif [[ "$applescript_result" == "TIMEOUT" ]]; then
+        print_warning "インストールがタイムアウトしました"
+        print_info "PlayCoverが応答していない可能性があります"
+    else
+        print_warning "AppleScript経由のインストールに失敗しました"
+        echo "エラー: $applescript_result"
     fi
     
-    # Run PlayCover CLI in foreground (it opens GUI)
-    # Redirect output to log but still show progress
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "PlayCover ログ:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    print_info "方法2: 手動インストールを試みます"
+    echo ""
     
-    # Use timeout to prevent hanging (max 5 minutes)
-    if timeout 300 "$playcover_cli" install "$ipa_file" 2>&1 | tee /tmp/playcover_install.log; then
-        local install_exit=${PIPESTATUS[0]}
+    # Method 2: Try direct CLI if it exists
+    local playcover_cli="/Applications/PlayCover.app/Contents/MacOS/PlayCover"
+    
+    if [[ -x "$playcover_cli" ]]; then
+        print_info "PlayCover CLI を使用してインストール中..."
         
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
+        # Try with different possible commands
+        local cli_success=false
         
-        if [[ $install_exit -eq 0 ]]; then
-            # Verify installation by checking if app exists
+        # Try: PlayCover install <ipa>
+        if "$playcover_cli" install "$ipa_file" > /tmp/playcover_install.log 2>&1; then
+            cli_success=true
+        # Try: PlayCover -i <ipa>
+        elif "$playcover_cli" -i "$ipa_file" > /tmp/playcover_install.log 2>&1; then
+            cli_success=true
+        # Try: PlayCover --install <ipa>
+        elif "$playcover_cli" --install "$ipa_file" > /tmp/playcover_install.log 2>&1; then
+            cli_success=true
+        fi
+        
+        if [[ "$cli_success" == true ]]; then
+            # Verify installation
+            sleep 2
             if [[ -d "$installed_app_path" ]]; then
-                print_success "インストールが完了しました"
+                print_success "インストールが完了しました (CLI経由)"
                 INSTALL_SUCCESS+=("$APP_NAME")
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                echo ""
+                return 0
             else
-                print_warning "PlayCover CLIは正常終了しましたが、アプリが見つかりません"
-                print_info "手動でPlayCoverを確認してください"
-                INSTALL_SUCCESS+=("$APP_NAME (要確認)")
+                print_warning "CLI実行は成功しましたが、アプリが見つかりません"
             fi
-            
-            update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
-            
-            echo ""
-            return 0
         else
-            print_error "インストールに失敗しました (終了コード: $install_exit)"
-            INSTALL_FAILED+=("$APP_NAME")
+            print_warning "CLI経由のインストールに失敗しました"
             echo ""
-            return 1
+            print_info "ログ:"
+            /bin/cat /tmp/playcover_install.log
         fi
+    fi
+    
+    # Method 3: Manual installation fallback
+    echo ""
+    print_warning "自動インストールに失敗しました"
+    echo ""
+    print_info "手動インストール手順:"
+    echo "  1. PlayCover アプリを開く"
+    echo "  2. 以下のIPAファイルをPlayCoverウィンドウにドラッグ&ドロップ:"
+    echo "     ${ipa_file}"
+    echo "  3. インストールが完了するまで待つ"
+    echo ""
+    echo -n "手動インストールが完了したらEnterキーを押してください..."
+    read
+    
+    # Verify manual installation
+    if [[ -d "$installed_app_path" ]]; then
+        print_success "インストールが確認されました (手動)"
+        INSTALL_SUCCESS+=("$APP_NAME")
+        update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+        echo ""
+        return 0
     else
-        local timeout_exit=$?
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-        
-        if [[ $timeout_exit -eq 124 ]]; then
-            print_error "インストールがタイムアウトしました (5分経過)"
-            print_info "PlayCover が応答していない可能性があります"
-        else
-            print_error "インストールに失敗しました"
-        fi
-        
+        print_error "インストールが確認できませんでした"
         INSTALL_FAILED+=("$APP_NAME")
-        echo ""
-        print_info "ログを確認:"
-        /bin/cat /tmp/playcover_install.log
         echo ""
         return 1
     fi
