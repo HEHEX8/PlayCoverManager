@@ -915,25 +915,30 @@ install_ipa_to_playcover() {
     local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
     local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
     
-    # Track settings file mtime stability (v4.9.0: Settings mtime based detection)
+    # Track settings file updates (v5.0.0: Update count based detection)
+    local settings_update_count=0
     local last_settings_mtime=0
-    local settings_stable_count=0
-    local required_stable_checks=2  # 6 seconds of settings mtime stability (2 checks * 3 seconds)
+    local initial_settings_exists=false
     
-    # Detection Method (v4.9.0 - Settings File Mtime Stability):
-    # Based on real-world observation:
-    # - New install: Settings file updated once, then stable for 6+ seconds = complete
-    # - Overwrite: Settings file updated TWICE, then stable for 6+ seconds = complete
+    # Check if settings file exists before installation starts
+    if [[ -f "$app_settings_plist" ]]; then
+        initial_settings_exists=true
+        last_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
+    fi
+    
+    # Detection Method (v5.0.0 - Settings File Update Count):
+    # Ultra-simple approach based on real-world observation:
     # 
-    # Phase 1: Structure validation (Info.plist + _CodeSignature)
-    # Phase 2: Settings file stability (mtime unchanged for 6 seconds)
-    # Success criteria: Phase 1 + Phase 2 (simple and reliable)
+    # NEW INSTALL:
+    #   - Wait for settings file to appear → Complete immediately
     # 
-    # Key findings from analysis:
-    # - resolution key appears early (not reliable as completion marker)
-    # - Settings file is updated multiple times during installation
-    # - When settings file stops updating = PlayCover finished processing
-    # - This works for both new and overwrite installations
+    # OVERWRITE INSTALL:
+    #   - Settings file already exists
+    #   - Wait for 1st update → Skip (ignore)
+    #   - Wait for 2nd update → Complete immediately
+    # 
+    # No stability checks, no complex conditions.
+    # Just count settings file updates and complete on the right count.
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
@@ -1037,31 +1042,33 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: Settings file mtime stability check (v4.9.1)
+                        # Phase 2: Settings file update count check (v5.0.0)
                         if [[ -f "$app_settings_plist" ]]; then
                             local current_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
                             
-                            # v4.9.1: Only track if mtime is valid (> 0)
                             if [[ $current_settings_mtime -gt 0 ]]; then
-                                # Check if settings file mtime changed
+                                # Check if settings file was updated
                                 if [[ $current_settings_mtime -ne $last_settings_mtime ]]; then
-                                    # Settings file was updated - reset stability counter
-                                    settings_stable_count=0
+                                    # Settings file was updated!
+                                    ((settings_update_count++))
                                     last_settings_mtime=$current_settings_mtime
-                                else
-                                    # Settings file unchanged - increment stability counter
-                                    # v4.9.1: Only count if we have a valid previous mtime
-                                    if [[ $last_settings_mtime -gt 0 ]]; then
-                                        ((settings_stable_count++))
-                                    fi
                                 fi
                                 
-                                # v4.9.1: Completion check
-                                # Structure valid + Settings file exists + Stable for 6 seconds = Complete
-                                if [[ "$structure_valid" == true ]] && [[ $last_settings_mtime -gt 0 ]] && [[ $settings_stable_count -ge $required_stable_checks ]]; then
-                                    # Installation confirmed by settings file stability
-                                    found=true
-                                    break
+                                # v5.0.0: Simple completion logic
+                                if [[ "$structure_valid" == true ]]; then
+                                    if [[ "$initial_settings_exists" == false ]]; then
+                                        # NEW INSTALL: Settings file appeared = Complete
+                                        if [[ $settings_update_count -ge 1 ]]; then
+                                            found=true
+                                            break
+                                        fi
+                                    else
+                                        # OVERWRITE: Wait for 2nd update = Complete
+                                        if [[ $settings_update_count -ge 2 ]]; then
+                                            found=true
+                                            break
+                                        fi
+                                    fi
                                 fi
                             fi
                         fi
@@ -1106,15 +1113,25 @@ install_ipa_to_playcover() {
         sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
-        # Show progress indicator with detailed status (v4.9.0)
-        if [[ $settings_stable_count -ge $required_stable_checks ]]; then
-            echo -n "✓"  # Settings stable (shouldn't reach here as loop should break)
-        elif [[ $settings_stable_count -gt 0 ]]; then
-            echo -n "◆"  # Settings file stable for ${settings_stable_count} checks
-        elif [[ $last_settings_mtime -gt 0 ]]; then
-            echo -n "◇"  # Settings file exists, waiting for stability
+        # Show progress indicator with detailed status (v5.0.0)
+        if [[ "$initial_settings_exists" == false ]]; then
+            # NEW INSTALL: Waiting for settings file
+            if [[ $settings_update_count -ge 1 ]]; then
+                echo -n "✓"  # Complete (shouldn't reach here)
+            elif [[ $last_settings_mtime -gt 0 ]]; then
+                echo -n "◆"  # Settings file detected
+            else
+                echo -n "."  # Waiting for settings
+            fi
         else
-            echo -n "."  # Still installing
+            # OVERWRITE: Waiting for 2nd update
+            if [[ $settings_update_count -ge 2 ]]; then
+                echo -n "✓"  # Complete (shouldn't reach here)
+            elif [[ $settings_update_count -eq 1 ]]; then
+                echo -n "◇"  # 1st update (waiting for 2nd)
+            else
+                echo -n "."  # Waiting for 1st update
+            fi
         fi
     done
     
