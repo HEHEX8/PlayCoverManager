@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.2.1 - Fixed: Correct PlayCover Settings Detection
+# Version: 4.3.0 - App Management (Install + Uninstall)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2235,8 +2235,8 @@ show_menu() {
     
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
-    echo "  ${GREEN}【インストール】${NC}                       ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. IPA をインストール                  2. 全ボリュームをマウント              5. ストレージ切り替え（内蔵⇄外部）"
+    echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
+    echo "  1. アプリ管理メニュー                  2. 全ボリュームをマウント              5. ストレージ切り替え（内蔵⇄外部）"
     echo "                                         3. 全ボリュームをアンマウント          6. ストレージ状態確認"
     echo "                                         4. 個別ボリューム操作"
     echo ""
@@ -2289,6 +2289,47 @@ show_mapping_info() {
 #######################################################
 # Module 10: Main Execution
 #######################################################
+
+#######################################################
+# Module 15.5: App Management Menu
+#######################################################
+
+app_management_menu() {
+    while true; do
+        clear
+        print_header "アプリ管理"
+        
+        echo ""
+        echo "${GREEN}▼ アプリ管理メニュー${NC}"
+        echo ""
+        echo "  1. IPAをインストール"
+        echo "  2. アプリをアンインストール"
+        echo ""
+        echo "  0. メインメニューに戻る"
+        echo ""
+        echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+        echo ""
+        echo -n "${CYAN}選択 (0-2):${NC} "
+        read app_choice
+        
+        case "$app_choice" in
+            1)
+                install_workflow
+                ;;
+            2)
+                uninstall_workflow
+                ;;
+            0)
+                return
+                ;;
+            *)
+                echo ""
+                print_error "無効な選択です"
+                sleep 2
+                ;;
+        esac
+    done
+}
 
 install_workflow() {
     clear
@@ -2343,6 +2384,225 @@ install_workflow() {
         done
     fi
     
+    echo ""
+    echo -n "Enterキーでメニューに戻る..."
+    read
+}
+
+uninstall_workflow() {
+    clear
+    print_header "アプリのアンインストール"
+    
+    # Check mapping file
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_error "マッピングファイルが見つかりません"
+        echo ""
+        echo "まだアプリがインストールされていません。"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    local mappings_content=$(read_mappings)
+    
+    if [[ -z "$mappings_content" ]]; then
+        print_warning "インストールされているアプリがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Display installed apps
+    echo ""
+    echo "インストールされているアプリ:"
+    echo ""
+    
+    local -a apps_list=()
+    local -a volumes_list=()
+    local -a bundles_list=()
+    local index=1
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        apps_list+=("$display_name")
+        volumes_list+=("$volume_name")
+        bundles_list+=("$bundle_id")
+        echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC}"
+        echo "      Bundle ID: ${bundle_id}"
+        echo "      ボリューム: ${volume_name}"
+        echo ""
+        ((index++))
+    done <<< "$mappings_content"
+    
+    local total_apps=${#apps_list[@]}
+    
+    if [[ $total_apps -eq 0 ]]; then
+        print_warning "インストールされているアプリがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    echo ""
+    echo -n "${YELLOW}アンインストールするアプリの番号を入力 (1-${total_apps}, 0=キャンセル):${NC} "
+    read app_choice
+    
+    # Validate input
+    if [[ ! "$app_choice" =~ ^[0-9]+$ ]] || [[ $app_choice -lt 0 ]] || [[ $app_choice -gt $total_apps ]]; then
+        print_error "無効な選択です"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    if [[ $app_choice -eq 0 ]]; then
+        print_info "キャンセルしました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Get selected app info (array index is choice - 1)
+    local selected_index=$((app_choice - 1))
+    local selected_app="${apps_list[$selected_index]}"
+    local selected_volume="${volumes_list[$selected_index]}"
+    local selected_bundle="${bundles_list[$selected_index]}"
+    
+    echo ""
+    print_warning "以下のアプリをアンインストールします:"
+    echo ""
+    echo "  アプリ名: ${GREEN}${selected_app}${NC}"
+    echo "  Bundle ID: ${selected_bundle}"
+    echo "  ボリューム: ${selected_volume}"
+    echo ""
+    print_warning "この操作は以下を実行します:"
+    echo "  1. PlayCover からアプリを削除"
+    echo "  2. APFSボリュームをアンマウント"
+    echo "  3. APFSボリュームを削除"
+    echo "  4. マッピング情報を削除"
+    echo ""
+    print_error "この操作は取り消せません！"
+    echo ""
+    echo -n "${RED}本当にアンインストールしますか？ (yes/NO):${NC} "
+    read confirm
+    
+    if [[ "$confirm" != "yes" ]]; then
+        print_info "キャンセルしました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Start uninstallation
+    echo ""
+    print_info "アンインストールを開始します..."
+    echo ""
+    
+    # Step 1: Remove app from PlayCover
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    local app_path="${playcover_apps}/${selected_bundle}.app"
+    
+    if [[ -d "$app_path" ]]; then
+        print_info "PlayCover からアプリを削除中..."
+        if rm -rf "$app_path" 2>/dev/null; then
+            print_success "アプリを削除しました"
+        else
+            print_error "アプリの削除に失敗しました"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            return
+        fi
+    else
+        print_warning "アプリが見つかりませんでした（既に削除済み）"
+    fi
+    
+    # Step 2: Remove app settings
+    local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${selected_bundle}.plist"
+    if [[ -f "$app_settings" ]]; then
+        print_info "アプリ設定を削除中..."
+        rm -f "$app_settings" 2>/dev/null
+        print_success "設定を削除しました"
+    fi
+    
+    # Step 3: Unmount volume if mounted
+    local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
+    if mount | grep -q "$volume_mount_point"; then
+        print_info "ボリュームをアンマウント中..."
+        if diskutil unmount "$volume_mount_point" >/dev/null 2>&1; then
+            print_success "ボリュームをアンマウントしました"
+        else
+            print_warning "アンマウントに失敗しました（続行します）"
+        fi
+    fi
+    
+    # Step 4: Delete APFS volume
+    print_info "APFSボリュームを削除中..."
+    
+    # Find the volume device
+    local volume_device=$(diskutil list | grep "$selected_volume" | awk '{print $NF}')
+    
+    if [[ -n "$volume_device" ]]; then
+        if sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+            print_success "ボリュームを削除しました"
+        else
+            print_error "ボリュームの削除に失敗しました"
+            echo ""
+            echo "手動で削除する必要があります:"
+            echo "  sudo diskutil apfs deleteVolume $volume_device"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            return
+        fi
+    else
+        print_warning "ボリュームが見つかりませんでした（既に削除済み）"
+    fi
+    
+    # Step 5: Remove from mapping file
+    print_info "マッピング情報を削除中..."
+    
+    # Acquire lock
+    local lock_acquired=false
+    local lock_attempts=0
+    local max_lock_attempts=10
+    
+    while [[ $lock_acquired == false ]] && [[ $lock_attempts -lt $max_lock_attempts ]]; do
+        if mkdir "$LOCK_DIR" 2>/dev/null; then
+            lock_acquired=true
+        else
+            ((lock_attempts++))
+            sleep 1
+        fi
+    done
+    
+    if [[ $lock_acquired == false ]]; then
+        print_error "マッピングファイルのロック取得に失敗しました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Remove the entry
+    local temp_file="${MAPPING_FILE}.tmp"
+    grep -v "^${selected_volume}	${selected_bundle}	" "$MAPPING_FILE" > "$temp_file" 2>/dev/null || true
+    mv "$temp_file" "$MAPPING_FILE"
+    
+    # Release lock
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    
+    print_success "マッピング情報を削除しました"
+    
+    echo ""
+    print_success "アンインストールが完了しました"
+    echo ""
+    echo "削除したアプリ: ${GREEN}${selected_app}${NC}"
     echo ""
     echo -n "Enterキーでメニューに戻る..."
     read
@@ -2971,7 +3231,7 @@ main() {
         
         case "$choice" in
             1)
-                install_workflow
+                app_management_menu
                 ;;
             2)
                 mount_all_volumes
