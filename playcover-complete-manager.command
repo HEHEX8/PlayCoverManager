@@ -1233,7 +1233,14 @@ unmount_all_volumes() {
     local success_count=0
     local fail_count=0
     
+    # Phase 1: Unmount PlayCover app volumes first (to avoid lock issues)
+    print_info "Phase 1: PlayCover配下のアプリボリュームをアンマウント中..."
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip PlayCover itself in this phase
+        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+            continue
+        fi
+        
         echo ""
         print_info "アンマウント中: ${display_name}"
         
@@ -1243,6 +1250,27 @@ unmount_all_volumes() {
             ((fail_count++))
         fi
     done <<< "$mappings_content"
+    
+    # Phase 2: Unmount PlayCover volume
+    echo ""
+    print_info "Phase 2: PlayCoverボリュームをアンマウント中..."
+    local playcover_device=$(get_playcover_device)
+    if [[ -n "$playcover_device" ]]; then
+        local playcover_volume=$(echo "$playcover_device" | sed 's|/dev/||')
+        echo ""
+        print_info "アンマウント中: PlayCover"
+        
+        # Quit PlayCover first
+        quit_app_for_bundle "$PLAYCOVER_BUNDLE_ID"
+        
+        if sudo /usr/sbin/diskutil unmount "$playcover_device" >/dev/null 2>&1; then
+            print_success "PlayCoverボリュームをアンマウントしました"
+            ((success_count++))
+        else
+            print_warning "PlayCoverボリュームのアンマウントに失敗しました"
+            ((fail_count++))
+        fi
+    fi
     
     echo ""
     print_success "アンマウント完了"
@@ -1487,36 +1515,105 @@ eject_disk() {
     
     # Get all volumes on this disk
     local all_volumes=$(/usr/sbin/diskutil list "$disk_id" | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
+    local mappings_content=$(read_mappings)
     
     if [[ -n "$all_volumes" ]]; then
-        local volume_count=0
+        # Separate volumes into three groups
+        declare -a app_volumes=()
+        declare -a playcover_volumes=()
+        declare -a other_volumes=()
+        
         while IFS= read -r vol_name; do
-            if [[ -n "$vol_name" ]]; then
-                echo ""
-                print_info "アンマウント中: ${vol_name}"
-                
-                # Try to find bundle_id for this volume from mappings
-                local bundle_id=""
-                local mappings_content=$(read_mappings)
-                if [[ -n "$mappings_content" ]]; then
-                    while IFS=$'\t' read -r mapped_vol mapped_bundle mapped_display; do
-                        if [[ "$mapped_vol" == "$vol_name" ]]; then
-                            bundle_id="$mapped_bundle"
-                            break
+            if [[ -z "$vol_name" ]]; then
+                continue
+            fi
+            
+            # Check if this is an app volume or PlayCover volume
+            local is_app_volume=false
+            local is_playcover_volume=false
+            local bundle_id=""
+            
+            if [[ -n "$mappings_content" ]]; then
+                while IFS=$'\t' read -r mapped_vol mapped_bundle mapped_display; do
+                    if [[ "$mapped_vol" == "$vol_name" ]]; then
+                        bundle_id="$mapped_bundle"
+                        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+                            is_playcover_volume=true
+                        else
+                            is_app_volume=true
                         fi
-                    done <<< "$mappings_content"
-                fi
+                        break
+                    fi
+                done <<< "$mappings_content"
+            fi
+            
+            if [[ "$is_app_volume" == true ]]; then
+                app_volumes+=("${vol_name}|${bundle_id}")
+            elif [[ "$is_playcover_volume" == true ]]; then
+                playcover_volumes+=("${vol_name}|${bundle_id}")
+            else
+                other_volumes+=("${vol_name}|")
+            fi
+        done <<< "$all_volumes"
+        
+        local volume_count=0
+        
+        # Phase 1: Unmount app volumes
+        if [[ ${#app_volumes[@]} -gt 0 ]]; then
+            print_info "Phase 1: PlayCover配下のアプリボリュームをアンマウント中..."
+            for vol_info in "${app_volumes[@]}"; do
+                local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+                local bundle_id=$(echo "$vol_info" | cut -d'|' -f2)
                 
-                # Quit app if we found a bundle_id
+                echo ""
+                print_info "  アンマウント中: ${vol_name}"
+                
                 if [[ -n "$bundle_id" ]]; then
                     quit_app_for_bundle "$bundle_id"
                 fi
                 
-                # Unmount the volume
-                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
                 ((volume_count++))
-            fi
-        done <<< "$all_volumes"
+            done
+        fi
+        
+        # Phase 2: Unmount PlayCover volume
+        if [[ ${#playcover_volumes[@]} -gt 0 ]]; then
+            echo ""
+            print_info "Phase 2: PlayCoverボリュームをアンマウント中..."
+            for vol_info in "${playcover_volumes[@]}"; do
+                local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+                local bundle_id=$(echo "$vol_info" | cut -d'|' -f2)
+                
+                echo ""
+                print_info "  アンマウント中: ${vol_name}"
+                
+                if [[ -n "$bundle_id" ]]; then
+                    quit_app_for_bundle "$bundle_id"
+                fi
+                
+                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                ((volume_count++))
+            done
+        fi
+        
+        # Phase 3: Unmount other volumes
+        if [[ ${#other_volumes[@]} -gt 0 ]]; then
+            echo ""
+            print_info "Phase 3: その他のボリュームをアンマウント中..."
+            for vol_info in "${other_volumes[@]}"; do
+                local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+                
+                echo ""
+                print_info "  アンマウント中: ${vol_name}"
+                
+                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                ((volume_count++))
+            done
+        fi
         
         echo ""
         print_info "アンマウント完了 (${volume_count}個のボリューム)"
@@ -1736,8 +1833,8 @@ switch_storage_location() {
             return
         fi
         
-        # Check if Data directory exists at root level
-        if [[ -d "$source_path/Data" ]] && [[ -f "$source_path/.com.apple.containermanagerd.metadata.plist" ]]; then
+        # Check if Data directory exists at root level (use sudo for permission)
+        if sudo test -d "$source_path/Data" && sudo test -f "$source_path/.com.apple.containermanagerd.metadata.plist"; then
             # Normal container structure - use as-is
             print_info "内蔵ストレージからコピーします: $source_path"
         else
