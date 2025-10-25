@@ -1737,12 +1737,12 @@ switch_storage_location() {
         
         # Get available space on external volume (mount temporarily to check)
         local volume_device=$(get_volume_device "$volume_name")
-        local temp_check_mount="/tmp/playcover_check_$$"
-        sudo /bin/mkdir -p "$temp_check_mount"
         
-        if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
-            print_error "外部ボリュームの容量チェックに失敗しました"
-            sudo /bin/rm -rf "$temp_check_mount"
+        if [[ -z "$volume_device" ]]; then
+            print_error "外部ボリュームのデバイス情報が取得できませんでした"
+            echo ""
+            print_info "デバッグ情報:"
+            echo "  ボリューム名: $volume_name"
             echo ""
             echo -n "Enterキーで続行..."
             read
@@ -1750,9 +1750,38 @@ switch_storage_location() {
             return
         fi
         
-        local available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
-        sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
-        sudo /bin/rm -rf "$temp_check_mount"
+        print_info "外部ボリューム: $volume_device"
+        
+        local temp_check_mount="/tmp/playcover_check_$$"
+        sudo /bin/mkdir -p "$temp_check_mount"
+        
+        # Check if volume is already mounted
+        local existing_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point" | sed 's/.*: *//')
+        local available_bytes=0
+        
+        if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
+            # Volume already mounted, use it directly
+            print_info "外部ボリュームは既にマウントされています: $existing_mount"
+            available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
+            sudo /bin/rm -rf "$temp_check_mount"
+        elif sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+            # Mounted successfully for check
+            available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
+            sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+            sudo /bin/rm -rf "$temp_check_mount"
+        else
+            print_error "外部ボリュームのマウントに失敗しました"
+            echo ""
+            print_info "デバッグ情報:"
+            echo "  デバイス: $volume_device"
+            echo "  マウントポイント: $temp_check_mount"
+            sudo /bin/rm -rf "$temp_check_mount"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
         
         # Convert to human readable
         local source_size_mb=$((source_size_bytes / 1024))
