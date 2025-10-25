@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.3.2 - Protected PlayCover + Complete Cleanup
+# Version: 4.4.0 - Batch Uninstall All Apps
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2236,16 +2236,16 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール                3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
-    echo "                                         5. 個別ボリューム操作"
+    echo "  1. アプリをインストール                4. 全ボリュームをマウント              7. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール            5. 全ボリュームをアンマウント          8. ストレージ状態確認"
+    echo "  3. 全アプリを一括アンインストール      6. 個別ボリューム操作"
     echo ""
     echo "  ${RED}【システム】${NC}"
-    echo "  8. ディスク全体を取り外し              9. マッピング情報を表示                0. 終了"
+    echo "  9. ディスク全体を取り外し              10. マッピング情報を表示               0. 終了"
     echo ""
     echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
-    echo -n "${CYAN}選択 (0-9):${NC} "
+    echo -n "${CYAN}選択 (0-10):${NC} "
 }
 
 show_mapping_info() {
@@ -2655,6 +2655,202 @@ uninstall_workflow() {
         # Loop continues for next uninstallation
     fi
     done
+}
+
+uninstall_all_apps() {
+    clear
+    print_header "全アプリ一括アンインストール"
+    
+    # Check mapping file
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_error "マッピングファイルが見つかりません"
+        echo ""
+        echo "まだアプリがインストールされていません。"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    local mappings_content=$(read_mappings)
+    
+    if [[ -z "$mappings_content" ]]; then
+        print_warning "インストールされているアプリがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Count total apps
+    local total_apps=$(echo "$mappings_content" | wc -l | tr -d ' ')
+    
+    # Display all installed apps
+    echo ""
+    echo "以下のアプリをすべて削除します:"
+    echo ""
+    
+    local -a apps_list=()
+    local -a volumes_list=()
+    local -a bundles_list=()
+    local index=1
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        apps_list+=("$display_name")
+        volumes_list+=("$volume_name")
+        bundles_list+=("$bundle_id")
+        echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC}"
+        echo "      Bundle ID: ${bundle_id}"
+        echo "      ボリューム: ${volume_name}"
+        echo ""
+        ((index++))
+    done <<< "$mappings_content"
+    
+    echo "${YELLOW}合計: ${total_apps} 個のアプリ${NC}"
+    echo ""
+    print_warning "この操作は以下を実行します:"
+    echo "  1. すべてのアプリを PlayCover から削除"
+    echo "  2. すべての設定ファイルを削除"
+    echo "  3. すべての Entitlements を削除"
+    echo "  4. すべての Keymapping を削除"
+    echo "  5. すべての Containersフォルダを削除"
+    echo "  6. すべての APFSボリュームをアンマウント・削除"
+    echo "  7. すべてのマッピング情報を削除"
+    echo ""
+    print_error "この操作は取り消せません！"
+    print_error "PlayCoverを含むすべてのアプリが削除されます！"
+    echo ""
+    echo -n "${RED}本当にすべてのアプリをアンインストールしますか？ (yes/NO):${NC} "
+    read confirm
+    
+    if [[ "$confirm" != "yes" ]]; then
+        print_info "キャンセルしました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Start batch uninstallation
+    echo ""
+    print_info "一括アンインストールを開始します..."
+    echo ""
+    
+    local success_count=0
+    local fail_count=0
+    
+    for i in "${!apps_list[@]}"; do
+        local app_name="${apps_list[$i]}"
+        local volume_name="${volumes_list[$i]}"
+        local bundle_id="${bundles_list[$i]}"
+        local current=$((i + 1))
+        
+        echo ""
+        print_info "[${current}/${total_apps}] ${app_name} を削除中..."
+        echo ""
+        
+        # Step 1: Remove app from PlayCover
+        local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+        local app_path="${playcover_apps}/${bundle_id}.app"
+        
+        if [[ -d "$app_path" ]]; then
+            rm -rf "$app_path" 2>/dev/null
+        fi
+        
+        # Step 2: Remove app settings
+        local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${bundle_id}.plist"
+        if [[ -f "$app_settings" ]]; then
+            rm -f "$app_settings" 2>/dev/null
+        fi
+        
+        # Step 3: Remove entitlements
+        local entitlements_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements/${bundle_id}.plist"
+        if [[ -f "$entitlements_file" ]]; then
+            rm -f "$entitlements_file" 2>/dev/null
+        fi
+        
+        # Step 4: Remove keymapping
+        local keymapping_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping/${bundle_id}.plist"
+        if [[ -f "$keymapping_file" ]]; then
+            rm -f "$keymapping_file" 2>/dev/null
+        fi
+        
+        # Step 5: Remove Containers folder
+        local containers_dir="${HOME}/Library/Containers/${bundle_id}"
+        if [[ -d "$containers_dir" ]]; then
+            rm -rf "$containers_dir" 2>/dev/null
+        fi
+        
+        # Step 6: Unmount and delete APFS volume
+        local volume_mount_point="${PLAYCOVER_CONTAINER}/${volume_name}"
+        if mount | grep -q "$volume_mount_point"; then
+            diskutil unmount "$volume_mount_point" >/dev/null 2>&1
+        fi
+        
+        # Find and delete volume
+        local volume_device=$(diskutil list | grep "$volume_name" | awk '{print $NF}')
+        if [[ -n "$volume_device" ]]; then
+            if sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+                print_success "✓ ${app_name}"
+                ((success_count++))
+            else
+                print_error "✗ ${app_name} (ボリューム削除失敗)"
+                ((fail_count++))
+            fi
+        else
+            print_success "✓ ${app_name}"
+            ((success_count++))
+        fi
+    done
+    
+    # Step 7: Clear entire mapping file
+    echo ""
+    print_info "マッピング情報をクリア中..."
+    
+    # Acquire lock
+    local lock_acquired=false
+    local lock_attempts=0
+    local max_lock_attempts=10
+    
+    while [[ $lock_acquired == false ]] && [[ $lock_attempts -lt $max_lock_attempts ]]; do
+        if mkdir "$LOCK_DIR" 2>/dev/null; then
+            lock_acquired=true
+        else
+            ((lock_attempts++))
+            if [[ $lock_attempts -ge $max_lock_attempts ]]; then
+                rmdir "$LOCK_DIR" 2>/dev/null || true
+                sleep 1
+                if mkdir "$LOCK_DIR" 2>/dev/null; then
+                    lock_acquired=true
+                fi
+            else
+                sleep 1
+            fi
+        fi
+    done
+    
+    if [[ $lock_acquired == true ]]; then
+        # Clear mapping file
+        > "$MAPPING_FILE"
+        rmdir "$LOCK_DIR" 2>/dev/null || true
+        print_success "マッピング情報をクリアしました"
+    else
+        print_warning "マッピングファイルのロック取得に失敗しました"
+    fi
+    
+    # Summary
+    echo ""
+    echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    print_success "一括アンインストールが完了しました"
+    echo ""
+    echo "  ${GREEN}成功: ${success_count} 個${NC}"
+    if [[ $fail_count -gt 0 ]]; then
+        echo "  ${RED}失敗: ${fail_count} 個${NC}"
+    fi
+    echo ""
+    echo -n "Enterキーでメニューに戻る..."
+    read
 }
 
 #######################################################
@@ -3286,24 +3482,27 @@ main() {
                 uninstall_workflow
                 ;;
             3)
-                mount_all_volumes
+                uninstall_all_apps
                 ;;
             4)
-                unmount_all_volumes
+                mount_all_volumes
                 ;;
             5)
-                individual_volume_control
+                unmount_all_volumes
                 ;;
             6)
-                switch_storage_location
+                individual_volume_control
                 ;;
             7)
-                show_status
+                switch_storage_location
                 ;;
             8)
-                eject_disk
+                show_status
                 ;;
             9)
+                eject_disk
+                ;;
+            10)
                 show_mapping_info
                 ;;
             0)
