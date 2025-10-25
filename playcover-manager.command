@@ -1743,13 +1743,38 @@ switch_storage_location() {
             print_info "一時マウントポイントへ移動中..."
             
             local volume_device=$(get_volume_device "$volume_name")
-            if ! sudo /usr/sbin/umount "$target_path" 2>/dev/null; then
-                print_error "アンマウントに失敗しました"
+            
+            # Try normal unmount first
+            local umount_output=$(sudo /usr/sbin/diskutil unmount "$target_path" 2>&1)
+            local umount_exit=$?
+            
+            if [[ $umount_exit -ne 0 ]]; then
+                print_warning "通常のアンマウントに失敗しました"
+                echo "理由: $umount_output"
                 echo ""
-                echo -n "Enterキーで続行..."
-                read
-                switch_storage_location
-                return
+                print_info "強制アンマウントを試みます..."
+                
+                # Try force unmount
+                umount_output=$(sudo /usr/sbin/diskutil unmount force "$target_path" 2>&1)
+                umount_exit=$?
+                
+                if [[ $umount_exit -ne 0 ]]; then
+                    print_error "強制アンマウントも失敗しました"
+                    echo "理由: $umount_output"
+                    echo ""
+                    print_warning "このアプリが使用中の可能性があります"
+                    print_info "推奨される対応:"
+                    echo "  1. アプリが起動していないか確認"
+                    echo "  2. Finderでこのディレクトリを開いていないか確認"
+                    echo "  3. 上記を確認後、再度実行"
+                    echo ""
+                    echo -n "Enterキーで続行..."
+                    read </dev/tty
+                    switch_storage_location
+                    return
+                else
+                    print_success "強制アンマウントに成功しました"
+                fi
             fi
             
             sleep 1
