@@ -1174,7 +1174,6 @@ mount_all_volumes() {
     print_header "全ボリュームのマウント"
     
     authenticate_sudo
-    ensure_playcover_main_volume
     
     local mappings_content=$(read_mappings)
     
@@ -1189,13 +1188,24 @@ mount_all_volumes() {
     local success_count=0
     local fail_count=0
     
+    # Phase 1: Mount PlayCover volume first (required for app dependencies)
+    print_info "Phase 1: PlayCoverボリュームをマウント中..."
+    ensure_playcover_main_volume
+    echo ""
+    print_success "PlayCoverボリュームのマウント完了"
+    
+    # Phase 2: Mount app volumes
+    echo ""
+    print_info "Phase 2: PlayCover配下のアプリボリュームをマウント中..."
+    
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip PlayCover itself (already mounted in Phase 1)
         if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
             continue
         fi
         
         echo ""
-        print_info "マウント中: ${display_name}"
+        print_info "  マウント中: ${display_name}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         
@@ -1207,7 +1217,7 @@ mount_all_volumes() {
     done <<< "$mappings_content"
     
     echo ""
-    print_success "マウント完了"
+    print_success "全ボリュームのマウント完了"
     print_info "成功: ${success_count} / 失敗: ${fail_count}"
     echo ""
     echo -n "Enterキーで続行..."
@@ -1429,8 +1439,12 @@ individual_volume_control() {
         
         if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
             echo ""
-            ensure_playcover_main_volume
-            echo ""
+            # Ensure PlayCover volume is mounted first (dependency requirement)
+            if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
+                print_info "依存関係: PlayCoverボリュームを先にマウント中..."
+                ensure_playcover_main_volume
+                echo ""
+            fi
             mount_volume "$volume_name" "$target_path"
         fi
     fi
