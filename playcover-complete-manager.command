@@ -1723,9 +1723,33 @@ switch_storage_location() {
             return
         fi
         
+        # Determine source path: use backup if available, otherwise target_path
+        local source_path="$target_path"
+        if [[ -d "$backup_path" ]]; then
+            # Backup exists from previous external -> internal migration
+            print_info "バックアップディレクトリを使用します: $backup_path"
+            source_path="$backup_path"
+        elif [[ "$current_storage" == "internal" ]]; then
+            # Currently on internal storage
+            print_info "内蔵ストレージからコピーします: $target_path"
+            source_path="$target_path"
+        else
+            print_error "コピー元のデータが見つかりません"
+            echo ""
+            print_info "デバッグ情報:"
+            echo "  target_path: $target_path (存在: $([ -d "$target_path" ] && echo "Yes" || echo "No"))"
+            echo "  backup_path: $backup_path (存在: $([ -d "$backup_path" ] && echo "Yes" || echo "No"))"
+            echo "  current_storage: $current_storage"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
+        
         # Check disk space before migration
         print_info "転送前の容量チェック中..."
-        local source_size_bytes=$(sudo /usr/bin/du -sk "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+        local source_size_bytes=$(sudo /usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
         if [[ -z "$source_size_bytes" ]]; then
             print_error "コピー元のサイズを取得できませんでした"
             echo ""
@@ -1847,9 +1871,9 @@ switch_storage_location() {
         fi
         
         # Debug: Show source path and content
-        print_info "コピー元: ${target_path}"
-        local file_count=$(sudo /usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        local total_size=$(sudo /usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+        print_info "コピー元: ${source_path}"
+        local file_count=$(sudo /usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        local total_size=$(sudo /usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
@@ -1858,7 +1882,7 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with progress for real-time progress (macOS compatible)
-        sudo /usr/bin/rsync -avH --ignore-errors --progress "$target_path/" "$temp_mount/"
+        sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_path/" "$temp_mount/"
         local rsync_exit=$?
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
