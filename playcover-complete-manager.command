@@ -1723,10 +1723,10 @@ switch_storage_location() {
             return
         fi
         
-        # For internal -> external, always use target_path (current internal data)
+        # For internal -> external, determine correct source path
         local source_path="$target_path"
         
-        # Validate source path has actual data
+        # Validate source path exists
         if [[ ! -d "$source_path" ]]; then
             print_error "コピー元が存在しません: $source_path"
             echo ""
@@ -1736,26 +1736,52 @@ switch_storage_location() {
             return
         fi
         
-        # Check if source has actual content (not just empty mount point)
-        local source_type=$(get_storage_type "$source_path")
-        if [[ "$source_type" == "none" ]] || [[ "$source_type" == "external" ]]; then
-            print_error "内蔵ストレージにデータがありません"
-            echo ""
-            print_info "現在の状態:"
-            echo "  パス: $source_path"
-            echo "  タイプ: $source_type"
-            echo ""
-            print_info "考えられる原因:"
-            echo "  - 外部ボリュームがまだマウントされている"
-            echo "  - 内蔵ストレージへの移行が完了していない"
-            echo ""
-            echo -n "Enterキーで続行..."
-            read
-            switch_storage_location
-            return
+        # Check if Data directory exists at root level
+        if [[ -d "$source_path/Data" ]] && [[ -f "$source_path/.com.apple.containermanagerd.metadata.plist" ]]; then
+            # Normal container structure - use as-is
+            print_info "内蔵ストレージからコピーします: $source_path"
+        else
+            # Check for nested backup structure and find actual Data directory
+            print_info "コンテナ構造を検証中..."
+            
+            local data_path=$(sudo /usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
+            if [[ -n "$data_path" ]]; then
+                # Found Data directory - extract parent container path
+                local container_path=$(dirname "$data_path")
+                if [[ -f "$container_path/.com.apple.containermanagerd.metadata.plist" ]]; then
+                    print_warning "ネストされた構造を検出しました"
+                    print_info "実際のデータパス: $container_path"
+                    source_path="$container_path"
+                else
+                    print_error "正しいコンテナ構造が見つかりません"
+                    echo ""
+                    print_info "デバッグ情報:"
+                    echo "  検索開始: $source_path"
+                    echo "  Data発見: $data_path"
+                    echo "  親ディレクトリ: $container_path"
+                    echo ""
+                    echo -n "Enterキーで続行..."
+                    read
+                    switch_storage_location
+                    return
+                fi
+            else
+                print_error "内蔵ストレージにデータがありません"
+                echo ""
+                print_info "現在の状態:"
+                echo "  パス: $source_path"
+                echo ""
+                print_info "考えられる原因:"
+                echo "  - 外部ボリュームがまだマウントされている"
+                echo "  - 内蔵ストレージへの移行が完了していない"
+                echo "  - コンテナディレクトリが破損している"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
         fi
-        
-        print_info "内蔵ストレージからコピーします: $source_path"
         
         # Check disk space before migration
         print_info "転送前の容量チェック中..."
@@ -1910,13 +1936,14 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with progress for real-time progress (macOS compatible)
-        # Exclude system metadata files that should not be copied
+        # Exclude system metadata files and backup directories
         sudo /usr/bin/rsync -avH --ignore-errors --progress \
             --exclude='.Spotlight-V100' \
             --exclude='.fseventsd' \
             --exclude='.Trashes' \
             --exclude='.TemporaryItems' \
             --exclude='.DS_Store' \
+            --exclude='.playcover_backup_*' \
             "$source_path/" "$temp_mount/"
         local rsync_exit=$?
         
@@ -2220,13 +2247,14 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with progress for real-time progress (macOS compatible)
-        # Exclude system metadata files that should not be copied
+        # Exclude system metadata files and backup directories
         sudo /usr/bin/rsync -avH --ignore-errors --progress \
             --exclude='.Spotlight-V100' \
             --exclude='.fseventsd' \
             --exclude='.Trashes' \
             --exclude='.TemporaryItems' \
             --exclude='.DS_Store' \
+            --exclude='.playcover_backup_*' \
             "$source_mount/" "$target_path/"
         local rsync_exit=$?
         
