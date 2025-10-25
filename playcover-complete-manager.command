@@ -1188,31 +1188,28 @@ mount_all_volumes() {
     local success_count=0
     local fail_count=0
     
-    # Phase 1: Mount PlayCover volume first (required for app dependencies)
-    print_info "Phase 1: PlayCoverボリュームをマウント中..."
-    ensure_playcover_main_volume
+    print_info "playcover-map.txt の記載順でマウント中..."
     echo ""
-    print_success "PlayCoverボリュームのマウント完了"
     
-    # Phase 2: Mount app volumes
-    echo ""
-    print_info "Phase 2: PlayCover配下のアプリボリュームをマウント中..."
-    
+    # Process in file order (first to last)
+    # PlayCover should be listed first in playcover-map.txt
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        # Skip PlayCover itself (already mounted in Phase 1)
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
         echo ""
-        print_info "  マウント中: ${display_name}"
+        print_info "マウント中: ${display_name}"
         
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
-        
-        if mount_volume "$volume_name" "$target_path"; then
-            ((success_count++))
+        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+            # PlayCover volume
+            ensure_playcover_main_volume
+            print_success "PlayCoverボリュームのマウント完了"
         else
-            ((fail_count++))
+            # App volume
+            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            
+            if mount_volume "$volume_name" "$target_path"; then
+                ((success_count++))
+            else
+                ((fail_count++))
+            fi
         fi
     done <<< "$mappings_content"
     
@@ -1243,13 +1240,18 @@ unmount_all_volumes() {
     local success_count=0
     local fail_count=0
     
-    # Phase 1: Unmount PlayCover app volumes first (to avoid lock issues)
-    print_info "Phase 1: PlayCover配下のアプリボリュームをアンマウント中..."
+    # Read mappings into array for reverse processing
+    declare -a mappings_array=()
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        # Skip PlayCover itself in this phase
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done <<< "$mappings_content"
+    
+    print_info "playcover-map.txt の逆順でアンマウント中..."
+    echo ""
+    
+    # Process in reverse order (last to first)
+    for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         echo ""
         print_info "アンマウント中: ${display_name}"
@@ -1259,28 +1261,7 @@ unmount_all_volumes() {
         else
             ((fail_count++))
         fi
-    done <<< "$mappings_content"
-    
-    # Phase 2: Unmount PlayCover volume
-    echo ""
-    print_info "Phase 2: PlayCoverボリュームをアンマウント中..."
-    local playcover_device=$(get_playcover_device)
-    if [[ -n "$playcover_device" ]]; then
-        local playcover_volume=$(echo "$playcover_device" | sed 's|/dev/||')
-        echo ""
-        print_info "アンマウント中: PlayCover"
-        
-        # Quit PlayCover first
-        quit_app_for_bundle "$PLAYCOVER_BUNDLE_ID"
-        
-        if sudo /usr/sbin/diskutil unmount "$playcover_device" >/dev/null 2>&1; then
-            print_success "PlayCoverボリュームをアンマウントしました"
-            ((success_count++))
-        else
-            print_warning "PlayCoverボリュームのアンマウントに失敗しました"
-            ((fail_count++))
-        fi
-    fi
+    done
     
     echo ""
     print_success "アンマウント完了"
