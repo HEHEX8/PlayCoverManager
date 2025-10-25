@@ -1037,28 +1037,32 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: Settings file mtime stability check (v4.9.0)
+                        # Phase 2: Settings file mtime stability check (v4.9.1)
                         if [[ -f "$app_settings_plist" ]]; then
                             local current_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
                             
-                            # Check if settings file mtime changed
-                            if [[ $current_settings_mtime -ne $last_settings_mtime ]]; then
-                                # Settings file was updated - reset stability counter
-                                settings_stable_count=0
-                                last_settings_mtime=$current_settings_mtime
-                            else
-                                # Settings file unchanged - increment stability counter
-                                if [[ $last_settings_mtime -gt 0 ]]; then
-                                    ((settings_stable_count++))
+                            # v4.9.1: Only track if mtime is valid (> 0)
+                            if [[ $current_settings_mtime -gt 0 ]]; then
+                                # Check if settings file mtime changed
+                                if [[ $current_settings_mtime -ne $last_settings_mtime ]]; then
+                                    # Settings file was updated - reset stability counter
+                                    settings_stable_count=0
+                                    last_settings_mtime=$current_settings_mtime
+                                else
+                                    # Settings file unchanged - increment stability counter
+                                    # v4.9.1: Only count if we have a valid previous mtime
+                                    if [[ $last_settings_mtime -gt 0 ]]; then
+                                        ((settings_stable_count++))
+                                    fi
                                 fi
-                            fi
-                            
-                            # v4.9.0: Simple completion check
-                            # Structure valid + Settings file stable for 6 seconds = Complete
-                            if [[ "$structure_valid" == true ]] && [[ $settings_stable_count -ge $required_stable_checks ]]; then
-                                # Installation confirmed by settings file stability
-                                found=true
-                                break
+                                
+                                # v4.9.1: Completion check
+                                # Structure valid + Settings file exists + Stable for 6 seconds = Complete
+                                if [[ "$structure_valid" == true ]] && [[ $last_settings_mtime -gt 0 ]] && [[ $settings_stable_count -ge $required_stable_checks ]]; then
+                                    # Installation confirmed by settings file stability
+                                    found=true
+                                    break
+                                fi
                             fi
                         fi
                     fi
