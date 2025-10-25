@@ -639,23 +639,9 @@ try
         set AppleScript's text item delimiters to linefeed
         return posixPaths as text
     end tell
-on error
-    tell application "System Events"
-        activate
-        set theFiles to choose file with prompt "インストールする IPA ファイルを選択してください（複数選択可、.ipa）:" with multiple selections allowed
-        
-        set posixPaths to {}
-        repeat with aFile in theFiles
-            set thePath to POSIX path of aFile
-            if thePath does not end with ".ipa" then
-                error "選択されたファイルに IPA ファイル以外が含まれています: " & thePath
-            end if
-            set end of posixPaths to thePath
-        end repeat
-        
-        set AppleScript's text item delimiters to linefeed
-        return posixPaths as text
-    end tell
+on error errorMessage
+    -- User cancelled, return empty string
+    return ""
 end try
 EOF
 )
