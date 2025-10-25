@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.4.0 - Batch Uninstall All Apps
+# Version: 4.4.1 - Unified Uninstall Menu (Individual + Batch)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2236,16 +2236,16 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール                4. 全ボリュームをマウント              7. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール            5. 全ボリュームをアンマウント          8. ストレージ状態確認"
-    echo "  3. 全アプリを一括アンインストール      6. 個別ボリューム操作"
+    echo "  1. アプリをインストール                3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
+    echo "                                         5. 個別ボリューム操作"
     echo ""
     echo "  ${RED}【システム】${NC}"
-    echo "  9. ディスク全体を取り外し              10. マッピング情報を表示               0. 終了"
+    echo "  8. ディスク全体を取り外し              9. マッピング情報を表示                0. 終了"
     echo ""
     echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
-    echo -n "${CYAN}選択 (0-10):${NC} "
+    echo -n "${CYAN}選択 (0-9):${NC} "
 }
 
 show_mapping_info() {
@@ -2408,24 +2408,36 @@ uninstall_workflow() {
         return
     fi
     
+    # Show uninstall options
     echo ""
-    echo -n "${YELLOW}アンインストールするアプリの番号を入力 (1-${total_apps}, 0=キャンセル):${NC} "
+    echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    echo "${YELLOW}▼ アンインストール方法を選択${NC}"
+    echo ""
+    echo "  ${GREEN}個別削除${NC}: 1-${total_apps} の番号を入力"
+    echo "  ${RED}一括削除${NC}: ${RED}ALL${NC} を入力（すべてのアプリを一度に削除）"
+    echo "  ${CYAN}キャンセル${NC}: 0 を入力"
+    echo ""
+    echo -n "${YELLOW}選択:${NC} "
     read app_choice
     
-    # Validate input
+    # Check for batch uninstall
+    if [[ "$app_choice" == "ALL" ]] || [[ "$app_choice" == "all" ]]; then
+        # Call batch uninstall function
+        uninstall_all_apps
+        return
+    fi
+    
+    # Validate input for individual uninstall
     if [[ ! "$app_choice" =~ ^[0-9]+$ ]] || [[ $app_choice -lt 0 ]] || [[ $app_choice -gt $total_apps ]]; then
         print_error "無効な選択です"
         echo ""
         echo -n "Enterキーで続行..."
         read
-        return
+        continue
     fi
     
     if [[ $app_choice -eq 0 ]]; then
-        print_info "キャンセルしました"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
         return
     fi
     
@@ -3482,27 +3494,24 @@ main() {
                 uninstall_workflow
                 ;;
             3)
-                uninstall_all_apps
-                ;;
-            4)
                 mount_all_volumes
                 ;;
-            5)
+            4)
                 unmount_all_volumes
                 ;;
-            6)
+            5)
                 individual_volume_control
                 ;;
-            7)
+            6)
                 switch_storage_location
                 ;;
-            8)
+            7)
                 show_status
                 ;;
-            9)
+            8)
                 eject_disk
                 ;;
-            10)
+            9)
                 show_mapping_info
                 ;;
             0)
