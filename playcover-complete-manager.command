@@ -915,17 +915,17 @@ install_ipa_to_playcover() {
     local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
     local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
     
-    # Track file modification stability (shortened from 9s to 6s)
+    # Track file modification stability (v4.7.0: Extended for reliability)
     local last_mtime=0
     local stable_count=0
-    local required_stable_checks=2  # Shortened to 6 seconds (2 checks * 3 seconds)
+    local required_stable_checks=4  # Extended to 12 seconds (4 checks * 3 seconds)
     
-    # Detection Method (v4.2.1 - Correct Implementation):
+    # Detection Method (v4.7.0 - Enhanced Reliability):
     # Phase 1: Structure validation (Info.plist + _CodeSignature)
-    # Phase 2: PlayCover App Settings file check (MOST RELIABLE)
+    # Phase 2: PlayCover App Settings file check (REQUIRED)
     #          File: ~/Library/Containers/io.playcover.PlayCover/App Settings/[BundleID].plist
-    # Phase 3: File stability confirmation (shortened to 6 seconds)
-    # Success criteria: Phase 1 + (Phase 2 OR Phase 3)
+    # Phase 3: File stability confirmation (12 seconds)
+    # Success criteria: Phase 1 + Phase 2 + Phase 3 (ALL REQUIRED)
     
     while [[ $elapsed -lt $max_wait ]]; do
         sleep $check_interval
@@ -952,14 +952,11 @@ install_ipa_to_playcover() {
                                 if [[ -d "${app_path}/_CodeSignature" ]]; then
                                     local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
                                     if [[ -n "$app_name" ]]; then
-                                        # Check PlayCover settings file creation
+                                        # v4.7.0: Require settings file for success
                                         if [[ -f "$app_settings_plist" ]]; then
                                             installation_succeeded=true
                                             break
                                         fi
-                                        # If settings file doesn't exist yet, accept structure validity as fallback
-                                        installation_succeeded=true
-                                        break
                                     fi
                                 fi
                             fi
@@ -1053,9 +1050,9 @@ install_ipa_to_playcover() {
                                     # No new changes in this check - increment stability counter
                                     ((stable_count++))
                                     
-                                    # Combined check: structure + (settings file OR stability)
-                                    if [[ "$structure_valid" == true ]] && { [[ "$settings_created" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
-                                        # Installation confirmed by multiple indicators
+                                    # v4.7.0: Strict check - ALL conditions required
+                                    if [[ "$structure_valid" == true ]] && [[ "$settings_created" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
+                                        # Installation confirmed by all indicators
                                         found=true
                                         break
                                     fi
@@ -1072,8 +1069,8 @@ install_ipa_to_playcover() {
                                 if [[ $current_app_mtime -eq $last_mtime ]]; then
                                     ((stable_count++))
                                     
-                                    # Combined check: structure + (settings file OR stability)
-                                    if [[ "$structure_valid" == true ]] && { [[ "$settings_created" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
+                                    # v4.7.0: Strict check - ALL conditions required
+                                    if [[ "$structure_valid" == true ]] && [[ "$settings_created" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
                                         found=true
                                         break
                                     fi
@@ -1101,11 +1098,17 @@ install_ipa_to_playcover() {
         
         initial_check_done=true
         
-        # Show progress indicator with more detailed status
-        if [[ $stable_count -gt 0 ]]; then
-            echo -n "✓"  # Show checkmark when stable
+        # Show progress indicator with detailed status (v4.7.0)
+        if [[ "$settings_created" == true ]]; then
+            if [[ $stable_count -ge $required_stable_checks ]]; then
+                echo -n "✓"  # All checks passed (shouldn't reach here as loop should break)
+            else
+                echo -n "◆"  # Settings created, waiting for stability
+            fi
+        elif [[ $stable_count -gt 0 ]]; then
+            echo -n "◇"  # Stable but no settings yet
         else
-            echo -n "."  # Show dot when still changing
+            echo -n "."  # Still installing
         fi
     done
     
