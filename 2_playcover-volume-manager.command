@@ -293,26 +293,26 @@ unmount_volume() {
 
 # Check if path is on external volume
 is_on_external_volume() {
-    local path=$1
-    local storage_type=$(get_storage_type "$path")
+    local container_path=$1
+    local storage_type=$(get_storage_type "$container_path")
     [[ "$storage_type" == "external" ]]
 }
 
 # Get storage type (internal/external/none)
 get_storage_type() {
-    local path=$1
+    local container_path=$1
     local debug=${2:-false}  # Optional debug flag
     
     # If path doesn't exist, return unknown
-    if [[ ! -e "$path" ]]; then
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Path does not exist: $path" >&2
+    if [[ ! -e "$container_path" ]]; then
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Path does not exist: $container_path" >&2
         echo "unknown"
         return
     fi
     
     # CRITICAL: First check if this path is a mount point for an APFS volume
     # This is the most reliable way to detect external storage
-    local mount_check=$(/sbin/mount | /usr/bin/grep " on ${path} ")
+    local mount_check=$(/sbin/mount | /usr/bin/grep " on ${container_path} ")
     if [[ -n "$mount_check" ]] && [[ "$mount_check" =~ "apfs" ]]; then
         # This path is mounted as an APFS volume = external storage
         [[ "$debug" == "true" ]] && echo "[DEBUG] Detected as mount point (external)" >&2
@@ -321,10 +321,10 @@ get_storage_type() {
     fi
     
     # If it's a directory but not a mount point, check if it has content
-    if [[ -d "$path" ]]; then
+    if [[ -d "$container_path" ]]; then
         # Ignore macOS metadata files when checking for content
         # Use ls -A1 to ensure one item per line (not multi-column output)
-        local content_check=$(/bin/ls -A1 "$path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
@@ -341,7 +341,7 @@ get_storage_type() {
     
     # If not a mount point and has content, it's a regular directory on some disk
     # Get the device info for the filesystem containing this path
-    local device=$(/bin/df "$path" | /usr/bin/tail -1 | /usr/bin/awk '{print $1}')
+    local device=$(/bin/df "$container_path" | /usr/bin/tail -1 | /usr/bin/awk '{print $1}')
     local disk_id=$(echo "$device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
     
     [[ "$debug" == "true" ]] && echo "[DEBUG] Device: $device, Disk ID: $disk_id" >&2
@@ -1446,7 +1446,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.11${CYAN}                             ║"
+    echo "║                 ${BLUE}Version 1.5.12${CYAN}                             ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
