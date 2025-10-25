@@ -30,6 +30,10 @@ readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
 
+# Display width settings (optimized for 120x30 terminal)
+readonly DISPLAY_WIDTH=118
+readonly SEPARATOR_CHAR="─"
+
 # Global variables
 declare -a SELECTED_IPAS=()
 declare -a INSTALL_SUCCESS=()
@@ -55,10 +59,19 @@ NEED_PLAYCOVER=false
 # Module 2: Utility Functions
 #######################################################
 
+# Print separator line (optimized for 120-column terminal)
+print_separator() {
+    local char="${1:-$SEPARATOR_CHAR}"
+    local color="${2:-$BLUE}"
+    printf "${color}"
+    printf '%*s' "$DISPLAY_WIDTH" | tr ' ' "$char"
+    printf "${NC}\n"
+}
+
 print_header() {
     echo ""
     echo "${BLUE}▼ $1${NC}"
-    echo "${BLUE}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator
     echo ""
 }
 
@@ -89,7 +102,7 @@ print_batch_progress() {
     
     echo ""
     echo "${MAGENTA}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
-    echo "${MAGENTA}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator "$SEPARATOR_CHAR" "$MAGENTA"
     echo ""
 }
 
@@ -1257,10 +1270,6 @@ show_status() {
     
     local index=1
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local storage_type=$(get_storage_type "$target_path")
         local status_icon=""
@@ -1345,7 +1354,7 @@ individual_volume_control() {
         ((index++))
     done <<< "$mappings_content"
     
-    echo "${BLUE}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator
     echo ""
     echo "${CYAN}操作を選択してください:${NC}"
     echo "  ${GREEN}[番号]${NC} : 個別マウント/アンマウント"
@@ -1595,7 +1604,7 @@ switch_storage_location() {
         ((index++))
     done <<< "$mappings_content"
     
-    echo "${BLUE}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator
     echo ""
     echo "${CYAN}切り替えるアプリを選択してください:${NC}"
     echo "  ${GREEN}[番号]${NC} : ストレージ切り替え"
@@ -2260,23 +2269,23 @@ show_menu() {
     clear
     
     echo ""
-    echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    print_separator "═" "$CYAN"
     echo ""
-    echo "                            ${GREEN}PlayCover 統合管理ツール${NC}"
+    echo "                                  ${GREEN}PlayCover 統合管理ツール${NC}"
     echo ""
-    echo "                      ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
+    echo "                            ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
     echo ""
-    echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    print_separator "═" "$CYAN"
     echo ""
     
     show_quick_status
     
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
-    echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール                3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
-    echo "                                         5. 個別ボリューム操作"
+    echo "  ${GREEN}【アプリ管理】${NC}                            ${YELLOW}【ボリューム管理】${NC}                       ${CYAN}【ストレージ管理】${NC}"
+    echo "  1. アプリをインストール                   3. 全ボリュームをマウント                 6. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール               4. 全ボリュームをアンマウント             7. ストレージ状態確認"
+    echo "                                            5. 個別ボリューム操作"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -2297,7 +2306,7 @@ show_menu() {
     echo "  9. マッピング情報を表示"
     echo "  0. 終了"
     echo ""
-    echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
     echo -n "${CYAN}選択 (0-9):${NC} "
 }
@@ -2464,7 +2473,7 @@ uninstall_workflow() {
     
     # Show uninstall options
     echo ""
-    echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
+    print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
     echo "${YELLOW}▼ アンインストール方法を選択${NC}"
     echo ""
