@@ -915,21 +915,23 @@ install_ipa_to_playcover() {
     local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
     local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
     
-    # Track file modification stability (v4.7.0: Redesigned detection)
-    local last_mtime=0
+    # Track file count stability (v4.8.0: File-count based detection)
+    local last_file_count=0
     local stable_count=0
-    local required_stable_checks=5  # 15 seconds of stability (5 checks * 3 seconds)
+    local required_stable_checks=2  # 6 seconds of file count stability (2 checks * 3 seconds)
     
-    # Additional markers to confirm PlayCover completed processing
-    local keymapping_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping"
-    
-    # Detection Method (v4.7.0 - Redesigned for Reliability):
-    # Phase 1: Structure validation (Info.plist + _CodeSignature + executable)
-    # Phase 2: PlayCover processing markers:
-    #          - App Settings file created
-    #          - Keymapping directory exists (PlayCover creates this)
-    # Phase 3: Extended file stability (15 seconds with NO changes)
+    # Detection Method (v4.8.0 - File Count & Settings Key Based):
+    # Phase 1: Structure validation (Info.plist + _CodeSignature)
+    # Phase 2: PlayCover processing completion markers:
+    #          - App Settings file exists with 'resolution' key (PlayCover writes this last)
+    #          - Executable file exists in root directory (iOS app structure)
+    # Phase 3: File count stability (6 seconds with NO file additions)
     # Success criteria: Phase 1 + Phase 2 + Phase 3 (ALL REQUIRED)
+    # 
+    # Key findings from analysis:
+    # - Executable is in root: app_path/[executable] (NOT MacOS/[executable])
+    # - Settings file 'resolution' key indicates PlayCover processing complete
+    # - File count is more reliable than mtime for both new and overwrite installs
     
     while [[ $elapsed -lt $max_wait ]]; do
         sleep $check_interval
@@ -956,9 +958,22 @@ install_ipa_to_playcover() {
                                 if [[ -d "${app_path}/_CodeSignature" ]]; then
                                     local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
                                     if [[ -n "$app_name" ]]; then
-                                        # v4.7.0: Enhanced check - require settings AND executable
+                                        # v4.8.0: Check for settings with resolution key (indicates completion)
                                         local exec_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${app_path}/Info.plist" 2>/dev/null)
-                                        if [[ -f "$app_settings_plist" ]] && [[ -n "$exec_name" ]] && [[ -f "${app_path}/MacOS/${exec_name}" ]]; then
+                                        local has_resolution=false
+                                        if [[ -f "$app_settings_plist" ]]; then
+                                            if /usr/libexec/PlistBuddy -c "Print :resolution" "$app_settings_plist" >/dev/null 2>&1; then
+                                                has_resolution=true
+                                            fi
+                                        fi
+                                        
+                                        # Check executable in root directory (iOS app structure)
+                                        local exec_exists=false
+                                        if [[ -n "$exec_name" ]] && [[ -f "${app_path}/${exec_name}" ]]; then
+                                            exec_exists=true
+                                        fi
+                                        
+                                        if [[ "$has_resolution" == true ]] && [[ "$exec_exists" == true ]]; then
                                             installation_succeeded=true
                                             break
                                         fi
@@ -1037,73 +1052,47 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: PlayCover processing markers (v4.7.0 enhanced)
-                        local settings_created=false
-                        local keymapping_exists=false
+                        # Phase 2: PlayCover processing completion markers (v4.8.0 enhanced)
+                        local settings_has_resolution=false
                         local executable_exists=false
                         
-                        # Check App Settings file
+                        # Check App Settings file for 'resolution' key (PlayCover writes this after processing)
                         if [[ -f "$app_settings_plist" ]]; then
-                            settings_created=true
+                            if /usr/libexec/PlistBuddy -c "Print :resolution" "$app_settings_plist" >/dev/null 2>&1; then
+                                settings_has_resolution=true
+                            fi
                         fi
                         
-                        # Check Keymapping directory (PlayCover creates this)
-                        if [[ -d "$keymapping_dir" ]]; then
-                            keymapping_exists=true
-                        fi
-                        
-                        # Check executable exists in app bundle
+                        # Check executable exists in ROOT directory (iOS app structure, not MacOS/)
                         local executable_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${app_path}/Info.plist" 2>/dev/null)
-                        if [[ -n "$executable_name" ]] && [[ -f "${app_path}/MacOS/${executable_name}" ]]; then
+                        if [[ -n "$executable_name" ]] && [[ -f "${app_path}/${executable_name}" ]]; then
                             executable_exists=true
                         fi
                         
-                        # PlayCover processing is complete when all markers exist
+                        # PlayCover processing is complete when both markers exist
                         local playcover_completed=false
-                        if [[ "$settings_created" == true ]] && [[ "$executable_exists" == true ]]; then
+                        if [[ "$settings_has_resolution" == true ]] && [[ "$executable_exists" == true ]]; then
                             playcover_completed=true
                         fi
                         
-                        # Phase 3: Stability check (extended to 15 seconds in v4.7.0)
-                        current_app_mtime=$(find "$app_path" -type f -exec stat -f %m {} \; 2>/dev/null | sort -n | tail -1)
+                        # Phase 3: File count stability check (v4.8.0 - more reliable than mtime)
+                        local current_file_count=$(find "$app_path" -type f 2>/dev/null | wc -l | tr -d ' ')
                         
-                        if [[ -n "$existing_app_path" ]]; then
-                            # App already existed - check if it's being updated
-                            if [[ $current_app_mtime -gt $existing_mtime ]]; then
-                                # Files are being modified
-                                if [[ $current_app_mtime -eq $last_mtime ]]; then
-                                    # No new changes in this check - increment stability counter
-                                    ((stable_count++))
-                                    
-                                    # v4.7.0: Enhanced check - structure + PlayCover completion + stability
-                                    if [[ "$structure_valid" == true ]] && [[ "$playcover_completed" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
-                                        # Installation confirmed by all indicators
-                                        found=true
-                                        break
-                                    fi
-                                else
-                                    # Still modifying files - reset stability counter
-                                    stable_count=0
-                                    last_mtime=$current_app_mtime
-                                fi
+                        # Check file count stability (works for both new and overwrite installs)
+                        if [[ $current_file_count -eq $last_file_count ]] && [[ $last_file_count -gt 0 ]]; then
+                            # File count unchanged - increment stability counter
+                            ((stable_count++))
+                            
+                            # v4.8.0: File count + settings key + executable check
+                            if [[ "$structure_valid" == true ]] && [[ "$playcover_completed" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
+                                # Installation confirmed by all indicators
+                                found=true
+                                break
                             fi
                         else
-                            # New installation - app appeared after we started
-                            if [[ "$initial_check_done" == true ]]; then
-                                # Check stability for new installation too
-                                if [[ $current_app_mtime -eq $last_mtime ]]; then
-                                    ((stable_count++))
-                                    
-                                    # v4.7.0: Enhanced check - structure + PlayCover completion + stability
-                                    if [[ "$structure_valid" == true ]] && [[ "$playcover_completed" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
-                                        found=true
-                                        break
-                                    fi
-                                else
-                                    stable_count=0
-                                    last_mtime=$current_app_mtime
-                                fi
-                            fi
+                            # Files still being added/modified - reset stability counter
+                            stable_count=0
+                            last_file_count=$current_file_count
                         fi
                     fi
                 fi
@@ -1123,15 +1112,15 @@ install_ipa_to_playcover() {
         
         initial_check_done=true
         
-        # Show progress indicator with detailed status (v4.7.0)
+        # Show progress indicator with detailed status (v4.8.0)
         if [[ "$playcover_completed" == true ]]; then
             if [[ $stable_count -ge $required_stable_checks ]]; then
                 echo -n "✓"  # All checks passed (shouldn't reach here as loop should break)
             else
-                echo -n "◆"  # PlayCover completed, waiting for stability
+                echo -n "◆"  # PlayCover completed, waiting for file count stability
             fi
-        elif [[ "$settings_created" == true ]] || [[ "$executable_exists" == true ]]; then
-            echo -n "◇"  # Partial completion
+        elif [[ "$settings_has_resolution" == true ]] || [[ "$executable_exists" == true ]]; then
+            echo -n "◇"  # Partial completion (settings or executable exists)
         else
             echo -n "."  # Still installing
         fi
