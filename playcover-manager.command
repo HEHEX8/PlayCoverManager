@@ -860,6 +860,9 @@ install_ipa_to_playcover() {
     
     print_info "既存アプリを検索中..."
     
+    local existing_version=""
+    local overwrite_choice=""
+    
     if [[ -d "$playcover_apps" ]]; then
         # Search for app with matching Bundle ID
         while IFS= read -r app_path; do
@@ -868,30 +871,32 @@ install_ipa_to_playcover() {
                 
                 if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
                     existing_app_path="$app_path"
-                    local existing_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
-                    
-                    print_warning "このアプリは既にインストールされています"
-                    print_info "既存バージョン: ${existing_version}"
-                    print_info "新バージョン: ${APP_VERSION}"
-                    echo ""
-                    echo -n "上書きインストールしますか？ (y/N): "
-                    read overwrite_choice
-                    
-                    if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
-                        print_info "インストールをスキップしました"
-                        INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
-                        
-                        # Still update mapping even if skipped
-                        update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
-                        
-                        echo ""
-                        return 0
-                    fi
-                    
+                    existing_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
                     break
                 fi
             fi
         done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+        
+        # Check if existing app was found and ask for confirmation OUTSIDE the loop
+        if [[ -n "$existing_app_path" ]]; then
+            print_warning "このアプリは既にインストールされています"
+            print_info "既存バージョン: ${existing_version}"
+            print_info "新バージョン: ${APP_VERSION}"
+            echo ""
+            echo -n "上書きインストールしますか？ (y/N): "
+            read overwrite_choice </dev/tty
+            
+            if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
+                print_info "インストールをスキップしました"
+                INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
+                
+                # Still update mapping even if skipped
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                
+                echo ""
+                return 0
+            fi
+        fi
     fi
     
     echo ""
@@ -973,7 +978,7 @@ install_ipa_to_playcover() {
     print_warning "インストール完了の自動検知がタイムアウトしました"
     echo ""
     echo -n "PlayCover でインストールが完了したら Enter キーを押してください: "
-    read
+    read </dev/tty
     
     # Final verification
     if [[ -d "$playcover_apps" ]]; then
