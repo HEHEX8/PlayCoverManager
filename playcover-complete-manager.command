@@ -915,16 +915,20 @@ install_ipa_to_playcover() {
     local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
     local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
     
-    # Track file modification stability (v4.7.0: Extended for reliability)
+    # Track file modification stability (v4.7.0: Redesigned detection)
     local last_mtime=0
     local stable_count=0
-    local required_stable_checks=4  # Extended to 12 seconds (4 checks * 3 seconds)
+    local required_stable_checks=5  # 15 seconds of stability (5 checks * 3 seconds)
     
-    # Detection Method (v4.7.0 - Enhanced Reliability):
-    # Phase 1: Structure validation (Info.plist + _CodeSignature)
-    # Phase 2: PlayCover App Settings file check (REQUIRED)
-    #          File: ~/Library/Containers/io.playcover.PlayCover/App Settings/[BundleID].plist
-    # Phase 3: File stability confirmation (12 seconds)
+    # Additional markers to confirm PlayCover completed processing
+    local keymapping_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping"
+    
+    # Detection Method (v4.7.0 - Redesigned for Reliability):
+    # Phase 1: Structure validation (Info.plist + _CodeSignature + executable)
+    # Phase 2: PlayCover processing markers:
+    #          - App Settings file created
+    #          - Keymapping directory exists (PlayCover creates this)
+    # Phase 3: Extended file stability (15 seconds with NO changes)
     # Success criteria: Phase 1 + Phase 2 + Phase 3 (ALL REQUIRED)
     
     while [[ $elapsed -lt $max_wait ]]; do
@@ -952,8 +956,9 @@ install_ipa_to_playcover() {
                                 if [[ -d "${app_path}/_CodeSignature" ]]; then
                                     local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
                                     if [[ -n "$app_name" ]]; then
-                                        # v4.7.0: Require settings file for success
-                                        if [[ -f "$app_settings_plist" ]]; then
+                                        # v4.7.0: Enhanced check - require settings AND executable
+                                        local exec_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${app_path}/Info.plist" 2>/dev/null)
+                                        if [[ -f "$app_settings_plist" ]] && [[ -n "$exec_name" ]] && [[ -f "${app_path}/MacOS/${exec_name}" ]]; then
                                             installation_succeeded=true
                                             break
                                         fi
@@ -1032,14 +1037,34 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: PlayCover settings file check (most reliable)
+                        # Phase 2: PlayCover processing markers (v4.7.0 enhanced)
                         local settings_created=false
+                        local keymapping_exists=false
+                        local executable_exists=false
+                        
+                        # Check App Settings file
                         if [[ -f "$app_settings_plist" ]]; then
-                            # App settings file was created by PlayCover
                             settings_created=true
                         fi
                         
-                        # Phase 3: Stability check (shortened to 6 seconds)
+                        # Check Keymapping directory (PlayCover creates this)
+                        if [[ -d "$keymapping_dir" ]]; then
+                            keymapping_exists=true
+                        fi
+                        
+                        # Check executable exists in app bundle
+                        local executable_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${app_path}/Info.plist" 2>/dev/null)
+                        if [[ -n "$executable_name" ]] && [[ -f "${app_path}/MacOS/${executable_name}" ]]; then
+                            executable_exists=true
+                        fi
+                        
+                        # PlayCover processing is complete when all markers exist
+                        local playcover_completed=false
+                        if [[ "$settings_created" == true ]] && [[ "$executable_exists" == true ]]; then
+                            playcover_completed=true
+                        fi
+                        
+                        # Phase 3: Stability check (extended to 15 seconds in v4.7.0)
                         current_app_mtime=$(find "$app_path" -type f -exec stat -f %m {} \; 2>/dev/null | sort -n | tail -1)
                         
                         if [[ -n "$existing_app_path" ]]; then
@@ -1050,8 +1075,8 @@ install_ipa_to_playcover() {
                                     # No new changes in this check - increment stability counter
                                     ((stable_count++))
                                     
-                                    # v4.7.0: Strict check - ALL conditions required
-                                    if [[ "$structure_valid" == true ]] && [[ "$settings_created" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
+                                    # v4.7.0: Enhanced check - structure + PlayCover completion + stability
+                                    if [[ "$structure_valid" == true ]] && [[ "$playcover_completed" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
                                         # Installation confirmed by all indicators
                                         found=true
                                         break
@@ -1069,8 +1094,8 @@ install_ipa_to_playcover() {
                                 if [[ $current_app_mtime -eq $last_mtime ]]; then
                                     ((stable_count++))
                                     
-                                    # v4.7.0: Strict check - ALL conditions required
-                                    if [[ "$structure_valid" == true ]] && [[ "$settings_created" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
+                                    # v4.7.0: Enhanced check - structure + PlayCover completion + stability
+                                    if [[ "$structure_valid" == true ]] && [[ "$playcover_completed" == true ]] && [[ $stable_count -ge $required_stable_checks ]]; then
                                         found=true
                                         break
                                     fi
@@ -1099,14 +1124,14 @@ install_ipa_to_playcover() {
         initial_check_done=true
         
         # Show progress indicator with detailed status (v4.7.0)
-        if [[ "$settings_created" == true ]]; then
+        if [[ "$playcover_completed" == true ]]; then
             if [[ $stable_count -ge $required_stable_checks ]]; then
                 echo -n "✓"  # All checks passed (shouldn't reach here as loop should break)
             else
-                echo -n "◆"  # Settings created, waiting for stability
+                echo -n "◆"  # PlayCover completed, waiting for stability
             fi
-        elif [[ $stable_count -gt 0 ]]; then
-            echo -n "◇"  # Stable but no settings yet
+        elif [[ "$settings_created" == true ]] || [[ "$executable_exists" == true ]]; then
+            echo -n "◇"  # Partial completion
         else
             echo -n "."  # Still installing
         fi
