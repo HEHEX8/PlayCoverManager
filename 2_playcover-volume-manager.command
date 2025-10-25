@@ -196,7 +196,7 @@ mount_volume() {
             # Directory exists but is NOT a mount point
             # Check if it contains actual data (not just an empty mount point directory)
             # Ignore macOS metadata files (.DS_Store, .Spotlight-V100, etc.)
-            local content_check=$(ls -A "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd')
+            local content_check=$(ls -A "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
             
             if [[ -n "$content_check" ]]; then
                 # Directory has actual content (not just metadata) = internal storage data exists
@@ -322,7 +322,7 @@ get_storage_type() {
     # If it's a directory but not a mount point, check if it has content
     if [[ -d "$path" ]]; then
         # Ignore macOS metadata files when checking for content
-        local content_check=$(ls -A "$path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd')
+        local content_check=$(ls -A "$path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
@@ -1444,7 +1444,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.8${CYAN}                              ║"
+    echo "║                 ${BLUE}Version 1.5.9${CYAN}                              ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
