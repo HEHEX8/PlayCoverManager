@@ -854,24 +854,150 @@ install_ipa_to_playcover() {
     local ipa_file=$1
     print_header "PlayCover へのインストール"
     
-    print_info "PlayCover を使用してインストール中..."
-    print_info "ファイル: $(basename "$ipa_file")"
+    # Check if app is already installed
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    local existing_app_path=""
     
-    # Use 'open -a' command - the standard macOS way
-    # This opens PlayCover with the IPA file, just like double-clicking
-    if open -a PlayCover "$ipa_file"; then
-        print_success "インストールが完了しました"
-        INSTALL_SUCCESS+=("$APP_NAME")
-        
-        update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
-        
-        echo ""
-        return 0
-    else
-        print_error "インストールに失敗しました"
+    print_info "既存アプリを検索中..."
+    
+    if [[ -d "$playcover_apps" ]]; then
+        # Search for app with matching Bundle ID
+        while IFS= read -r app_path; do
+            if [[ -f "${app_path}/Info.plist" ]]; then
+                local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                
+                if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                    existing_app_path="$app_path"
+                    local existing_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                    
+                    print_warning "このアプリは既にインストールされています"
+                    print_info "既存バージョン: ${existing_version}"
+                    print_info "新バージョン: ${APP_VERSION}"
+                    echo ""
+                    echo -n "上書きインストールしますか？ (y/N): "
+                    read overwrite_choice
+                    
+                    if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
+                        print_info "インストールをスキップしました"
+                        INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
+                        
+                        # Still update mapping even if skipped
+                        update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                        
+                        echo ""
+                        return 0
+                    fi
+                    
+                    break
+                fi
+            fi
+        done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    fi
+    
+    echo ""
+    print_info "PlayCover でインストールを開始します..."
+    print_info "ファイル: $(basename "$ipa_file")"
+    echo ""
+    print_warning "PlayCover ウィンドウが開きます"
+    print_info "インストールが完了するまでお待ちください"
+    echo ""
+    
+    # Open IPA with PlayCover
+    if ! open -a PlayCover "$ipa_file"; then
+        print_error "PlayCover の起動に失敗しました"
         INSTALL_FAILED+=("$APP_NAME")
         return 1
     fi
+    
+    # Wait for installation to complete
+    print_info "インストールの完了を待機中..."
+    echo ""
+    
+    local max_wait=300  # 5 minutes
+    local elapsed=0
+    local check_interval=3
+    local initial_check_done=false
+    
+    while [[ $elapsed -lt $max_wait ]]; do
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+        
+        # Check if app was installed
+        if [[ -d "$playcover_apps" ]]; then
+            local found=false
+            while IFS= read -r app_path; do
+                if [[ -f "${app_path}/Info.plist" ]]; then
+                    local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                    
+                    if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                        # Found the app - but was it just installed or already there?
+                        if [[ -n "$existing_app_path" ]]; then
+                            # App already existed, check if it was updated
+                            local new_mtime=$(stat -f %m "$app_path" 2>/dev/null)
+                            local old_mtime=$(stat -f %m "$existing_app_path" 2>/dev/null)
+                            
+                            if [[ "$new_mtime" -gt "$old_mtime" ]] 2>/dev/null; then
+                                found=true
+                                break
+                            fi
+                        else
+                            # New installation
+                            if [[ "$initial_check_done" == true ]]; then
+                                found=true
+                                break
+                            fi
+                        fi
+                    fi
+                fi
+            done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+            
+            if [[ "$found" == true ]]; then
+                print_success "インストールが完了しました"
+                INSTALL_SUCCESS+=("$APP_NAME")
+                
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                
+                echo ""
+                return 0
+            fi
+        fi
+        
+        initial_check_done=true
+        
+        # Show progress indicator
+        echo -n "."
+    done
+    
+    echo ""
+    echo ""
+    print_warning "インストール完了の自動検知がタイムアウトしました"
+    echo ""
+    echo -n "PlayCover でインストールが完了したら Enter キーを押してください: "
+    read
+    
+    # Final verification
+    if [[ -d "$playcover_apps" ]]; then
+        while IFS= read -r app_path; do
+            if [[ -f "${app_path}/Info.plist" ]]; then
+                local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                
+                if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                    print_success "インストールが確認されました"
+                    INSTALL_SUCCESS+=("$APP_NAME")
+                    
+                    update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                    
+                    echo ""
+                    return 0
+                fi
+            fi
+        done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    fi
+    
+    print_error "インストールが確認できませんでした"
+    INSTALL_FAILED+=("$APP_NAME")
+    echo ""
+    return 1
 }
 
 #######################################################
