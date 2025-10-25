@@ -1,4 +1,4 @@
-# PlayCover Complete Manager v4.3.0
+# PlayCover Complete Manager v4.3.1
 
 ## 📋 概要
 
@@ -95,9 +95,10 @@ PlayCover 統合管理ツール
 
 ### 【日常管理機能】（from v3.1.1）
 
-#### アプリ管理機能（v4.3.0 NEW!）
+#### アプリ管理機能（v4.3.1 強化版）
 - **IPAインストール** - 一括インストール（バッチ処理）対応
-- **アプリアンインストール** - 完全削除（アプリ + ボリューム + マッピング）
+- **アプリアンインストール** - 完全削除（Applications + App Settings + Entitlements + Keymapping + ボリューム + マッピング）
+- **連続アンインストール** - 0個になるまで連続実行可能
 - PlayCoverクラッシュ検出と復旧
 - **堅牢な完了検出**（3段階検証: 構造+設定ファイル+安定性）
 
@@ -126,8 +127,8 @@ PlayCover 統合管理ツール
 
 ```
 ファイル名: playcover-complete-manager.command
-サイズ: 118KB
-行数: 3276行
+サイズ: 119KB
+行数: 3283行
 関数数: 49個
 バージョン: 4.2.0
 ```

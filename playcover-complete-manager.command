@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.3.0 - App Management (Install + Uninstall)
+# Version: 4.3.1 - Enhanced Uninstall (Complete Cleanup + Loop)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2236,16 +2236,16 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                         ${YELLOW}【ボリューム管理】${NC}                    ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリ管理メニュー                  2. 全ボリュームをマウント              5. ストレージ切り替え（内蔵⇄外部）"
-    echo "                                         3. 全ボリュームをアンマウント          6. ストレージ状態確認"
-    echo "                                         4. 個別ボリューム操作"
+    echo "  1. IPAをインストール                   3. 全ボリュームをマウント              6. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール            4. 全ボリュームをアンマウント          7. ストレージ状態確認"
+    echo "                                         5. 個別ボリューム操作"
     echo ""
     echo "  ${RED}【システム】${NC}"
-    echo "  7. ディスク全体を取り外し              8. マッピング情報を表示                0. 終了"
+    echo "  8. ディスク全体を取り外し              9. マッピング情報を表示                0. 終了"
     echo ""
     echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
-    echo -n "${CYAN}選択 (0-8):${NC} "
+    echo -n "${CYAN}選択 (0-9):${NC} "
 }
 
 show_mapping_info() {
@@ -2289,47 +2289,6 @@ show_mapping_info() {
 #######################################################
 # Module 10: Main Execution
 #######################################################
-
-#######################################################
-# Module 15.5: App Management Menu
-#######################################################
-
-app_management_menu() {
-    while true; do
-        clear
-        print_header "アプリ管理"
-        
-        echo ""
-        echo "${GREEN}▼ アプリ管理メニュー${NC}"
-        echo ""
-        echo "  1. IPAをインストール"
-        echo "  2. アプリをアンインストール"
-        echo ""
-        echo "  0. メインメニューに戻る"
-        echo ""
-        echo "${CYAN}───────────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-        echo ""
-        echo -n "${CYAN}選択 (0-2):${NC} "
-        read app_choice
-        
-        case "$app_choice" in
-            1)
-                install_workflow
-                ;;
-            2)
-                uninstall_workflow
-                ;;
-            0)
-                return
-                ;;
-            *)
-                echo ""
-                print_error "無効な選択です"
-                sleep 2
-                ;;
-        esac
-    done
-}
 
 install_workflow() {
     clear
@@ -2390,29 +2349,33 @@ install_workflow() {
 }
 
 uninstall_workflow() {
-    clear
-    print_header "アプリのアンインストール"
-    
-    # Check mapping file
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_error "マッピングファイルが見つかりません"
-        echo ""
-        echo "まだアプリがインストールされていません。"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    local mappings_content=$(read_mappings)
-    
-    if [[ -z "$mappings_content" ]]; then
-        print_warning "インストールされているアプリがありません"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
+    # Loop until user cancels or no more apps
+    while true; do
+        clear
+        print_header "アプリのアンインストール"
+        
+        # Check mapping file
+        if [[ ! -f "$MAPPING_FILE" ]]; then
+            print_error "マッピングファイルが見つかりません"
+            echo ""
+            echo "まだアプリがインストールされていません。"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            return
+        fi
+        
+        local mappings_content=$(read_mappings)
+        
+        if [[ -z "$mappings_content" ]]; then
+            print_success "すべてのアプリがアンインストールされました"
+            echo ""
+            echo "インストールされているアプリ: 0個"
+            echo ""
+            echo -n "Enterキーでメニューに戻る..."
+            read
+            return
+        fi
     
     # Display installed apps
     echo ""
@@ -2480,10 +2443,13 @@ uninstall_workflow() {
     echo "  ボリューム: ${selected_volume}"
     echo ""
     print_warning "この操作は以下を実行します:"
-    echo "  1. PlayCover からアプリを削除"
-    echo "  2. APFSボリュームをアンマウント"
-    echo "  3. APFSボリュームを削除"
-    echo "  4. マッピング情報を削除"
+    echo "  1. PlayCover からアプリを削除 (Applications/)"
+    echo "  2. アプリ設定を削除 (App Settings/)"
+    echo "  3. Entitlements を削除"
+    echo "  4. Keymapping を削除"
+    echo "  5. APFSボリュームをアンマウント"
+    echo "  6. APFSボリュームを削除"
+    echo "  7. マッピング情報を削除"
     echo ""
     print_error "この操作は取り消せません！"
     echo ""
@@ -2503,7 +2469,7 @@ uninstall_workflow() {
     print_info "アンインストールを開始します..."
     echo ""
     
-    # Step 1: Remove app from PlayCover
+    # Step 1: Remove app from PlayCover Applications/
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     local app_path="${playcover_apps}/${selected_bundle}.app"
     
@@ -2522,7 +2488,7 @@ uninstall_workflow() {
         print_warning "アプリが見つかりませんでした（既に削除済み）"
     fi
     
-    # Step 2: Remove app settings
+    # Step 2: Remove app settings from App Settings/
     local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${selected_bundle}.plist"
     if [[ -f "$app_settings" ]]; then
         print_info "アプリ設定を削除中..."
@@ -2530,7 +2496,25 @@ uninstall_workflow() {
         print_success "設定を削除しました"
     fi
     
-    # Step 3: Unmount volume if mounted
+    # Step 3: Remove entitlements from Entitlements/
+    local entitlements_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements"
+    local entitlements_file="${entitlements_dir}/${selected_bundle}.plist"
+    if [[ -f "$entitlements_file" ]]; then
+        print_info "Entitlements を削除中..."
+        rm -f "$entitlements_file" 2>/dev/null
+        print_success "Entitlements を削除しました"
+    fi
+    
+    # Step 4: Remove keymapping from Keymapping/
+    local keymapping_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping"
+    local keymapping_file="${keymapping_dir}/${selected_bundle}.plist"
+    if [[ -f "$keymapping_file" ]]; then
+        print_info "Keymapping を削除中..."
+        rm -f "$keymapping_file" 2>/dev/null
+        print_success "Keymapping を削除しました"
+    fi
+    
+    # Step 5: Unmount volume if mounted
     local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
     if mount | grep -q "$volume_mount_point"; then
         print_info "ボリュームをアンマウント中..."
@@ -2541,7 +2525,7 @@ uninstall_workflow() {
         fi
     fi
     
-    # Step 4: Delete APFS volume
+    # Step 6: Delete APFS volume
     print_info "APFSボリュームを削除中..."
     
     # Find the volume device
@@ -2564,7 +2548,7 @@ uninstall_workflow() {
         print_warning "ボリュームが見つかりませんでした（既に削除済み）"
     fi
     
-    # Step 5: Remove from mapping file
+    # Step 7: Remove from mapping file
     print_info "マッピング情報を削除中..."
     
     # Acquire lock
@@ -2604,8 +2588,28 @@ uninstall_workflow() {
     echo ""
     echo "削除したアプリ: ${GREEN}${selected_app}${NC}"
     echo ""
-    echo -n "Enterキーでメニューに戻る..."
-    read
+    
+    # Check if there are more apps
+    local remaining_content=$(read_mappings)
+    if [[ -z "$remaining_content" ]]; then
+        print_success "すべてのアプリがアンインストールされました"
+        echo ""
+        echo -n "Enterキーでメニューに戻る..."
+        read
+        return
+    else
+        local remaining_count=$(echo "$remaining_content" | wc -l | tr -d ' ')
+        echo "${CYAN}残り ${remaining_count} 個のアプリがインストールされています${NC}"
+        echo ""
+        echo -n "${YELLOW}続けて別のアプリをアンインストールしますか？ (y/N):${NC} "
+        read continue_uninstall
+        
+        if [[ ! "$continue_uninstall" =~ ^[Yy] ]]; then
+            return
+        fi
+        # Loop continues for next uninstallation
+    fi
+    done
 }
 
 #######################################################
@@ -3231,27 +3235,30 @@ main() {
         
         case "$choice" in
             1)
-                app_management_menu
+                install_workflow
                 ;;
             2)
-                mount_all_volumes
+                uninstall_workflow
                 ;;
             3)
-                unmount_all_volumes
+                mount_all_volumes
                 ;;
             4)
-                individual_volume_control
+                unmount_all_volumes
                 ;;
             5)
-                switch_storage_location
+                individual_volume_control
                 ;;
             6)
-                show_status
+                switch_storage_location
                 ;;
             7)
-                eject_disk
+                show_status
                 ;;
             8)
+                eject_disk
+                ;;
+            9)
                 show_mapping_info
                 ;;
             0)
