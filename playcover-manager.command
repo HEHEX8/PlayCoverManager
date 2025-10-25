@@ -862,6 +862,7 @@ install_ipa_to_playcover() {
     
     local existing_version=""
     local overwrite_choice=""
+    local existing_mtime=0
     
     if [[ -d "$playcover_apps" ]]; then
         # Search for app with matching Bundle ID
@@ -872,6 +873,8 @@ install_ipa_to_playcover() {
                 if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
                     existing_app_path="$app_path"
                     existing_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                    # Record CURRENT modification time BEFORE installation
+                    existing_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
                     break
                 fi
             fi
@@ -916,12 +919,16 @@ install_ipa_to_playcover() {
     
     # Wait for installation to complete
     print_info "インストールの完了を待機中..."
+    print_info "（PlayCoverウィンドウでインストールが完了するのを監視しています）"
     echo ""
     
     local max_wait=300  # 5 minutes
     local elapsed=0
     local check_interval=3
     local initial_check_done=false
+    
+    # Get timestamp BEFORE starting installation check
+    local install_start_time=$(date +%s)
     
     while [[ $elapsed -lt $max_wait ]]; do
         sleep $check_interval
@@ -938,15 +945,24 @@ install_ipa_to_playcover() {
                         # Found the app - but was it just installed or already there?
                         if [[ -n "$existing_app_path" ]]; then
                             # App already existed, check if it was updated
-                            local new_mtime=$(stat -f %m "$app_path" 2>/dev/null)
-                            local old_mtime=$(stat -f %m "$existing_app_path" 2>/dev/null)
+                            # Compare against the mtime we recorded BEFORE installation
+                            local current_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
                             
-                            if [[ "$new_mtime" -gt "$old_mtime" ]] 2>/dev/null; then
+                            # Check if mtime changed OR if any file inside was modified recently
+                            if [[ $current_mtime -gt $existing_mtime ]]; then
+                                # App directory itself was modified
                                 found=true
                                 break
+                            else
+                                # Check if any files inside were modified after install_start_time
+                                local recent_files=$(find "$app_path" -type f -newermt "@${install_start_time}" 2>/dev/null | head -1)
+                                if [[ -n "$recent_files" ]]; then
+                                    found=true
+                                    break
+                                fi
                             fi
                         else
-                            # New installation
+                            # New installation - app appeared after we started
                             if [[ "$initial_check_done" == true ]]; then
                                 found=true
                                 break
@@ -957,6 +973,7 @@ install_ipa_to_playcover() {
             done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
             
             if [[ "$found" == true ]]; then
+                echo ""
                 print_success "インストールが完了しました"
                 INSTALL_SUCCESS+=("$APP_NAME")
                 
