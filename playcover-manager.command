@@ -1620,29 +1620,39 @@ switch_storage_location() {
             return
         fi
         
-        # Determine source path: use backup if available, otherwise target_path
+        # For internal -> external, always use target_path (current internal data)
         local source_path="$target_path"
-        if [[ -d "$backup_path" ]]; then
-            # Backup exists from previous external -> internal migration
-            print_info "バックアップディレクトリを使用します: $backup_path"
-            source_path="$backup_path"
-        elif [[ "$current_storage" == "internal" ]]; then
-            # Currently on internal storage
-            print_info "内蔵ストレージからコピーします: $target_path"
-            source_path="$target_path"
-        else
-            print_error "コピー元のデータが見つかりません"
-            echo ""
-            print_info "デバッグ情報:"
-            echo "  target_path: $target_path (存在: $([ -d "$target_path" ] && echo "Yes" || echo "No"))"
-            echo "  backup_path: $backup_path (存在: $([ -d "$backup_path" ] && echo "Yes" || echo "No"))"
-            echo "  current_storage: $current_storage"
+        
+        # Validate source path has actual data
+        if [[ ! -d "$source_path" ]]; then
+            print_error "コピー元が存在しません: $source_path"
             echo ""
             echo -n "Enterキーで続行..."
             read
             switch_storage_location
             return
         fi
+        
+        # Check if source has actual content (not just empty mount point)
+        local source_type=$(get_storage_type "$source_path")
+        if [[ "$source_type" == "none" ]] || [[ "$source_type" == "external" ]]; then
+            print_error "内蔵ストレージにデータがありません"
+            echo ""
+            print_info "現在の状態:"
+            echo "  パス: $source_path"
+            echo "  タイプ: $source_type"
+            echo ""
+            print_info "考えられる原因:"
+            echo "  - 外部ボリュームがまだマウントされている"
+            echo "  - 内蔵ストレージへの移行が完了していない"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
+        
+        print_info "内蔵ストレージからコピーします: $source_path"
         
         # Check disk space before migration
         print_info "転送前の容量チェック中..."
@@ -2058,12 +2068,20 @@ switch_storage_location() {
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
-        # Backup if it exists
+        # Backup existing internal data if it exists and has actual content
         if [[ -e "$target_path" ]]; then
-            print_info "既存ディレクトリをバックアップ中..."
-            sudo /bin/mv "$target_path" "$backup_path" 2>/dev/null || {
-                print_warning "バックアップに失敗しましたが続行します"
-            }
+            local existing_type=$(get_storage_type "$target_path")
+            if [[ "$existing_type" == "internal" ]]; then
+                # Has actual internal data - backup for safety
+                print_info "既存の内蔵データをバックアップ中..."
+                sudo /bin/mv "$target_path" "$backup_path" 2>/dev/null || {
+                    print_warning "バックアップに失敗しましたが続行します"
+                }
+            else
+                # Empty mount point or no data - just remove
+                print_info "空のマウントポイントをクリーンアップ中..."
+                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+            fi
         fi
         
         # Create new internal directory
