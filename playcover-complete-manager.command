@@ -1794,14 +1794,20 @@ switch_storage_location() {
         local available_bytes=0
         
         if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
-            # Volume already mounted, use it directly
+            # Volume already mounted - need to unmount it first for fresh mount later
             print_info "外部ボリュームは既にマウントされています: $existing_mount"
             available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
+            
+            # Unmount for clean state
+            print_info "容量チェック完了後、一時マウントをアンマウント中..."
+            sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
+            sleep 1
             sudo /bin/rm -rf "$temp_check_mount"
         elif sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
             # Mounted successfully for check
             available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
             sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+            sleep 1
             sudo /bin/rm -rf "$temp_check_mount"
         else
             print_error "外部ボリュームのマウントに失敗しました"
@@ -1892,7 +1898,14 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with progress for real-time progress (macOS compatible)
-        sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_path/" "$temp_mount/"
+        # Exclude system metadata files that should not be copied
+        sudo /usr/bin/rsync -avH --ignore-errors --progress \
+            --exclude='.Spotlight-V100' \
+            --exclude='.fseventsd' \
+            --exclude='.Trashes' \
+            --exclude='.TemporaryItems' \
+            --exclude='.DS_Store' \
+            "$source_path/" "$temp_mount/"
         local rsync_exit=$?
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
@@ -2195,7 +2208,14 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with progress for real-time progress (macOS compatible)
-        sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_mount/" "$target_path/"
+        # Exclude system metadata files that should not be copied
+        sudo /usr/bin/rsync -avH --ignore-errors --progress \
+            --exclude='.Spotlight-V100' \
+            --exclude='.fseventsd' \
+            --exclude='.Trashes' \
+            --exclude='.TemporaryItems' \
+            --exclude='.DS_Store' \
+            "$source_mount/" "$target_path/"
         local rsync_exit=$?
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
