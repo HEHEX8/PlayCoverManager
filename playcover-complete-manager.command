@@ -1958,7 +1958,9 @@ switch_storage_location() {
             echo ""
             print_error "データのコピーに失敗しました"
             print_info "一時マウントをクリーンアップ中..."
-            sudo /usr/sbin/umount "$temp_mount" 2>/dev/null || true
+            sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
+                sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
+            }
             sleep 1  # Wait for unmount to complete
             sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
             echo ""
@@ -1969,7 +1971,12 @@ switch_storage_location() {
         fi
         
         # Unmount temporary mount
-        sudo /usr/sbin/umount "$temp_mount"
+        print_info "一時マウントをアンマウント中..."
+        sudo /usr/sbin/diskutil unmount "$temp_mount" || {
+            print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+            sudo /usr/sbin/diskutil unmount force "$temp_mount"
+        }
+        sleep 1  # Wait for unmount to complete
         sudo /bin/rm -rf "$temp_mount"
         
         # Backup internal data
@@ -2274,7 +2281,9 @@ switch_storage_location() {
             # Cleanup: Unmount first, then clean up directories
             if [[ "$temp_mount_created" == true ]]; then
                 print_info "一時マウントをクリーンアップ中..."
-                sudo /usr/sbin/umount "$source_mount" 2>/dev/null || true
+                sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
+                    sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
+                }
                 sleep 1  # Wait for unmount to complete
                 sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
             fi
@@ -2296,7 +2305,10 @@ switch_storage_location() {
         # Unmount volume
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
-            sudo /usr/sbin/umount "$source_mount" 2>/dev/null || true
+            sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
+                sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
+            }
+            sleep 1  # Wait for unmount to complete
             sudo /bin/rm -rf "$source_mount"
         else
             print_info "外部ボリュームをアンマウント中..."
