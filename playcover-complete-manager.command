@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.0.0 - Complete Integration with Auto Setup
+# Version: 4.1.0 - True Standalone (No External Dependencies)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -29,7 +29,6 @@ readonly PLAYCOVER_VOLUME_NAME="PlayCover"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
-readonly INITIAL_SETUP_SCRIPT="${SCRIPT_DIR}/0_playcover-initial-setup.command"
 
 # Global variables
 declare -a SELECTED_IPAS=()
@@ -46,6 +45,11 @@ SUDO_AUTHENTICATED=false
 BATCH_MODE=false
 CURRENT_IPA_INDEX=0
 TOTAL_IPAS=0
+
+# Initial setup specific variables
+NEED_XCODE_TOOLS=false
+NEED_HOMEBREW=false
+NEED_PLAYCOVER=false
 
 #######################################################
 # Module 2: Utility Functions
@@ -2295,7 +2299,488 @@ install_workflow() {
 }
 
 #######################################################
-# Module 16: Environment Check & Initial Setup
+# Module 16: Initial Setup Functions (from 0_playcover-initial-setup.command)
+#######################################################
+
+check_architecture() {
+    print_header "アーキテクチャの確認"
+    
+    local arch=$(uname -m)
+    
+    if [[ "$arch" == "arm64" ]]; then
+        print_success "Apple Silicon Mac を検出しました (${arch})"
+        return 0
+    else
+        print_error "このスクリプトはApple Silicon Mac専用です"
+        print_error "検出されたアーキテクチャ: ${arch}"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    echo ""
+}
+
+check_xcode_tools() {
+    print_header "Xcode Command Line Tools の確認"
+    
+    if xcode-select -p >/dev/null 2>&1; then
+        local xcode_path=$(xcode-select -p)
+        print_success "Xcode Command Line Tools が存在します"
+        print_info "パス: ${xcode_path}"
+        NEED_XCODE_TOOLS=false
+    else
+        print_warning "Xcode Command Line Tools が見つかりません"
+        NEED_XCODE_TOOLS=true
+    fi
+    
+    echo ""
+}
+
+check_homebrew() {
+    print_header "Homebrew の確認"
+    
+    if command -v brew >/dev/null 2>&1; then
+        local brew_version=$(brew --version | head -n 1)
+        print_success "Homebrew が存在します"
+        print_info "${brew_version}"
+        NEED_HOMEBREW=false
+    else
+        print_warning "Homebrew が見つかりません"
+        NEED_HOMEBREW=true
+    fi
+    
+    echo ""
+}
+
+check_playcover_installation() {
+    print_header "PlayCover の確認"
+    
+    if [[ -d "/Applications/PlayCover.app" ]]; then
+        print_success "PlayCover が存在します"
+        if [[ -f "/Applications/PlayCover.app/Contents/Info.plist" ]]; then
+            local version=$(defaults read "/Applications/PlayCover.app/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || echo "不明")
+            print_info "バージョン: ${version}"
+        fi
+        NEED_PLAYCOVER=false
+    else
+        print_warning "PlayCover が見つかりません"
+        NEED_PLAYCOVER=true
+    fi
+    
+    echo ""
+}
+
+select_external_disk() {
+    print_header "コンテナボリューム作成先の選択"
+    
+    local root_device=$(diskutil info / | grep "Device Node:" | awk '{print $3}')
+    local internal_disk=$(echo "$root_device" | sed -E 's/disk([0-9]+).*/disk\1/')
+    
+    print_info "利用可能な外部ストレージを検索中..."
+    echo ""
+    
+    local -a external_disks
+    local -a disk_info
+    local -a seen_disks
+    local index=1
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^/dev/disk[0-9]+ ]]; then
+            local disk_id=$(echo "$line" | sed -E 's|^/dev/(disk[0-9]+).*|\1|')
+            local full_line="$line"
+            
+            local already_seen=false
+            for seen in "${seen_disks[@]}"; do
+                if [[ "$seen" == "$disk_id" ]]; then
+                    already_seen=true
+                    break
+                fi
+            done
+            
+            if $already_seen; then
+                continue
+            fi
+            
+            seen_disks+=("$disk_id")
+            
+            if [[ ! "$full_line" =~ "physical" ]]; then
+                continue
+            fi
+            
+            if [[ "$disk_id" == "$internal_disk" ]]; then
+                continue
+            fi
+            
+            if [[ "$full_line" =~ "internal" ]]; then
+                continue
+            fi
+            
+            local device_name=$(diskutil info "/dev/$disk_id" | grep "Device / Media Name:" | sed 's/.*: *//')
+            local total_size=$(diskutil info "/dev/$disk_id" | grep "Disk Size:" | sed 's/.*: *//' | awk '{print $1, $2}')
+            
+            if [[ -z "$device_name" ]] || [[ -z "$total_size" ]]; then
+                continue
+            fi
+            
+            local is_removable=$(diskutil info "/dev/$disk_id" | grep "Removable Media:" | grep "Yes")
+            local protocol=$(diskutil info "/dev/$disk_id" | grep "Protocol:" | sed 's/.*: *//')
+            local location=$(diskutil info "/dev/$disk_id" | grep "Device Location:" | sed 's/.*: *//')
+            
+            if [[ -n "$is_removable" ]] || \
+               [[ "$protocol" =~ (USB|Thunderbolt|PCI-Express) ]] || \
+               [[ "$location" =~ External ]]; then
+                external_disks+=("/dev/$disk_id")
+                local display_protocol="${protocol:-不明}"
+                disk_info+=("${index}. ${device_name} (${total_size}) [${display_protocol}]")
+                ((index++))
+            fi
+        fi
+    done < <(diskutil list)
+    
+    if [[ ${#external_disks[@]} -eq 0 ]]; then
+        print_error "外部ストレージが見つかりません"
+        print_info "外部ストレージを接続してから再実行してください"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    for info in "${disk_info[@]}"; do
+        echo "$info"
+    done
+    
+    echo ""
+    echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}): "
+    read selection
+    
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [[ $selection -ge 1 ]] && [[ $selection -le ${#external_disks[@]} ]]; then
+        SELECTED_DISK="${external_disks[$selection]}"
+        print_success "選択されたディスク: ${disk_info[$selection]}"
+    else
+        print_error "無効な選択です"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    echo ""
+}
+
+confirm_software_installations() {
+    print_header "追加インストール項目の確認"
+    
+    local need_install=false
+    local install_items=()
+    
+    if $NEED_XCODE_TOOLS; then
+        install_items+=("Xcode Command Line Tools")
+        need_install=true
+    fi
+    
+    if $NEED_HOMEBREW; then
+        install_items+=("Homebrew")
+        need_install=true
+    fi
+    
+    if $NEED_PLAYCOVER; then
+        install_items+=("playcover-community")
+        need_install=true
+    fi
+    
+    if ! $need_install; then
+        print_success "すべての必要なソフトウェアがインストール済みです"
+        echo ""
+        return 0
+    fi
+    
+    print_warning "以下の項目をインストールする必要があります:"
+    for item in "${install_items[@]}"; do
+        echo "  - ${item}"
+    done
+    echo ""
+    
+    echo -n "インストールを続行しますか? (Y/n): "
+    read response
+    
+    case "$response" in
+        [nN]|[nN][oO])
+            print_info "ユーザーによりインストールがキャンセルされました"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            exit 0
+            ;;
+        *)
+            print_success "インストールを続行します"
+            echo ""
+            ;;
+    esac
+}
+
+create_playcover_main_volume() {
+    print_header "PlayCover ボリュームの作成"
+    
+    if diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
+        local existing_volume=$(diskutil info "${PLAYCOVER_VOLUME_NAME}" | grep "Mount Point:" | sed 's/.*: *//')
+        print_warning "「${PLAYCOVER_VOLUME_NAME}」ボリュームが既に存在します"
+        print_info "既存のボリュームを使用します: ${existing_volume}"
+        echo ""
+        return 0
+    fi
+    
+    print_info "新しいAPFSボリュームを作成中..."
+    
+    local container=""
+    local disk_num=$(echo "$SELECTED_DISK" | sed -E 's|/dev/disk([0-9]+)|\1|')
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ "APFS Container" ]] && [[ "$line" =~ disk[0-9]+ ]]; then
+            local found_container=$(echo "$line" | grep -oE 'disk[0-9]+')
+            local container_info=$(diskutil info "$found_container" 2>/dev/null)
+            if echo "$container_info" | grep -q "APFS Physical Store.*disk${disk_num}"; then
+                container="$found_container"
+                break
+            fi
+        fi
+    done < <(diskutil apfs list)
+    
+    if [[ -z "$container" ]]; then
+        print_error "APFSコンテナが見つかりません"
+        print_info "選択されたディスク: $SELECTED_DISK"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    if sudo diskutil apfs addVolume "$container" APFS "${PLAYCOVER_VOLUME_NAME}" -nomount > /tmp/apfs_create.log 2>&1; then
+        print_success "ボリューム「${PLAYCOVER_VOLUME_NAME}」を作成しました"
+    else
+        print_error "ボリュームの作成に失敗しました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    echo ""
+}
+
+mount_playcover_main_volume() {
+    print_header "PlayCoverボリュームのマウント"
+    
+    local volume_device=$(diskutil info "${PLAYCOVER_VOLUME_NAME}" | grep "Device Node:" | awk '{print $3}')
+    
+    if [[ -z "$volume_device" ]]; then
+        print_error "ボリュームデバイスが見つかりません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    local current_mount=$(diskutil info "${PLAYCOVER_VOLUME_NAME}" | grep "Mount Point:" | sed 's/.*: *//')
+    if [[ "$current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
+        print_success "ボリュームは既にマウントされています"
+        print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
+        echo ""
+        return 0
+    fi
+    
+    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
+        print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
+        print_info "アンマウント中..."
+        if ! sudo diskutil unmount force "$volume_device" 2>/dev/null; then
+            print_error "ボリュームのアンマウントに失敗しました"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            exit 1
+        fi
+        print_success "アンマウントしました"
+    fi
+    
+    local has_internal_data=false
+    local has_external_data=false
+    
+    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+        if [[ $(find "$PLAYCOVER_CONTAINER" -mindepth 1 -maxdepth 1 ! -name ".*" 2>/dev/null | wc -l) -gt 0 ]]; then
+            has_internal_data=true
+        fi
+    fi
+    
+    local temp_mount="/tmp/playcover_temp_mount_$$"
+    mkdir -p "$temp_mount"
+    
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
+        if [[ $(find "$temp_mount" -mindepth 1 -maxdepth 1 ! -name ".*" 2>/dev/null | wc -l) -gt 0 ]]; then
+            has_external_data=true
+        fi
+        sudo umount "$temp_mount" 2>/dev/null
+    fi
+    
+    rmdir "$temp_mount" 2>/dev/null
+    
+    if $has_internal_data && $has_external_data; then
+        print_warning "内部ストレージと外部ストレージの両方にデータが存在します"
+        echo ""
+        echo "1. 内部ストレージのデータを使用 (外部を上書き)"
+        echo "2. 外部ストレージのデータを使用 (内部を削除)"
+        echo ""
+        echo -n "選択してください (1/2): "
+        read data_choice
+        
+        case "$data_choice" in
+            1)
+                print_info "内部ストレージのデータを使用します"
+                mkdir -p "$temp_mount"
+                sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+                print_info "外部ストレージをクリア中..."
+                sudo rm -rf "$temp_mount"/* "$temp_mount"/.[!.]* 2>/dev/null || true
+                print_info "データをコピー中..."
+                sudo cp -R "$PLAYCOVER_CONTAINER"/* "$temp_mount"/ 2>/dev/null || true
+                sudo cp -R "$PLAYCOVER_CONTAINER"/.[!.]* "$temp_mount"/ 2>/dev/null || true
+                sudo umount "$temp_mount"
+                rmdir "$temp_mount"
+                print_info "内部ストレージをクリア中..."
+                sudo rm -rf "$PLAYCOVER_CONTAINER"
+                ;;
+            2)
+                print_info "外部ストレージのデータを使用します"
+                print_info "内部ストレージをクリア中..."
+                sudo rm -rf "$PLAYCOVER_CONTAINER"
+                ;;
+            *)
+                print_error "無効な選択です"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                exit 1
+                ;;
+        esac
+    elif $has_internal_data; then
+        print_info "内部ストレージのデータを外部に移行します"
+        mkdir -p "$temp_mount"
+        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        print_info "データをコピー中..."
+        sudo cp -R "$PLAYCOVER_CONTAINER"/* "$temp_mount"/ 2>/dev/null || true
+        sudo cp -R "$PLAYCOVER_CONTAINER"/.[!.]* "$temp_mount"/ 2>/dev/null || true
+        sudo umount "$temp_mount"
+        rmdir "$temp_mount"
+        print_info "内部ストレージをクリア中..."
+        sudo rm -rf "$PLAYCOVER_CONTAINER"
+    else
+        if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+            sudo rm -rf "$PLAYCOVER_CONTAINER"
+        fi
+    fi
+    
+    sudo mkdir -p "$PLAYCOVER_CONTAINER"
+    
+    print_info "ボリュームをマウント中..."
+    if sudo mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
+        print_success "ボリュームを正常にマウントしました"
+        print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
+        sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+    else
+        print_error "ボリュームのマウントに失敗しました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    echo ""
+}
+
+install_xcode_tools() {
+    print_info "Xcode Command Line Tools をインストール中..."
+    xcode-select --install 2>/dev/null || true
+    print_warning "Xcode Command Line Tools のインストールダイアログが表示されます"
+    print_info "インストールが完了するまでお待ちください..."
+    while ! xcode-select -p >/dev/null 2>&1; do
+        sleep 5
+    done
+    print_success "Xcode Command Line Tools のインストールが完了しました"
+}
+
+install_homebrew() {
+    print_info "Homebrew をインストール中..."
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" < /dev/null > /tmp/homebrew_install.log 2>&1
+    if [[ ! -f "${HOME}/.zprofile" ]] || ! grep -q "/opt/homebrew/bin/brew" "${HOME}/.zprofile"; then
+        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "${HOME}/.zprofile"
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+    print_success "Homebrew のインストールが完了しました"
+}
+
+install_playcover() {
+    print_info "PlayCover をインストール中..."
+    brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
+    print_success "PlayCover のインストールが完了しました"
+}
+
+perform_software_installations() {
+    print_header "追加ソフトウェアのインストール"
+    
+    if $NEED_XCODE_TOOLS; then
+        install_xcode_tools
+        echo ""
+    fi
+    
+    if $NEED_HOMEBREW; then
+        install_homebrew
+        echo ""
+    fi
+    
+    if $NEED_PLAYCOVER; then
+        install_playcover
+        echo ""
+    fi
+    
+    if ! $NEED_XCODE_TOOLS && ! $NEED_HOMEBREW && ! $NEED_PLAYCOVER; then
+        print_info "インストールが必要な項目はありません"
+        echo ""
+    fi
+}
+
+create_initial_mapping() {
+    print_header "マッピングデータの作成"
+    
+    if ! acquire_mapping_lock; then
+        print_error "マッピングファイルのロック取得に失敗しました"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        exit 1
+    fi
+    
+    local mapping_exists=false
+    if [[ -f "$MAPPING_FILE" ]]; then
+        if grep -q "^${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}$" "$MAPPING_FILE" 2>/dev/null; then
+            print_warning "マッピングデータが既に存在します"
+            mapping_exists=true
+        fi
+    fi
+    
+    if ! $mapping_exists; then
+        echo "${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}" >> "$MAPPING_FILE"
+        print_success "マッピングデータを作成しました"
+        print_info "ファイル: ${MAPPING_FILE}"
+        print_info "データ: ${PLAYCOVER_VOLUME_NAME} → ${PLAYCOVER_BUNDLE_ID}"
+    fi
+    
+    release_mapping_lock
+    
+    echo ""
+}
+
+#######################################################
+# Module 17: Environment Check & Initial Setup Flow
 #######################################################
 
 is_playcover_environment_ready() {
@@ -2352,38 +2837,61 @@ run_initial_setup() {
             ;;
     esac
     
-    # Run initial setup script if it exists
-    if [[ -f "$INITIAL_SETUP_SCRIPT" ]]; then
-        print_info "初期セットアップスクリプトを実行します..."
-        echo ""
-        "$INITIAL_SETUP_SCRIPT"
-        local setup_exit=$?
-        
-        if [[ $setup_exit -eq 0 ]]; then
-            print_success "初期セットアップが完了しました"
-            echo ""
-            print_info "PlayCover Complete Manager を起動します..."
-            sleep 3
-        else
-            print_error "初期セットアップに失敗しました"
+    # Run integrated initial setup
+    check_architecture
+    check_full_disk_access
+    check_xcode_tools
+    check_homebrew
+    check_playcover_installation
+    authenticate_sudo
+    select_external_disk
+    confirm_software_installations
+    
+    # Final confirmation
+    print_header "最終確認"
+    print_warning "以下の操作を実行します:"
+    echo "  1. 外部ストレージに PlayCover ボリュームを作成"
+    echo "  2. PlayCover コンテナを外部ストレージにマウント"
+    if $NEED_XCODE_TOOLS || $NEED_HOMEBREW || $NEED_PLAYCOVER; then
+        echo "  3. 不足しているソフトウェアをインストール"
+    fi
+    echo ""
+    print_info "選択されたディスク: ${SELECTED_DISK}"
+    print_info "マウント先: ${PLAYCOVER_CONTAINER}"
+    echo ""
+    echo -n "続行してもよろしいですか? (Y/n): "
+    read final_confirm
+    
+    case "$final_confirm" in
+        [nN]|[nN][oO])
+            print_info "ユーザーにより処理がキャンセルされました"
             echo ""
             echo -n "Enterキーで続行..."
             read
-            exit 1
-        fi
-    else
-        print_error "初期セットアップスクリプトが見つかりません"
-        print_info "必要なファイル: ${INITIAL_SETUP_SCRIPT}"
-        echo ""
-        print_warning "手動でセットアップを完了してください:"
-        echo "  1. PlayCover をインストール"
-        echo "  2. 外部ストレージに PlayCover ボリュームを作成"
-        echo "  3. PlayCover コンテナを外部ボリュームにマウント"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        exit 1
-    fi
+            exit 0
+            ;;
+        *)
+            print_success "処理を開始します"
+            echo ""
+            ;;
+    esac
+    
+    create_playcover_main_volume
+    mount_playcover_main_volume
+    perform_software_installations
+    create_initial_mapping
+    
+    # Setup complete
+    print_header "セットアップ完了"
+    print_success "PlayCover の外部ストレージ環境構築が完了しました"
+    echo ""
+    print_info "設定内容:"
+    echo "  ボリューム名: ${PLAYCOVER_VOLUME_NAME}"
+    echo "  マウント先: ${PLAYCOVER_CONTAINER}"
+    echo "  マッピングファイル: ${MAPPING_FILE}"
+    echo ""
+    print_info "PlayCover Complete Manager のメニューに移動します..."
+    sleep 3
 }
 
 #######################################################
