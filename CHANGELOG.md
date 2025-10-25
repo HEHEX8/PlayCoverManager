@@ -189,3 +189,27 @@ After:
   - Correct display of internal storage status in main menu
   - Better understanding of data location for users
   - Mount protection still works correctly (verified by user)
+
+### Phase 16: macOS Metadata Files Filtering (v1.5.4)
+- **Fixed Critical Bug**: Mount protection incorrectly triggered by macOS metadata files
+- **User Report**: 
+  - Empty directory (confirmed with `ls`) but mount blocked
+  - Script detected `.DS_Store` as "internal storage data"
+  - Mount protection blocked mounting unnecessarily
+- **Root Cause**: 
+  - `ls` (without -A) hides `.DS_Store` and other dot files
+  - `ls -A` (used in script) shows `.DS_Store`
+  - Script treated `.DS_Store` as user data
+- **Solution**:
+  - Filter out macOS metadata files in `mount_volume()` (Line 198-223)
+  - Filter out macOS metadata files in `get_storage_type()` (Line 319-334)
+  - Excluded files: `.DS_Store`, `.Spotlight-V100`, `.Trashes`, `.fseventsd`
+  - Display detected files when mount protection triggers
+- **Benefits**:
+  - Directories with only `.DS_Store` can now be mounted
+  - More accurate storage type detection
+  - Users can see what files triggered protection
+- **Impact**:
+  - Mount protection now only blocks for actual user data
+  - False positives eliminated for metadata-only directories
+  - Improved user experience with clear feedback

@@ -195,10 +195,19 @@ mount_volume() {
         if [[ -z "$mount_check" ]]; then
             # Directory exists but is NOT a mount point
             # Check if it contains actual data (not just an empty mount point directory)
-            if [[ -n "$(ls -A "$target_path" 2>/dev/null)" ]]; then
-                # Directory has content = internal storage data exists
+            # Ignore macOS metadata files (.DS_Store, .Spotlight-V100, etc.)
+            local content_check=$(ls -A "$target_path" 2>/dev/null | grep -v '^\\.DS_Store$' | grep -v '^\\.Spotlight-V100$' | grep -v '^\\.Trashes$' | grep -v '^\\.fseventsd$')
+            
+            if [[ -n "$content_check" ]]; then
+                # Directory has actual content (not just metadata) = internal storage data exists
                 print_error "❌ マウントがブロックされました"
                 print_warning "このアプリは現在、内蔵ストレージで動作しています"
+                print_info "検出されたデータ:"
+                echo "$content_check" | head -5 | while read item; do
+                    echo "  - $item"
+                done
+                [[ $(echo "$content_check" | wc -l | xargs) -gt 5 ]] && echo "  ... (他 $(($(echo "$content_check" | wc -l | xargs) - 5)) 個)"
+                echo ""
                 print_info "外部ボリュームをマウントする前に、以下を実行してください:"
                 echo ""
                 echo "  ${CYAN}1.${NC} ストレージ切り替え機能（オプション6）を使用"
@@ -209,7 +218,7 @@ mount_volume() {
                 echo ""
                 return 1
             else
-                # Directory is empty = safe to remove and mount
+                # Directory is empty or only has metadata files = safe to remove and mount
                 print_info "空のディレクトリを削除してマウント準備中..."
                 sudo rm -rf "$target_path"
             fi
@@ -312,18 +321,19 @@ get_storage_type() {
     
     # If it's a directory but not a mount point, check if it has content
     if [[ -d "$path" ]]; then
-        local content_check=$(ls -A "$path" 2>/dev/null)
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Content check: '$content_check'" >&2
+        # Ignore macOS metadata files when checking for content
+        local content_check=$(ls -A "$path" 2>/dev/null | grep -v '^\\.DS_Store$' | grep -v '^\\.Spotlight-V100$' | grep -v '^\\.Trashes$' | grep -v '^\\.fseventsd$')
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
         if [[ -z "$content_check" ]]; then
-            # Directory exists but is empty = no actual data
+            # Directory exists but is empty (or only has metadata) = no actual data
             # This is just an empty mount point directory left after unmount
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty (none)" >&2
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata (none)" >&2
             echo "none"
             return
         else
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory has content, checking disk location..." >&2
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory has actual content, checking disk location..." >&2
         fi
     fi
     
@@ -1402,7 +1412,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.3${CYAN}                              ║"
+    echo "║                 ${BLUE}Version 1.5.4${CYAN}                              ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
