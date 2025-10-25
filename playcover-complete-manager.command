@@ -661,15 +661,21 @@ EOF
 )
     
     if [[ -z "$selected" ]]; then
-        print_error "IPA ファイルが選択されませんでした"
-        exit_with_cleanup 1 "IPA ファイル未選択"
+        print_info "キャンセルされました"
+        echo ""
+        echo -n "Enterキーでメニューに戻る..."
+        read
+        return 1
     fi
     
     while IFS= read -r line; do
         if [[ -n "$line" ]] && [[ -f "$line" ]]; then
             if [[ ! "$line" =~ \.ipa$ ]]; then
                 print_error "選択されたファイルは IPA ファイルではありません: ${line}"
-                exit_with_cleanup 1 "無効なファイル形式"
+                echo ""
+                echo -n "Enterキーでメニューに戻る..."
+                read
+                return 1
             fi
             SELECTED_IPAS+=("$line")
         fi
@@ -679,7 +685,10 @@ EOF
     
     if [[ $TOTAL_IPAS -eq 0 ]]; then
         print_error "有効な IPA ファイルが選択されませんでした"
-        exit_with_cleanup 1 "有効なファイルなし"
+        echo ""
+        echo -n "Enterキーでメニューに戻る..."
+        read
+        return 1
     fi
     
     if [[ $TOTAL_IPAS -gt 1 ]]; then
@@ -1353,12 +1362,12 @@ individual_volume_control() {
     echo ""
     echo "${CYAN}操作を選択してください:${NC}"
     echo "  ${GREEN}[番号]${NC} : 個別マウント/アンマウント"
-    echo "  ${YELLOW}[q]${NC}    : 戻る"
+    echo "  ${YELLOW}[0]${NC}    : 戻る"
     echo ""
     echo -n "${CYAN}選択:${NC} "
     read choice
     
-    if [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
+    if [[ "$choice" == "0" ]]; then
         return
     fi
     
@@ -1603,12 +1612,12 @@ switch_storage_location() {
     echo ""
     echo "${CYAN}切り替えるアプリを選択してください:${NC}"
     echo "  ${GREEN}[番号]${NC} : ストレージ切り替え"
-    echo "  ${YELLOW}[q]${NC}    : 戻る"
+    echo "  ${YELLOW}[0]${NC}    : 戻る"
     echo ""
     echo -n "${CYAN}選択:${NC} "
     read choice
     
-    if [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
+    if [[ "$choice" == "0" ]]; then
         return
     fi
     
@@ -2365,7 +2374,7 @@ install_workflow() {
     authenticate_sudo
     check_playcover_volume_mount
     
-    select_ipa_files
+    select_ipa_files || return
     
     CURRENT_IPA_INDEX=0
     for ipa_file in "${SELECTED_IPAS[@]}"; do
