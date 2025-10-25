@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.5.0 - Streamlined Installation Output
+# Version: 4.6.0 - Streamlined Output Across All Functions
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2445,7 +2445,7 @@ uninstall_workflow() {
     
     # Start uninstallation
     echo ""
-    print_info "アンインストールを開始します..."
+    print_info "${selected_app} を削除中..."
     echo ""
     
     # Step 1: Remove app from PlayCover Applications/
@@ -2453,95 +2453,50 @@ uninstall_workflow() {
     local app_path="${playcover_apps}/${selected_bundle}.app"
     
     if [[ -d "$app_path" ]]; then
-        print_info "PlayCover からアプリを削除中..."
-        if rm -rf "$app_path" 2>/dev/null; then
-            print_success "アプリを削除しました"
-        else
+        if ! rm -rf "$app_path" 2>/dev/null; then
             print_error "アプリの削除に失敗しました"
             echo ""
             echo -n "Enterキーで続行..."
             read
             return
         fi
-    else
-        print_warning "アプリが見つかりませんでした（既に削除済み）"
     fi
     
-    # Step 2: Remove app settings from App Settings/
+    # Step 2-5: Remove settings, entitlements, keymapping, containers (silent)
     local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${selected_bundle}.plist"
-    if [[ -f "$app_settings" ]]; then
-        print_info "アプリ設定を削除中..."
-        rm -f "$app_settings" 2>/dev/null
-        print_success "設定を削除しました"
-    fi
+    rm -f "$app_settings" 2>/dev/null
     
-    # Step 3: Remove entitlements from Entitlements/
-    local entitlements_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements"
-    local entitlements_file="${entitlements_dir}/${selected_bundle}.plist"
-    if [[ -f "$entitlements_file" ]]; then
-        print_info "Entitlements を削除中..."
-        rm -f "$entitlements_file" 2>/dev/null
-        print_success "Entitlements を削除しました"
-    fi
+    local entitlements_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements/${selected_bundle}.plist"
+    rm -f "$entitlements_file" 2>/dev/null
     
-    # Step 4: Remove keymapping from Keymapping/
-    local keymapping_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping"
-    local keymapping_file="${keymapping_dir}/${selected_bundle}.plist"
-    if [[ -f "$keymapping_file" ]]; then
-        print_info "Keymapping を削除中..."
-        rm -f "$keymapping_file" 2>/dev/null
-        print_success "Keymapping を削除しました"
-    fi
+    local keymapping_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping/${selected_bundle}.plist"
+    rm -f "$keymapping_file" 2>/dev/null
     
-    # Step 5: Remove Containers folder for the app
     local containers_dir="${HOME}/Library/Containers/${selected_bundle}"
-    if [[ -d "$containers_dir" ]]; then
-        print_info "Containersフォルダを削除中..."
-        if rm -rf "$containers_dir" 2>/dev/null; then
-            print_success "Containersフォルダを削除しました"
-        else
-            print_warning "Containersフォルダの削除に失敗しました"
-        fi
-    fi
+    rm -rf "$containers_dir" 2>/dev/null
     
-    # Step 7: Unmount volume if mounted
+    # Step 7: Unmount volume if mounted (silent)
     local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
     if mount | grep -q "$volume_mount_point"; then
-        print_info "ボリュームをアンマウント中..."
-        if diskutil unmount "$volume_mount_point" >/dev/null 2>&1; then
-            print_success "ボリュームをアンマウントしました"
-        else
-            print_warning "アンマウントに失敗しました（続行します）"
-        fi
+        diskutil unmount "$volume_mount_point" >/dev/null 2>&1
     fi
     
     # Step 8: Delete APFS volume
-    print_info "APFSボリュームを削除中..."
-    
-    # Find the volume device
     local volume_device=$(diskutil list | grep "$selected_volume" | awk '{print $NF}')
     
     if [[ -n "$volume_device" ]]; then
-        if sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
-            print_success "ボリュームを削除しました"
-        else
+        if ! sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
             print_error "ボリュームの削除に失敗しました"
             echo ""
-            echo "手動で削除する必要があります:"
-            echo "  sudo diskutil apfs deleteVolume $volume_device"
+            echo "手動で削除してください: sudo diskutil apfs deleteVolume $volume_device"
             echo ""
             echo -n "Enterキーで続行..."
             read
             return
         fi
-    else
-        print_warning "ボリュームが見つかりませんでした（既に削除済み）"
     fi
     
-    # Step 9: Remove from mapping file
-    print_info "マッピング情報を削除中..."
-    
-    # Use remove_mapping function for consistency
+    # Step 9: Remove from mapping file (silent)
     if ! remove_mapping "$selected_bundle"; then
         print_error "マッピング情報の削除に失敗しました"
         echo ""
@@ -2550,29 +2505,17 @@ uninstall_workflow() {
         return
     fi
     
-    print_success "マッピング情報を削除しました"
-    
     # Step 10: If PlayCover volume, remove PlayCover.app and exit
     if [[ "$selected_volume" == "PlayCover" ]]; then
         echo ""
-        print_info "PlayCover本体を削除中..."
-        
         local playcover_app="/Applications/PlayCover.app"
         if [[ -d "$playcover_app" ]]; then
-            if rm -rf "$playcover_app" 2>/dev/null; then
-                print_success "PlayCover.appを削除しました"
-            else
-                print_warning "PlayCover.appの削除に失敗しました（手動削除が必要です）"
-            fi
-        else
-            print_warning "PlayCover.appが見つかりませんでした"
+            rm -rf "$playcover_app" 2>/dev/null
         fi
         
+        print_success "PlayCover を完全にアンインストールしました"
         echo ""
-        print_success "PlayCoverのアンインストールが完了しました"
-        echo ""
-        print_warning "PlayCoverを削除したため、このスクリプトは今後使用できません"
-        echo "再度使用するには、PlayCoverを再インストールしてください"
+        print_warning "このスクリプトは今後使用できません（PlayCoverを再インストールすると使用可能）"
         echo ""
         echo -n "Enterキーでターミナルを終了します..."
         read
@@ -2580,9 +2523,7 @@ uninstall_workflow() {
     fi
     
     echo ""
-    print_success "アンインストールが完了しました"
-    echo ""
-    echo "削除したアプリ: ${GREEN}${selected_app}${NC}"
+    print_success "✓ ${selected_app}"
     echo ""
     
     # Check if there are more apps
@@ -2684,8 +2625,6 @@ uninstall_all_apps() {
     
     # Start batch uninstallation
     echo ""
-    print_info "一括アンインストールを開始します..."
-    echo ""
     
     local success_count=0
     local fail_count=0
@@ -2696,10 +2635,6 @@ uninstall_all_apps() {
         local volume_name="${volumes_list[$i]}"
         local bundle_id="${bundles_list[$i]}"
         local current=$i
-        
-        echo ""
-        print_info "[${current}/${total_apps}] ${app_name} を削除中..."
-        echo ""
         
         # Step 1: Remove app from PlayCover
         local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
@@ -2755,48 +2690,24 @@ uninstall_all_apps() {
         fi
     done
     
-    # Step 7: Clear entire mapping file
+    # Step 7: Clear entire mapping file (silent)
     echo ""
-    print_info "マッピング情報をクリア中..."
-    
-    # Use acquire_mapping_lock function for consistency
     if acquire_mapping_lock; then
-        # Clear mapping file
         > "$MAPPING_FILE"
         release_mapping_lock
-        print_success "マッピング情報をクリアしました"
-    else
-        print_warning "マッピングファイルのロック取得に失敗しました"
     fi
     
-    # Step 8: Remove PlayCover.app
-    echo ""
-    print_info "PlayCover本体を削除中..."
-    
+    # Step 8: Remove PlayCover.app (silent)
     local playcover_app="/Applications/PlayCover.app"
-    if [[ -d "$playcover_app" ]]; then
-        if rm -rf "$playcover_app" 2>/dev/null; then
-            print_success "PlayCover.appを削除しました"
-        else
-            print_warning "PlayCover.appの削除に失敗しました（手動削除が必要です）"
-        fi
-    else
-        print_warning "PlayCover.appが見つかりませんでした"
-    fi
+    rm -rf "$playcover_app" 2>/dev/null
     
     # Summary
-    echo ""
-    echo "${CYAN}═══════════════════════════════════════════════════════════════════════════════════════════════════${NC}"
-    echo ""
-    print_success "一括アンインストールが完了しました"
-    echo ""
-    echo "  ${GREEN}成功: ${success_count} 個${NC}"
+    print_success "PlayCover と全アプリを完全削除しました (${success_count} 個)"
     if [[ $fail_count -gt 0 ]]; then
         echo "  ${RED}失敗: ${fail_count} 個${NC}"
     fi
     echo ""
-    print_warning "PlayCoverを削除したため、このスクリプトは今後使用できません"
-    echo "再度使用するには、PlayCoverを再インストールしてください"
+    print_warning "このスクリプトは今後使用できません（PlayCoverを再インストールすると使用可能）"
     echo ""
     echo -n "Enterキーでターミナルを終了します..."
     read
