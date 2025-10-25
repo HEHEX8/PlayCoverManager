@@ -927,8 +927,10 @@ install_ipa_to_playcover() {
     local check_interval=3
     local initial_check_done=false
     
-    # Get timestamp BEFORE starting installation check
-    local install_start_time=$(date +%s)
+    # Track file modification stability
+    local last_mtime=0
+    local stable_count=0
+    local required_stable_checks=3  # Must be stable for 9 seconds (3 checks * 3 seconds)
     
     while [[ $elapsed -lt $max_wait ]]; do
         sleep $check_interval
@@ -937,35 +939,50 @@ install_ipa_to_playcover() {
         # Check if app was installed
         if [[ -d "$playcover_apps" ]]; then
             local found=false
+            local current_app_mtime=0
+            
             while IFS= read -r app_path; do
                 if [[ -f "${app_path}/Info.plist" ]]; then
                     local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
                     
                     if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
-                        # Found the app - but was it just installed or already there?
+                        # Get the latest mtime of any file in the app bundle
+                        current_app_mtime=$(find "$app_path" -type f -exec stat -f %m {} \; 2>/dev/null | sort -n | tail -1)
+                        
                         if [[ -n "$existing_app_path" ]]; then
-                            # App already existed, check if it was updated
-                            # Compare against the mtime we recorded BEFORE installation
-                            local current_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
-                            
-                            # Check if mtime changed OR if any file inside was modified recently
-                            if [[ $current_mtime -gt $existing_mtime ]]; then
-                                # App directory itself was modified
-                                found=true
-                                break
-                            else
-                                # Check if any files inside were modified after install_start_time
-                                local recent_files=$(find "$app_path" -type f -newermt "@${install_start_time}" 2>/dev/null | head -1)
-                                if [[ -n "$recent_files" ]]; then
-                                    found=true
-                                    break
+                            # App already existed - check if it's being updated
+                            if [[ $current_app_mtime -gt $existing_mtime ]]; then
+                                # Files are being modified
+                                if [[ $current_app_mtime -eq $last_mtime ]]; then
+                                    # No new changes in this check - increment stability counter
+                                    ((stable_count++))
+                                    
+                                    if [[ $stable_count -ge $required_stable_checks ]]; then
+                                        # Files have been stable for required duration
+                                        found=true
+                                        break
+                                    fi
+                                else
+                                    # Still modifying files - reset stability counter
+                                    stable_count=0
+                                    last_mtime=$current_app_mtime
                                 fi
                             fi
                         else
                             # New installation - app appeared after we started
                             if [[ "$initial_check_done" == true ]]; then
-                                found=true
-                                break
+                                # Check stability for new installation too
+                                if [[ $current_app_mtime -eq $last_mtime ]]; then
+                                    ((stable_count++))
+                                    
+                                    if [[ $stable_count -ge $required_stable_checks ]]; then
+                                        found=true
+                                        break
+                                    fi
+                                else
+                                    stable_count=0
+                                    last_mtime=$current_app_mtime
+                                fi
                             fi
                         fi
                     fi
@@ -987,7 +1004,11 @@ install_ipa_to_playcover() {
         initial_check_done=true
         
         # Show progress indicator
-        echo -n "."
+        if [[ $stable_count -gt 0 ]]; then
+            echo -n "✓"  # Show checkmark when stable
+        else
+            echo -n "."  # Show dot when still changing
+        fi
     done
     
     echo ""
