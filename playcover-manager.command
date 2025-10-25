@@ -3,10 +3,11 @@
 #######################################################
 # PlayCover Integrated Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 3.0.0 - Complete Integration
+# Version: 3.0.1 - Complete Integration (Fixed)
 #######################################################
 
-set -e
+# Note: set -e is NOT used here to allow graceful error handling
+# Volume operations require explicit error checking
 
 #######################################################
 # Module 1: Constants & Global Variables
