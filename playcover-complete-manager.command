@@ -686,7 +686,8 @@ EOF
         BATCH_MODE=true
         print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
     else
-        print_success "$(basename "${SELECTED_IPAS[0]}")"
+        # zsh arrays are 1-indexed
+        print_success "$(basename "${SELECTED_IPAS[1]}")"
     fi
     
     echo ""
