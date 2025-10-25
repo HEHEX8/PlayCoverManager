@@ -2260,7 +2260,7 @@ show_quick_status() {
     
     if [[ $total_count -gt 0 ]]; then
         echo "${CYAN}【現在のステータス】${NC}"
-        echo "  ${GREEN}🔌 外部ストレージ: ${external_count}/${total_count}${NC}    ${YELLOW}💾 内蔵ストレージ: ${internal_count}/${total_count}${NC}    ${BLUE}⚪ データなし: ${unmounted_count}/${total_count}${NC}"
+        echo "  ${GREEN}🔌 外部ストレージ: ${external_count}/${total_count}${NC}     ${YELLOW}💾 内蔵ストレージ: ${internal_count}/${total_count}${NC}     ${BLUE}⚪ データなし: ${unmounted_count}/${total_count}${NC}"
         echo ""
     fi
 }
@@ -2271,9 +2271,9 @@ show_menu() {
     echo ""
     print_separator "═" "$CYAN"
     echo ""
-    echo "                                  ${GREEN}PlayCover 統合管理ツール${NC}"
+    echo "                               ${GREEN}PlayCover 統合管理ツール${NC}"
     echo ""
-    echo "                            ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
+    echo "                         ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
     echo ""
     print_separator "═" "$CYAN"
     echo ""
@@ -2282,10 +2282,10 @@ show_menu() {
     
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
-    echo "  ${GREEN}【アプリ管理】${NC}                            ${YELLOW}【ボリューム管理】${NC}                       ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール                   3. 全ボリュームをマウント                 6. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール               4. 全ボリュームをアンマウント             7. ストレージ状態確認"
-    echo "                                            5. 個別ボリューム操作"
+    echo "  ${GREEN}【アプリ管理】${NC}                       ${YELLOW}【ボリューム管理】${NC}                  ${CYAN}【ストレージ管理】${NC}"
+    echo "  1. アプリをインストール              3. 全ボリュームをマウント           6. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール          4. 全ボリュームをアンマウント       7. ストレージ状態確認"
+    echo "                                       5. 個別ボリューム操作"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
