@@ -1725,8 +1725,8 @@ switch_storage_location() {
         print_info "データをコピー中... (進捗が表示されます)"
         echo ""
         
-        # Use rsync with info=progress2 for real-time progress bar
-        sudo /usr/bin/rsync -avH --ignore-errors --info=progress2 "$target_path/" "$temp_mount/"
+        # Use rsync with progress for real-time progress (macOS compatible)
+        sudo /usr/bin/rsync -avH --ignore-errors --progress "$target_path/" "$temp_mount/"
         local rsync_exit=$?
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
@@ -1739,8 +1739,10 @@ switch_storage_location() {
         else
             echo ""
             print_error "データのコピーに失敗しました"
-            sudo /usr/sbin/umount "$temp_mount"
-            sudo /bin/rm -rf "$temp_mount"
+            print_info "一時マウントをクリーンアップ中..."
+            sudo /usr/sbin/umount "$temp_mount" 2>/dev/null || true
+            sleep 1  # Wait for unmount to complete
+            sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
             echo ""
             echo -n "Enterキーで続行..."
             read
@@ -2018,8 +2020,8 @@ switch_storage_location() {
         print_info "データをコピー中... (進捗が表示されます)"
         echo ""
         
-        # Use rsync with info=progress2 for real-time progress bar
-        sudo /usr/bin/rsync -avH --ignore-errors --info=progress2 "$source_mount/" "$target_path/"
+        # Use rsync with progress for real-time progress (macOS compatible)
+        sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_mount/" "$target_path/"
         local rsync_exit=$?
         
         if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
@@ -2034,15 +2036,20 @@ switch_storage_location() {
         else
             echo ""
             print_error "データのコピーに失敗しました"
-            sudo /bin/rm -rf "$target_path"
+            
+            # Cleanup: Unmount first, then clean up directories
+            if [[ "$temp_mount_created" == true ]]; then
+                print_info "一時マウントをクリーンアップ中..."
+                sudo /usr/sbin/umount "$source_mount" 2>/dev/null || true
+                sleep 1  # Wait for unmount to complete
+                sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
+            fi
+            
+            # Restore backup
+            sudo /bin/rm -rf "$target_path" 2>/dev/null || true
             if [[ -d "$backup_path" ]]; then
                 print_info "バックアップを復元中..."
                 sudo /bin/mv "$backup_path" "$target_path"
-            fi
-            
-            if [[ "$temp_mount_created" == true ]]; then
-                sudo /usr/sbin/umount "$source_mount" 2>/dev/null || true
-                sudo /bin/rm -rf "$source_mount"
             fi
             
             echo ""
