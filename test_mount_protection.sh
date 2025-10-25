@@ -50,19 +50,37 @@ if [[ -z "$mount_check" ]]; then
     ls -la "$test_path" 2>/dev/null
     
     echo ""
-    echo "Step 4: Protection decision"
-    if [[ -n "$content" ]]; then
-        echo "  ✗ BLOCKED: Directory has content"
+    echo "Step 4: Filter macOS metadata files (v1.5.6 logic)"
+    echo "  Using: grep -v -x -F '.DS_Store' | grep -v -x -F '.Spotlight-V100' ..."
+    
+    # Apply the same filtering as mount_volume() v1.5.6
+    content_filtered=$(echo "$content" | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd')
+    
+    echo "  Filtered output: '$content_filtered'"
+    echo "  Filtered length: ${#content_filtered} characters"
+    
+    echo ""
+    echo "Step 5: Protection decision (based on filtered content)"
+    if [[ -n "$content_filtered" ]]; then
+        echo "  ✗ BLOCKED: Directory has actual user data"
         echo "  → Mount protection will BLOCK mounting"
         echo ""
-        echo "Content detected:"
-        echo "$content" | while read line; do
+        echo "Actual user data detected (after filtering metadata):"
+        echo "$content_filtered" | while read line; do
             echo "    - $line"
         done
     else
-        echo "  ✓ ALLOWED: Directory is empty"
+        echo "  ✓ ALLOWED: Directory is empty or contains only metadata"
         echo "  → Mount protection will ALLOW mounting"
-        echo "  → Empty directory will be deleted first"
+        echo "  → Empty directory (or metadata-only) will be deleted first"
+        
+        if [[ -n "$content" ]]; then
+            echo ""
+            echo "Metadata files that will be ignored:"
+            echo "$content" | while read line; do
+                echo "    - $line (filtered out)"
+            done
+        fi
     fi
 else
     echo "  ✓ IS a mount point (external storage)"
