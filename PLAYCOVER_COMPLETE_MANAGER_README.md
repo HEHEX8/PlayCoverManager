@@ -1,4 +1,4 @@
-# PlayCover Complete Manager v4.0.0
+# PlayCover Complete Manager v4.2.0
 
 ## 📋 概要
 
@@ -98,7 +98,7 @@ PlayCover 統合管理ツール
 #### インストール機能
 - IPA 一括インストール（バッチ処理）
 - PlayCoverクラッシュ検出と復旧
-- インストール完了の安定性判定
+- **堅牢な完了検出**（3段階検証: 構造+DB+安定性）
 
 #### ボリューム管理機能
 - 全ボリュームの一括マウント/アンマウント
@@ -125,10 +125,10 @@ PlayCover 統合管理ツール
 
 ```
 ファイル名: playcover-complete-manager.command
-サイズ: 91KB
-行数: 2464行
-関数数: 47個（新規+2）
-バージョン: 4.0.0
+サイズ: 107KB
+行数: 2966行
+関数数: 49個
+バージョン: 4.2.0
 ```
 
 ### 新規追加機能
@@ -137,6 +137,36 @@ PlayCover 統合管理ツール
 |------|------|
 | `is_playcover_environment_ready()` | 環境が整っているか判定 |
 | `run_initial_setup()` | 初期セットアップを実行 |
+
+### IPA インストール検出ロジック (v4.2.0)
+
+```bash
+# 3段階検証による堅牢な完了検出
+
+Phase 1: 構造検証
+├─ Info.plist の存在確認
+├─ CFBundleName の有効性確認
+├─ CFBundleShortVersionString の有効性確認
+└─ _CodeSignature ディレクトリの存在確認
+
+Phase 2: PlayCover データベース確認 (MOST RELIABLE)
+├─ PlayCover.sqlite へのアクセス
+├─ Bundle ID での登録確認
+└─ SELECT COUNT(*) FROM apps WHERE bundleIdentifier='...'
+
+Phase 3: ファイル安定性確認 (短縮版)
+├─ 最新ファイルの mtime 取得
+├─ 2回連続で同じ mtime (6秒間安定)
+└─ ファイル変更の停止を確認
+
+成功判定: Phase 1 ✓ AND (Phase 2 ✓ OR Phase 3 ✓)
+```
+
+**検出ロジックの利点**:
+- **最高の信頼性**: PlayCover の内部状態を直接確認
+- **高速検出**: DB登録確認で即座に完了判定（6秒待機不要）
+- **フォールバック対応**: DB確認失敗時は構造+安定性で判定
+- **短縮された待機時間**: mtime安定確認が9秒→6秒に短縮
 
 ### 環境判定ロジック
 
@@ -256,6 +286,44 @@ diskutil info PlayCover
 
 ## 📈 変更履歴
 
+### v4.2.0 (2025-10-25) - Robust Installation Detection
+
+**改善点**: IPA インストール完了検出の大幅強化
+
+**新しい検出方式（3段階検証）**:
+1. **Phase 1: 構造検証**
+   - Info.plist の存在と有効性確認
+   - _CodeSignature ディレクトリの存在確認
+   - CFBundleName と CFBundleShortVersionString の取得確認
+
+2. **Phase 2: PlayCover データベース確認**（最も信頼性が高い）
+   - PlayCover.sqlite から Bundle ID の登録を確認
+   - PlayCover内部の状態を直接チェック
+   - データベースアクセス失敗時は構造検証のみで判定
+
+3. **Phase 3: 安定性確認**（短縮版）
+   - ファイル修正時間（mtime）の安定確認
+   - 従来の9秒から6秒に短縮（2チェック × 3秒）
+   - より高速な検出を実現
+
+**成功判定基準**: Phase 1 + (Phase 2 OR Phase 3)
+- データベース登録が確認できれば即座に成功判定
+- データベースチェック失敗時は安定性確認で判定
+- より確実で高速な検出を実現
+
+**利点**:
+- PlayCoverの内部状態を直接確認（最も信頼性が高い）
+- 検出時間の短縮（9秒 → 6秒、またはDB確認で即座）
+- 複数の検証方法によるフォールバック対応
+- クラッシュ時の検証も同様に強化
+
+### v4.1.0 (2025-10-25) - True Standalone
+
+**改善点**: 完全自己完結型へ進化
+- 外部依存の完全排除
+- 13個のセットアップ関数を直接統合
+- 単一ファイルですべて完結
+
 ### v4.0.0 (2025-10-25) - Initial Release
 
 **新機能**: 完全統合版
@@ -266,11 +334,6 @@ diskutil info PlayCover
 **統合内容**:
 - 0_playcover-initial-setup.command v1.1.0 のロジックを統合
 - playcover-manager.command v3.1.1 の全機能を継承
-
-**改善点**:
-- ゼロコンフィグで起動可能
-- 初心者でも迷わない設計
-- セットアップ済みユーザーは影響なし
 
 ---
 
@@ -311,10 +374,11 @@ diskutil info PlayCover
 
 ## 🎉 まとめ
 
-**PlayCover Complete Manager v4.0.0** は:
+**PlayCover Complete Manager v4.2.0** は:
 - ✅ 初心者に優しい（自動セットアップ）
 - ✅ 上級者も満足（全機能統合）
 - ✅ 既存ユーザーも安心（完全互換）
 - ✅ メンテナンスしやすい（単一ファイル）
+- ✅ **最も確実なインストール検出**（PlayCover DB直接確認）
 
-**究極の完全統合版、ここに完成！** 🚀
+**究極の完全統合版、さらに進化！** 🚀

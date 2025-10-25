@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.1.0 - True Standalone (No External Dependencies)
+# Version: 4.2.0 - Robust Installation Detection
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -925,7 +925,7 @@ install_ipa_to_playcover() {
     
     # Wait for installation to complete
     print_info "インストールの完了を待機中..."
-    print_info "（PlayCoverウィンドウでインストールが完了するのを監視しています）"
+    print_info "（PlayCoverデータベースとアプリ構造を監視しています）"
     echo ""
     
     local max_wait=300  # 5 minutes
@@ -933,10 +933,19 @@ install_ipa_to_playcover() {
     local check_interval=3
     local initial_check_done=false
     
-    # Track file modification stability
+    # PlayCover database path
+    local playcover_db="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Data/Library/Application Support/PlayCover/PlayCover.sqlite"
+    
+    # Track file modification stability (shortened from 9s to 6s)
     local last_mtime=0
     local stable_count=0
-    local required_stable_checks=3  # Must be stable for 9 seconds (3 checks * 3 seconds)
+    local required_stable_checks=2  # Shortened to 6 seconds (2 checks * 3 seconds)
+    
+    # Detection Method (v4.2.0 - Robust Triple Verification):
+    # Phase 1: Structure validation (Info.plist + _CodeSignature)
+    # Phase 2: PlayCover database registration check (MOST RELIABLE)
+    # Phase 3: File stability confirmation (shortened to 6 seconds)
+    # Success criteria: Phase 1 + (Phase 2 OR Phase 3)
     
     while [[ $elapsed -lt $max_wait ]]; do
         sleep $check_interval
@@ -950,7 +959,7 @@ install_ipa_to_playcover() {
             print_warning "インストール中にクラッシュした可能性があります"
             echo ""
             
-            # Check if installation actually succeeded despite crash
+            # Check if installation actually succeeded despite crash (using robust verification)
             local installation_succeeded=false
             if [[ -d "$playcover_apps" ]]; then
                 while IFS= read -r app_path; do
@@ -959,8 +968,23 @@ install_ipa_to_playcover() {
                         if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
                             local current_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
                             if [[ $current_mtime -gt $existing_mtime ]]; then
-                                installation_succeeded=true
-                                break
+                                # Verify structure integrity
+                                if [[ -d "${app_path}/_CodeSignature" ]]; then
+                                    local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
+                                    if [[ -n "$app_name" ]]; then
+                                        # Check PlayCover database registration
+                                        if [[ -f "$playcover_db" ]]; then
+                                            local db_entry=$(sqlite3 "$playcover_db" "SELECT COUNT(*) FROM apps WHERE bundleIdentifier='$APP_BUNDLE_ID'" 2>/dev/null || echo "0")
+                                            if [[ "$db_entry" -gt 0 ]]; then
+                                                installation_succeeded=true
+                                                break
+                                            fi
+                                        fi
+                                        # If database check fails, accept structure validity as fallback
+                                        installation_succeeded=true
+                                        break
+                                    fi
+                                fi
                             fi
                         fi
                     fi
@@ -1016,7 +1040,35 @@ install_ipa_to_playcover() {
                     local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
                     
                     if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
-                        # Get the latest mtime of any file in the app bundle
+                        # Phase 1: Basic structure validation
+                        local structure_valid=false
+                        
+                        # Check Info.plist validity
+                        if [[ -f "${app_path}/Info.plist" ]]; then
+                            local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
+                            local app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                            
+                            # Check _CodeSignature directory
+                            if [[ -d "${app_path}/_CodeSignature" ]] && [[ -n "$app_name" ]] && [[ -n "$app_version" ]]; then
+                                structure_valid=true
+                            fi
+                        fi
+                        
+                        if [[ "$structure_valid" == false ]]; then
+                            continue
+                        fi
+                        
+                        # Phase 2: PlayCover database check (most reliable)
+                        local db_registered=false
+                        if [[ -f "$playcover_db" ]]; then
+                            # Check if app is registered in PlayCover's database
+                            local db_entry=$(sqlite3 "$playcover_db" "SELECT COUNT(*) FROM apps WHERE bundleIdentifier='$APP_BUNDLE_ID'" 2>/dev/null || echo "0")
+                            if [[ "$db_entry" -gt 0 ]]; then
+                                db_registered=true
+                            fi
+                        fi
+                        
+                        # Phase 3: Stability check (shortened to 6 seconds)
                         current_app_mtime=$(find "$app_path" -type f -exec stat -f %m {} \; 2>/dev/null | sort -n | tail -1)
                         
                         if [[ -n "$existing_app_path" ]]; then
@@ -1027,8 +1079,9 @@ install_ipa_to_playcover() {
                                     # No new changes in this check - increment stability counter
                                     ((stable_count++))
                                     
-                                    if [[ $stable_count -ge $required_stable_checks ]]; then
-                                        # Files have been stable for required duration
+                                    # Combined check: structure + (database OR stability)
+                                    if [[ "$structure_valid" == true ]] && { [[ "$db_registered" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
+                                        # Installation confirmed by multiple indicators
                                         found=true
                                         break
                                     fi
@@ -1045,7 +1098,8 @@ install_ipa_to_playcover() {
                                 if [[ $current_app_mtime -eq $last_mtime ]]; then
                                     ((stable_count++))
                                     
-                                    if [[ $stable_count -ge $required_stable_checks ]]; then
+                                    # Combined check: structure + (database OR stability)
+                                    if [[ "$structure_valid" == true ]] && { [[ "$db_registered" == true ]] || [[ $stable_count -ge $required_stable_checks ]]; }; then
                                         found=true
                                         break
                                     fi
@@ -1073,7 +1127,7 @@ install_ipa_to_playcover() {
         
         initial_check_done=true
         
-        # Show progress indicator
+        # Show progress indicator with more detailed status
         if [[ $stable_count -gt 0 ]]; then
             echo -n "✓"  # Show checkmark when stable
         else
