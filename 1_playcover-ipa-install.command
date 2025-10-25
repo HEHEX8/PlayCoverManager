@@ -1,8 +1,9 @@
 #!/bin/zsh
 
 #######################################################
-# PlayCover IPA Installation Script
+# PlayCover IPA Installation Script (Batch Mode)
 # macOS Tahoe 26.0.1 Compatible
+# Version: 2.0.0 - Batch Installation Support
 #######################################################
 
 set -e
@@ -13,6 +14,7 @@ readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly CYAN='\033[0;36m'
+readonly MAGENTA='\033[0;35m'
 readonly NC='\033[0m' # No Color
 
 # Constants
@@ -24,7 +26,9 @@ readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly INITIAL_SETUP_SCRIPT="${SCRIPT_DIR}/0_playcover-initial-setup.command"
 
 # Global variables
-SELECTED_IPA=""
+declare -a SELECTED_IPAS=()  # Array for multiple IPAs
+declare -a INSTALL_SUCCESS=()
+declare -a INSTALL_FAILED=()
 APP_NAME=""
 APP_NAME_EN=""
 APP_VERSION=""
@@ -33,6 +37,9 @@ APP_VOLUME_NAME=""
 SELECTED_DISK=""
 PLAYCOVER_VOLUME_DEVICE=""
 SUDO_AUTHENTICATED=false
+BATCH_MODE=false
+CURRENT_IPA_INDEX=0
+TOTAL_IPAS=0
 
 #######################################################
 # Utility Functions
@@ -59,6 +66,18 @@ print_warning() {
 
 print_info() {
     echo "${BLUE}ℹ $1${NC}"
+}
+
+print_batch_progress() {
+    local current=$1
+    local total=$2
+    local app_name=$3
+    
+    echo ""
+    echo "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "${MAGENTA}  処理中: ${current}/${total} - ${app_name}${NC}"
+    echo "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 }
 
 exit_with_cleanup() {
@@ -246,52 +265,93 @@ mount_playcover_volume() {
 }
 
 #######################################################
-# 06. IPA Selection
+# 06. IPA Selection (Multiple Files)
 #######################################################
 
-select_ipa_file() {
+select_ipa_files() {
     print_header "06. インストールする IPA ファイルの選択"
     
-    # Use AppleScript to select IPA file
-    # Try multiple type identifiers for IPA files
+    # Use AppleScript to select multiple IPA files
     local selected=$(osascript <<'EOF' 2>/dev/null
 try
     tell application "System Events"
         activate
-        -- Try with multiple type identifiers
-        set theFile to choose file with prompt "インストールする IPA ファイルを選択してください:" of type {"ipa", "public.archive", "public.data"}
-        return POSIX path of theFile
+        -- Allow multiple file selection
+        set theFiles to choose file with prompt "インストールする IPA ファイルを選択してください（複数選択可）:" of type {"ipa", "public.archive", "public.data"} with multiple selections allowed
+        
+        -- Convert file list to POSIX paths
+        set posixPaths to {}
+        repeat with aFile in theFiles
+            set end of posixPaths to POSIX path of aFile
+        end repeat
+        
+        -- Join paths with newline
+        set AppleScript's text item delimiters to linefeed
+        return posixPaths as text
     end tell
 on error
-    -- Fallback: allow all files
+    -- Fallback: allow all files with multiple selection
     tell application "System Events"
         activate
-        set theFile to choose file with prompt "インストールする IPA ファイルを選択してください (.ipa):"
-        set filePath to POSIX path of theFile
-        if filePath does not end with ".ipa" then
-            error "選択されたファイルは IPA ファイルではありません"
-        end if
-        return filePath
+        set theFiles to choose file with prompt "インストールする IPA ファイルを選択してください（複数選択可、.ipa）:" with multiple selections allowed
+        
+        set posixPaths to {}
+        repeat with aFile in theFiles
+            set thePath to POSIX path of aFile
+            -- Verify .ipa extension
+            if thePath does not end with ".ipa" then
+                error "選択されたファイルに IPA ファイル以外が含まれています: " & thePath
+            end if
+            set end of posixPaths to thePath
+        end repeat
+        
+        set AppleScript's text item delimiters to linefeed
+        return posixPaths as text
     end tell
 end try
 EOF
 )
     
-    if [[ -z "$selected" ]] || [[ ! -f "$selected" ]]; then
+    if [[ -z "$selected" ]]; then
         print_error "IPA ファイルが選択されませんでした"
         exit_with_cleanup 1 "IPA ファイル未選択"
     fi
     
-    # Verify file extension
-    if [[ ! "$selected" =~ \.ipa$ ]]; then
-        print_error "選択されたファイルは IPA ファイルではありません"
-        print_error "ファイル: ${selected}"
-        exit_with_cleanup 1 "無効なファイル形式"
+    # Parse selected files into array
+    while IFS= read -r line; do
+        if [[ -n "$line" ]] && [[ -f "$line" ]]; then
+            # Verify file extension
+            if [[ ! "$line" =~ \.ipa$ ]]; then
+                print_error "選択されたファイルは IPA ファイルではありません: ${line}"
+                exit_with_cleanup 1 "無効なファイル形式"
+            fi
+            SELECTED_IPAS+=("$line")
+        fi
+    done <<< "$selected"
+    
+    TOTAL_IPAS=${#SELECTED_IPAS[@]}
+    
+    if [[ $TOTAL_IPAS -eq 0 ]]; then
+        print_error "有効な IPA ファイルが選択されませんでした"
+        exit_with_cleanup 1 "有効なファイルなし"
     fi
     
-    SELECTED_IPA="$selected"
-    print_success "IPA ファイルを選択しました"
-    print_info "ファイル: ${SELECTED_IPA}"
+    print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
+    
+    # Display selected files
+    echo ""
+    print_info "選択されたファイル:"
+    local idx=1
+    for ipa in "${SELECTED_IPAS[@]}"; do
+        echo "  ${idx}. $(basename "$ipa")"
+        ((idx++))
+    done
+    
+    if [[ $TOTAL_IPAS -gt 1 ]]; then
+        BATCH_MODE=true
+        echo ""
+        print_info "バッチモード: 複数の IPA ファイルを順次処理します"
+    fi
     
     echo ""
 }
@@ -301,28 +361,30 @@ EOF
 #######################################################
 
 extract_ipa_info() {
+    local ipa_file=$1
     print_header "07. IPA 情報の取得"
     
     # Create temporary directory for extraction
     local temp_dir=$(mktemp -d)
     
     print_info "IPA ファイルを解析中..."
+    print_info "ファイル: $(basename "$ipa_file")"
     
     # Extract only Info.plist for faster processing
     # Find Info.plist path in zip without extracting everything
-    local plist_path=$(unzip -l "$SELECTED_IPA" 2>/dev/null | grep -E "Payload/.*\.app/Info\.plist" | head -n 1 | awk '{print $NF}')
+    local plist_path=$(unzip -l "$ipa_file" 2>/dev/null | grep -E "Payload/.*\.app/Info\.plist" | head -n 1 | awk '{print $NF}')
     
     if [[ -z "$plist_path" ]]; then
         print_error "IPA 内に Info.plist が見つかりません"
         rm -rf "$temp_dir"
-        exit_with_cleanup 1 "Info.plist 不在"
+        return 1
     fi
     
     # Extract only the Info.plist file
-    if ! unzip -q "$SELECTED_IPA" "$plist_path" -d "$temp_dir" 2>/dev/null; then
+    if ! unzip -q "$ipa_file" "$plist_path" -d "$temp_dir" 2>/dev/null; then
         print_error "Info.plist の解凍に失敗しました"
         rm -rf "$temp_dir"
-        exit_with_cleanup 1 "IPA 解凍エラー"
+        return 1
     fi
     
     # Find Info.plist
@@ -331,7 +393,7 @@ extract_ipa_info() {
     if [[ -z "$info_plist" ]]; then
         print_error "Info.plist が見つかりません"
         rm -rf "$temp_dir"
-        exit_with_cleanup 1 "Info.plist 不在"
+        return 1
     fi
     
     # Extract Bundle Identifier
@@ -340,7 +402,7 @@ extract_ipa_info() {
     if [[ -z "$APP_BUNDLE_ID" ]]; then
         print_error "Bundle Identifier の取得に失敗しました"
         rm -rf "$temp_dir"
-        exit_with_cleanup 1 "Bundle ID 取得エラー"
+        return 1
     fi
     
     # Extract App Version
@@ -360,17 +422,17 @@ extract_ipa_info() {
     if [[ -z "$app_name_en" ]]; then
         print_error "アプリ名の取得に失敗しました"
         rm -rf "$temp_dir"
-        exit_with_cleanup 1 "アプリ名取得エラー"
+        return 1
     fi
     
     # Extract Japanese App Name (priority: ja_JP localization)
     local app_name_ja=""
     
     # Try to get localized Japanese name from InfoPlist.strings
-    local strings_path=$(unzip -l "$SELECTED_IPA" 2>/dev/null | grep -E "Payload/.*\.app/ja\.lproj/InfoPlist\.strings" | head -n 1 | awk '{print $NF}')
+    local strings_path=$(unzip -l "$ipa_file" 2>/dev/null | grep -E "Payload/.*\.app/ja\.lproj/InfoPlist\.strings" | head -n 1 | awk '{print $NF}')
     if [[ -n "$strings_path" ]]; then
         # Extract Japanese strings file
-        unzip -q "$SELECTED_IPA" "$strings_path" -d "$temp_dir" 2>/dev/null || true
+        unzip -q "$ipa_file" "$strings_path" -d "$temp_dir" 2>/dev/null || true
         local ja_strings="${temp_dir}/${strings_path}"
         if [[ -f "$ja_strings" ]]; then
             # Try to extract CFBundleDisplayName from Japanese strings
@@ -403,6 +465,7 @@ extract_ipa_info() {
     print_info "ボリューム名: ${APP_VOLUME_NAME}"
     
     echo ""
+    return 0
 }
 
 #######################################################
@@ -410,7 +473,10 @@ extract_ipa_info() {
 #######################################################
 
 select_installation_disk() {
-    print_header "08. インストール先ディスクの選択"
+    # Skip header in batch mode to avoid clutter
+    if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
+        print_header "08. インストール先ディスクの選択"
+    fi
     
     # Find disk where PlayCover volume is located
     local playcover_disk=""
@@ -419,15 +485,19 @@ select_installation_disk() {
         # Extract disk number from volume device (e.g., /dev/disk5s1 -> disk5)
         playcover_disk=$(echo "$PLAYCOVER_VOLUME_DEVICE" | sed -E 's|/dev/(disk[0-9]+).*|\1|')
         
-        print_info "PlayCover ボリュームが存在するディスク: ${playcover_disk}"
-        print_info "PlayCover ボリュームデバイス: ${PLAYCOVER_VOLUME_DEVICE}"
+        if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
+            print_info "PlayCover ボリュームが存在するディスク: ${playcover_disk}"
+            print_info "PlayCover ボリュームデバイス: ${PLAYCOVER_VOLUME_DEVICE}"
+        fi
         
         # Find APFS container for this disk
         local container=$(find_apfs_container "${playcover_disk}")
         
         if [[ -n "$container" ]]; then
             SELECTED_DISK="$container"
-            print_success "インストール先を自動選択しました: ${SELECTED_DISK}"
+            if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
+                print_success "インストール先を自動選択しました: ${SELECTED_DISK}"
+            fi
         else
             print_error "APFS コンテナの検出に失敗しました"
             print_info "デバッグ: diskutil list の出力を確認中..."
@@ -435,14 +505,17 @@ select_installation_disk() {
             echo ""
             print_info "デバッグ: diskutil info の出力を確認中..."
             diskutil info "$PLAYCOVER_VOLUME_DEVICE" | grep -E "(Container|Type|APFS)"
-            exit_with_cleanup 1 "APFS コンテナ検出エラー"
+            return 1
         fi
     else
         print_error "PlayCover ボリュームのデバイス情報が見つかりません"
-        exit_with_cleanup 1 "デバイス情報不在"
+        return 1
     fi
     
-    echo ""
+    if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
+        echo ""
+    fi
+    return 0
 }
 
 find_apfs_container() {
@@ -539,43 +612,62 @@ create_app_volume() {
             fi
         else
             print_error "既存のボリュームが破損している可能性があります"
-            echo ""
-            echo "ボリュームを再作成しますか？ (y/n): "
-            read recreate_choice
-            if [[ "$recreate_choice" == "y" ]]; then
-                print_info "既存のボリュームを削除中..."
+            
+            # In batch mode, auto-recreate without prompting
+            if [[ "$BATCH_MODE" == true ]]; then
+                print_info "既存のボリュームを自動で再作成します..."
                 sudo diskutil apfs deleteVolume "/dev/${existing_volume}" 2>/dev/null || {
                     print_error "ボリュームの削除に失敗しました"
-                    exit_with_cleanup 1 "ボリューム削除失敗"
+                    return 1
                 }
                 existing_volume=""
             else
-                exit_with_cleanup 1 "ユーザーキャンセル"
+                echo ""
+                echo "ボリュームを再作成しますか？ (y/n): "
+                read recreate_choice
+                if [[ "$recreate_choice" == "y" ]]; then
+                    print_info "既存のボリュームを削除中..."
+                    sudo diskutil apfs deleteVolume "/dev/${existing_volume}" 2>/dev/null || {
+                        print_error "ボリュームの削除に失敗しました"
+                        return 1
+                    }
+                    existing_volume=""
+                else
+                    return 1
+                fi
             fi
         fi
     fi
     
     if [[ -z "$existing_volume" ]]; then
-        # Confirmation prompt before creating volume
-        echo ""
-        echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo "${BLUE}  ボリューム作成の確認${NC}"
-        echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo ""
-        echo "  ${GREEN}アプリ名:${NC} ${APP_NAME}"
-        if [[ -n "$APP_VERSION" ]]; then
-            echo "  ${GREEN}バージョン:${NC} ${APP_VERSION}"
-        fi
-        echo "  ${GREEN}Bundle ID:${NC} ${APP_BUNDLE_ID}"
-        echo "  ${GREEN}ボリューム名:${NC} ${APP_VOLUME_NAME}"
-        echo "  ${GREEN}作成先:${NC} ${SELECTED_DISK}"
-        echo ""
-        echo -n "このボリュームを作成しますか？ (Y/n): "
-        read create_choice
-        
-        if [[ "$create_choice" =~ ^[Nn] ]]; then
-            print_info "ボリューム作成をキャンセルしました"
-            exit_with_cleanup 0 "ユーザーキャンセル"
+        # Confirmation prompt before creating volume (skip in batch mode after first confirmation)
+        if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
+            echo ""
+            echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo "${BLUE}  ボリューム作成の確認${NC}"
+            echo "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo "  ${GREEN}アプリ名:${NC} ${APP_NAME}"
+            if [[ -n "$APP_VERSION" ]]; then
+                echo "  ${GREEN}バージョン:${NC} ${APP_VERSION}"
+            fi
+            echo "  ${GREEN}Bundle ID:${NC} ${APP_BUNDLE_ID}"
+            echo "  ${GREEN}ボリューム名:${NC} ${APP_VOLUME_NAME}"
+            echo "  ${GREEN}作成先:${NC} ${SELECTED_DISK}"
+            echo ""
+            
+            if [[ "$BATCH_MODE" == true ]]; then
+                echo -n "残り ${TOTAL_IPAS} 個のアプリのボリュームを作成しますか？ (Y/n): "
+            else
+                echo -n "このボリュームを作成しますか？ (Y/n): "
+            fi
+            
+            read create_choice
+            
+            if [[ "$create_choice" =~ ^[Nn] ]]; then
+                print_info "ボリューム作成をキャンセルしました"
+                return 1
+            fi
         fi
         
         print_info "ボリューム「${APP_VOLUME_NAME}」を作成中..."
@@ -634,7 +726,7 @@ create_app_volume() {
                     print_success "ボリュームの検証: OK"
                 else
                     print_error "ボリュームの検証: 失敗"
-                    exit_with_cleanup 1 "ボリューム検証失敗"
+                    return 1
                 fi
                 
                 # Unmount the auto-mounted volume
@@ -656,16 +748,17 @@ create_app_volume() {
                 print_info "作成ログ:"
                 cat /tmp/apfs_create_app.log
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                exit_with_cleanup 1 "ボリューム作成後の確認失敗"
+                return 1
             fi
         else
             print_error "ボリュームの作成に失敗しました"
             cat /tmp/apfs_create_app.log
-            exit_with_cleanup 1 "ボリューム作成エラー"
+            return 1
         fi
     fi
     
     echo ""
+    return 0
 }
 
 #######################################################
@@ -737,7 +830,7 @@ mount_app_volume() {
         print_info "コンテナのボリューム一覧:"
         diskutil list "${SELECTED_DISK}" 2>/dev/null || echo "  (コンテナ情報の取得に失敗)"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        exit_with_cleanup 1 "ボリュームデバイス不在"
+        return 1
     fi
     
     volume_device="/dev/${volume_device}"
@@ -755,7 +848,7 @@ mount_app_volume() {
             print_info "既存のマウントをアンマウント中..."
             sudo umount "$current_mount" 2>/dev/null || {
                 print_error "アンマウントに失敗しました"
-                exit_with_cleanup 1 "アンマウント失敗"
+                return 1
             }
         fi
     fi
@@ -780,13 +873,20 @@ mount_app_volume() {
     # Handle data conflict
     if $internal_exists && $external_has_data; then
         print_warning "内部ストレージと外部ストレージの両方にデータが存在します"
-        echo ""
-        echo "どちらのデータを使用しますか？"
-        echo "  1) 内部ストレージのデータを使用（外部を上書き）"
-        echo "  2) 外部ストレージのデータを使用（内部を削除）"
-        echo ""
-        echo -n "選択してください (1/2): "
-        read data_choice
+        
+        # In batch mode, prefer internal data by default
+        if [[ "$BATCH_MODE" == true ]]; then
+            print_info "内部ストレージのデータを自動選択して外部にコピーします..."
+            local data_choice=1
+        else
+            echo ""
+            echo "どちらのデータを使用しますか？"
+            echo "  1) 内部ストレージのデータを使用（外部を上書き）"
+            echo "  2) 外部ストレージのデータを使用（内部を削除）"
+            echo ""
+            echo -n "選択してください (1/2): "
+            read data_choice
+        fi
         
         case $data_choice in
             1)
@@ -806,8 +906,10 @@ mount_app_volume() {
                     fi
                     
                     sudo umount "$temp_mount"
+                    rmdir "$temp_mount" 2>/dev/null || true
+                else
+                    rmdir "$temp_mount" 2>/dev/null || true
                 fi
-                rmdir "$temp_mount" 2>/dev/null || true
                 
                 # Remove internal container
                 print_info "内部ストレージのコンテナを削除中..."
@@ -820,9 +922,17 @@ mount_app_volume() {
                 ;;
             *)
                 print_error "無効な選択です"
-                exit_with_cleanup 1 "無効な選択"
+                return 1
                 ;;
         esac
+        
+        # IMPORTANT: Unmount the volume if it's still mounted from data check
+        local current_temp_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point:" | sed 's/.*: *//')
+        if [[ -n "$current_temp_mount" ]] && [[ "$current_temp_mount" != "Not applicable (no file system)" ]]; then
+            print_info "一時マウントをアンマウント中: ${current_temp_mount}"
+            sudo umount "$current_temp_mount" 2>/dev/null || sudo diskutil unmount force "$volume_device" 2>/dev/null || true
+            sleep 1  # Wait for unmount to complete
+        fi
     elif $internal_exists; then
         # Only internal data exists
         print_info "内部ストレージのデータを外部にコピーします..."
@@ -835,15 +945,34 @@ mount_app_volume() {
                 print_warning "データのコピーに失敗しました（空のコンテナの可能性）"
             fi
             sudo umount "$temp_mount"
+            rmdir "$temp_mount" 2>/dev/null || true
+        else
+            rmdir "$temp_mount" 2>/dev/null || true
         fi
-        rmdir "$temp_mount" 2>/dev/null || true
         
         # Remove internal container
         sudo rm -rf "$app_container"
+        
+        # IMPORTANT: Unmount the volume if it's still mounted
+        local current_temp_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point:" | sed 's/.*: *//')
+        if [[ -n "$current_temp_mount" ]] && [[ "$current_temp_mount" != "Not applicable (no file system)" ]]; then
+            print_info "一時マウントをアンマウント中: ${current_temp_mount}"
+            sudo umount "$current_temp_mount" 2>/dev/null || sudo diskutil unmount force "$volume_device" 2>/dev/null || true
+            sleep 1  # Wait for unmount to complete
+        fi
     fi
     
     # Mount external volume to container path
     print_info "外部ボリュームをマウント中..."
+    
+    # Final pre-mount check: ensure volume is not mounted anywhere
+    local pre_mount_check=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point:" | sed 's/.*: *//')
+    if [[ -n "$pre_mount_check" ]] && [[ "$pre_mount_check" != "Not applicable (no file system)" ]]; then
+        print_warning "ボリュームがまだマウントされています: ${pre_mount_check}"
+        print_info "強制アンマウント中..."
+        sudo umount -f "$pre_mount_check" 2>/dev/null || sudo diskutil unmount force "$volume_device" 2>/dev/null || true
+        sleep 1
+    fi
     
     # Ensure parent directory exists
     sudo mkdir -p "$(dirname "$app_container")" 2>/dev/null || true
@@ -855,18 +984,18 @@ mount_app_volume() {
             print_info "削除してから再マウントします..."
             sudo rm -rf "$app_container" 2>/dev/null || {
                 print_error "コンテナディレクトリの削除に失敗しました"
-                exit_with_cleanup 1 "ディレクトリ削除失敗"
+                return 1
             }
         else
             print_error "コンテナパスがディレクトリではありません: ${app_container}"
-            exit_with_cleanup 1 "無効なパス"
+            return 1
         fi
     fi
     
     # Create mount point
     sudo mkdir -p "$app_container" 2>/dev/null || {
         print_error "マウントポイントの作成に失敗しました"
-        exit_with_cleanup 1 "マウントポイント作成失敗"
+        return 1
     }
     
     # Attempt mount with nobrowse option (hide from Finder/Desktop) and detailed error reporting
@@ -881,7 +1010,7 @@ mount_app_volume() {
             sudo chown -R $(id -u):$(id -g) "$app_container" 2>/dev/null || true
         else
             print_error "マウントコマンドは成功しましたが、実際にはマウントされていません"
-            exit_with_cleanup 1 "マウント検証失敗"
+            return 1
         fi
     else
         print_error "ボリュームのマウントに失敗しました"
@@ -900,10 +1029,11 @@ mount_app_volume() {
         echo "現在のマウント状態:"
         mount | grep -i "$(basename ${volume_device})" || echo "(マウントなし)"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        exit_with_cleanup 1 "ボリュームマウントエラー"
+        return 1
     fi
     
     echo ""
+    return 0
 }
 
 #######################################################
@@ -931,6 +1061,7 @@ register_mapping() {
     fi
     
     echo ""
+    return 0
 }
 
 #######################################################
@@ -938,13 +1069,13 @@ register_mapping() {
 #######################################################
 
 install_ipa_to_playcover() {
+    local ipa_file=$1
     print_header "12. PlayCover への IPA インストール"
     
     # Check if app is already installed - correct path
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     
     print_info "既存アプリを検索中..."
-    print_info "検索パス: ${playcover_apps}"
     
     if [[ -d "$playcover_apps" ]]; then
         # Find app by Bundle ID
@@ -952,17 +1083,10 @@ install_ipa_to_playcover() {
         local existing_app_version=""
         local existing_app_name=""
         
-        # Debug: Count apps
-        local app_count=$(find "$playcover_apps" -type d -name "*.app" 2>/dev/null | wc -l | xargs)
-        print_info "PlayChain 内のアプリ数: ${app_count}"
-        
         # Search for app with matching Bundle ID
         while IFS= read -r app_path; do
             if [[ -f "${app_path}/Info.plist" ]]; then
                 local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
-                
-                # Debug: Show found apps
-                print_info "検索中: ${bundle_id}"
                 
                 if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
                     existing_app_path="$app_path"
@@ -982,25 +1106,31 @@ install_ipa_to_playcover() {
         
         if [[ -n "$existing_app_path" ]]; then
             print_warning "アプリは既にインストールされています"
-            echo ""
-            echo "  ${YELLOW}インストール済み:${NC}"
-            echo "    アプリ名: ${existing_app_name}"
-            if [[ -n "$existing_app_version" ]]; then
-                echo "    バージョン: ${existing_app_version}"
-            fi
-            echo ""
-            echo "  ${GREEN}インストール予定:${NC}"
-            echo "    アプリ名: ${APP_NAME}"
-            if [[ -n "$APP_VERSION" ]]; then
-                echo "    バージョン: ${APP_VERSION}"
-            fi
-            echo ""
-            echo -n "上書き（アップデート）しますか？ (Y/n): "
-            read update_choice
             
-            if [[ "$update_choice" =~ ^[Nn] ]]; then
-                print_info "インストールをスキップしました"
-                exit_with_cleanup 0 "インストールスキップ"
+            # In batch mode, auto-update without prompting
+            if [[ "$BATCH_MODE" == true ]]; then
+                print_info "既存のアプリを自動で上書きします"
+            else
+                echo ""
+                echo "  ${YELLOW}インストール済み:${NC}"
+                echo "    アプリ名: ${existing_app_name}"
+                if [[ -n "$existing_app_version" ]]; then
+                    echo "    バージョン: ${existing_app_version}"
+                fi
+                echo ""
+                echo "  ${GREEN}インストール予定:${NC}"
+                echo "    アプリ名: ${APP_NAME}"
+                if [[ -n "$APP_VERSION" ]]; then
+                    echo "    バージョン: ${APP_VERSION}"
+                fi
+                echo ""
+                echo -n "上書き（アップデート）しますか？ (Y/n): "
+                read update_choice
+                
+                if [[ "$update_choice" =~ ^[Nn] ]]; then
+                    print_info "インストールをスキップしました"
+                    return 1
+                fi
             fi
             
             print_info "既存のアプリを上書きします"
@@ -1015,37 +1145,158 @@ install_ipa_to_playcover() {
     print_info "PlayCover でインストールを開始します..."
     
     # Open IPA with PlayCover
-    if open -a PlayCover "$SELECTED_IPA"; then
+    if open -a PlayCover "$ipa_file"; then
         print_success "PlayCover でインストールを開始しました"
-        print_info "PlayCover のウィンドウでインストールを確認してください"
+        if [[ "$BATCH_MODE" != true ]]; then
+            print_info "PlayCover のウィンドウでインストールを確認してください"
+        fi
     else
         print_error "PlayCover の起動に失敗しました"
-        exit_with_cleanup 1 "PlayCover 起動エラー"
+        return 1
     fi
     
     echo ""
+    return 0
 }
 
 #######################################################
-# 13. Completion
+# Process Single IPA
 #######################################################
 
-complete_installation() {
-    print_header "インストール完了"
+process_single_ipa() {
+    local ipa_file=$1
+    local ipa_index=$2
     
-    print_success "すべての処理が正常に完了しました"
-    echo ""
-    print_info "アプリ情報:"
-    echo "  アプリ名: ${APP_NAME}"
-    if [[ -n "$APP_VERSION" ]]; then
-        echo "  バージョン: ${APP_VERSION}"
+    # Show batch progress
+    if [[ "$BATCH_MODE" == true ]]; then
+        print_batch_progress "$ipa_index" "$TOTAL_IPAS" "$(basename "$ipa_file")"
     fi
-    echo "  Bundle ID: ${APP_BUNDLE_ID}"
-    echo "  ボリューム名: ${APP_VOLUME_NAME}"
-    echo "  マウント先: ${HOME}/Library/Containers/${APP_BUNDLE_ID}"
+    
+    # Extract IPA info
+    if ! extract_ipa_info "$ipa_file"; then
+        print_error "IPA 情報の取得に失敗しました: $(basename "$ipa_file")"
+        INSTALL_FAILED+=("$(basename "$ipa_file") - 情報取得失敗")
+        return 1
+    fi
+    
+    # Select installation disk (only show header for first IPA in batch mode)
+    if ! select_installation_disk; then
+        print_error "インストール先ディスクの選択に失敗しました"
+        INSTALL_FAILED+=("${APP_NAME} - ディスク選択失敗")
+        return 1
+    fi
+    
+    # Create app volume
+    if ! create_app_volume; then
+        print_error "ボリューム作成に失敗しました: ${APP_NAME}"
+        INSTALL_FAILED+=("${APP_NAME} - ボリューム作成失敗")
+        return 1
+    fi
+    
+    # Mount app volume
+    if ! mount_app_volume; then
+        print_error "ボリュームマウントに失敗しました: ${APP_NAME}"
+        INSTALL_FAILED+=("${APP_NAME} - マウント失敗")
+        return 1
+    fi
+    
+    # Register mapping
+    if ! register_mapping; then
+        print_error "マッピング登録に失敗しました: ${APP_NAME}"
+        INSTALL_FAILED+=("${APP_NAME} - マッピング登録失敗")
+        return 1
+    fi
+    
+    # Install IPA to PlayCover
+    if ! install_ipa_to_playcover "$ipa_file"; then
+        print_error "PlayCover へのインストール起動に失敗しました: ${APP_NAME}"
+        INSTALL_FAILED+=("${APP_NAME} - インストール失敗")
+        return 1
+    fi
+    
+    # Success
+    INSTALL_SUCCESS+=("${APP_NAME}")
+    
+    # Add delay between batch installations to avoid conflicts
+    if [[ "$BATCH_MODE" == true ]] && [[ $ipa_index -lt $TOTAL_IPAS ]]; then
+        print_info "次の IPA 処理まで 3 秒待機します..."
+        sleep 3
+    fi
+    
+    return 0
+}
+
+#######################################################
+# 13. Completion Summary
+#######################################################
+
+show_batch_summary() {
+    echo ""
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "${CYAN}  一括インストール完了${NC}"
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
-    exit_with_cleanup 0 "インストール完了"
+    local success_count=${#INSTALL_SUCCESS[@]}
+    local failed_count=${#INSTALL_FAILED[@]}
+    
+    echo "  ${GREEN}処理完了:${NC} ${success_count}/${TOTAL_IPAS}"
+    echo "  ${RED}処理失敗:${NC} ${failed_count}/${TOTAL_IPAS}"
+    echo ""
+    
+    if [[ $success_count -gt 0 ]]; then
+        echo "${GREEN}✓ 成功したアプリ:${NC}"
+        for app in "${INSTALL_SUCCESS[@]}"; do
+            echo "  - ${app}"
+        done
+        echo ""
+    fi
+    
+    if [[ $failed_count -gt 0 ]]; then
+        echo "${RED}✗ 失敗したアプリ:${NC}"
+        for app in "${INSTALL_FAILED[@]}"; do
+            echo "  - ${app}"
+        done
+        echo ""
+    fi
+    
+    if [[ $failed_count -eq 0 ]]; then
+        print_success "すべてのアプリのセットアップが完了しました"
+    else
+        print_warning "一部のアプリのセットアップに失敗しました"
+    fi
+    
+    echo ""
+    print_info "PlayCover のウィンドウで各アプリのインストールを確認してください"
+}
+
+complete_installation() {
+    if [[ "$BATCH_MODE" == true ]]; then
+        show_batch_summary
+        
+        local failed_count=${#INSTALL_FAILED[@]}
+        if [[ $failed_count -eq 0 ]]; then
+            exit_with_cleanup 0 "一括インストール完了"
+        else
+            exit_with_cleanup 1 "一部のアプリのインストールに失敗しました"
+        fi
+    else
+        print_header "インストール完了"
+        
+        print_success "すべての処理が正常に完了しました"
+        echo ""
+        print_info "アプリ情報:"
+        echo "  アプリ名: ${APP_NAME}"
+        if [[ -n "$APP_VERSION" ]]; then
+            echo "  バージョン: ${APP_VERSION}"
+        fi
+        echo "  Bundle ID: ${APP_BUNDLE_ID}"
+        echo "  ボリューム名: ${APP_VOLUME_NAME}"
+        echo "  マウント先: ${HOME}/Library/Containers/${APP_BUNDLE_ID}"
+        echo ""
+        
+        exit_with_cleanup 0 "インストール完了"
+    fi
 }
 
 #######################################################
@@ -1058,9 +1309,10 @@ show_title() {
     echo "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                                                           ║"
-    echo "║           ${GREEN}PlayCover IPA インストール${CYAN}                   ║"
+    echo "║      ${GREEN}PlayCover IPA インストール（一括対応）${CYAN}          ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
+    echo "║              ${MAGENTA}Version 2.0.0 - Batch Mode${CYAN}                   ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
@@ -1070,18 +1322,29 @@ show_title() {
 main() {
     show_title
     
+    # Pre-flight checks
     check_playcover_app
     check_playcover_mapping
     check_full_disk_access
     authenticate_sudo
     check_playcover_volume_mount
-    select_ipa_file
-    extract_ipa_info
-    select_installation_disk
-    create_app_volume
-    mount_app_volume
-    register_mapping
-    install_ipa_to_playcover
+    
+    # Select IPA files (single or multiple)
+    select_ipa_files
+    
+    # Process each IPA
+    CURRENT_IPA_INDEX=0
+    for ipa_file in "${SELECTED_IPAS[@]}"; do
+        ((CURRENT_IPA_INDEX++))
+        
+        # Process single IPA (errors are captured in INSTALL_FAILED array)
+        process_single_ipa "$ipa_file" "$CURRENT_IPA_INDEX" || {
+            print_warning "IPA 処理でエラーが発生しましたが、次のファイルを続行します"
+            echo ""
+        }
+    done
+    
+    # Show completion summary
     complete_installation
 }
 
