@@ -920,6 +920,12 @@ install_ipa_to_playcover() {
     local stable_count=0
     local required_stable_checks=2  # 6 seconds of file count stability (2 checks * 3 seconds)
     
+    # Track initial settings state to detect actual updates (v4.8.1 fix)
+    local initial_settings_mtime=0
+    if [[ -f "$app_settings_plist" ]]; then
+        initial_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
+    fi
+    
     # Detection Method (v4.8.0 - File Count & Settings Key Based):
     # Phase 1: Structure validation (Info.plist + _CodeSignature)
     # Phase 2: PlayCover processing completion markers:
@@ -934,10 +940,7 @@ install_ipa_to_playcover() {
     # - File count is more reliable than mtime for both new and overwrite installs
     
     while [[ $elapsed -lt $max_wait ]]; do
-        sleep $check_interval
-        elapsed=$((elapsed + check_interval))
-        
-        # Check if PlayCover is still running
+        # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
         if ! pgrep -x "PlayCover" > /dev/null; then
             echo ""
             echo ""
@@ -1052,14 +1055,21 @@ install_ipa_to_playcover() {
                             continue
                         fi
                         
-                        # Phase 2: PlayCover processing completion markers (v4.8.0 enhanced)
+                        # Phase 2: PlayCover processing completion markers (v4.8.1 enhanced)
                         local settings_has_resolution=false
+                        local settings_updated=false
                         local executable_exists=false
                         
                         # Check App Settings file for 'resolution' key (PlayCover writes this after processing)
                         if [[ -f "$app_settings_plist" ]]; then
                             if /usr/libexec/PlistBuddy -c "Print :resolution" "$app_settings_plist" >/dev/null 2>&1; then
                                 settings_has_resolution=true
+                            fi
+                            
+                            # v4.8.1: Verify settings file was actually updated during this installation
+                            local current_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
+                            if [[ $current_settings_mtime -gt $initial_settings_mtime ]]; then
+                                settings_updated=true
                             fi
                         fi
                         
@@ -1069,9 +1079,9 @@ install_ipa_to_playcover() {
                             executable_exists=true
                         fi
                         
-                        # PlayCover processing is complete when both markers exist
+                        # PlayCover processing is complete when all markers exist (v4.8.1)
                         local playcover_completed=false
-                        if [[ "$settings_has_resolution" == true ]] && [[ "$executable_exists" == true ]]; then
+                        if [[ "$settings_has_resolution" == true ]] && [[ "$settings_updated" == true ]] && [[ "$executable_exists" == true ]]; then
                             playcover_completed=true
                         fi
                         
@@ -1099,6 +1109,26 @@ install_ipa_to_playcover() {
             done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
             
             if [[ "$found" == true ]]; then
+                # v4.8.1: Final verification - ensure PlayCover is still running
+                if ! pgrep -x "PlayCover" > /dev/null; then
+                    echo ""
+                    echo ""
+                    print_warning "完了判定直後に PlayCover が終了しました"
+                    print_info "最終確認を実施中..."
+                    sleep 2
+                    
+                    # Re-verify the installation is truly complete
+                    if [[ -f "${app_path}/Info.plist" ]] && [[ -f "$app_settings_plist" ]]; then
+                        echo ""
+                        print_success "インストールは正常に完了していました"
+                    else
+                        echo ""
+                        print_error "インストールが不完全です"
+                        INSTALL_FAILED+=("$APP_NAME (完了直後にPlayCoverクラッシュ)")
+                        return 1
+                    fi
+                fi
+                
                 echo ""
                 print_success "インストールが完了しました"
                 INSTALL_SUCCESS+=("$APP_NAME")
@@ -1112,15 +1142,20 @@ install_ipa_to_playcover() {
         
         initial_check_done=true
         
-        # Show progress indicator with detailed status (v4.8.0)
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+        
+        # Show progress indicator with detailed status (v4.8.1)
         if [[ "$playcover_completed" == true ]]; then
             if [[ $stable_count -ge $required_stable_checks ]]; then
                 echo -n "✓"  # All checks passed (shouldn't reach here as loop should break)
             else
                 echo -n "◆"  # PlayCover completed, waiting for file count stability
             fi
-        elif [[ "$settings_has_resolution" == true ]] || [[ "$executable_exists" == true ]]; then
-            echo -n "◇"  # Partial completion (settings or executable exists)
+        elif [[ "$settings_has_resolution" == true ]] && [[ "$settings_updated" == true ]]; then
+            echo -n "◇"  # Settings updated, checking other conditions
+        elif [[ "$executable_exists" == true ]]; then
+            echo -n "○"  # Executable exists, waiting for settings update
         else
             echo -n "."  # Still installing
         fi
