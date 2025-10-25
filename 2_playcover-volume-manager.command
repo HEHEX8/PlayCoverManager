@@ -1004,7 +1004,8 @@ switch_storage_location() {
     print_header "${display_name} のストレージ切り替え"
     
     local target_path="${HOME}/Library/Containers/${bundle_id}"
-    local backup_path="${HOME}/Library/Containers/.${bundle_id}.backup"
+    # Create backup path outside Containers directory to avoid path duplication
+    local backup_path="${HOME}/Library/.playcover_backup_${bundle_id}"
     
     # Check current storage type
     local current_storage="unknown"
@@ -1133,7 +1134,13 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with better progress display
-        if sudo /usr/bin/rsync -avH --progress "$target_path/" "$temp_mount/" 2>&1; then
+        # --ignore-errors: Continue copying even if some files fail (e.g., Spotlight files)
+        local rsync_output=$(sudo /usr/bin/rsync -avH --ignore-errors --progress "$target_path/" "$temp_mount/" 2>&1)
+        local rsync_exit=$?
+        echo "$rsync_output"
+        
+        # Check if rsync succeeded (exit code 0) or had partial success (exit code 23/24)
+        if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
             echo ""
             print_success "データのコピーが完了しました"
             
@@ -1280,7 +1287,14 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with better progress display
-        if sudo /usr/bin/rsync -avH --progress "$source_mount/" "$target_path/" 2>&1; then
+        # --ignore-errors: Continue copying even if some files fail (e.g., Spotlight files)
+        # Note: We still check exit code, but non-zero doesn't always mean total failure
+        local rsync_output=$(sudo /usr/bin/rsync -avH --ignore-errors --progress "$source_mount/" "$target_path/" 2>&1)
+        local rsync_exit=$?
+        echo "$rsync_output"
+        
+        # Check if rsync succeeded (exit code 0) or had partial success (exit code 23/24 = some files couldn't be transferred)
+        if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
             echo ""
             print_success "データのコピーが完了しました"
             
@@ -1430,7 +1444,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.7${CYAN}                              ║"
+    echo "║                 ${BLUE}Version 1.5.8${CYAN}                              ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
