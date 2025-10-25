@@ -1194,6 +1194,10 @@ switch_storage_location() {
         # Determine current mount point
         local current_mount=$(get_mount_point "$volume_name")
         local temp_mount_created=false
+        local source_mount=""
+        
+        # CRITICAL: Always use a temporary mount for copying to avoid data loss
+        # If the volume is mounted at target_path, we need to remount to temp location
         
         if [[ -z "$current_mount" ]]; then
             # Volume not mounted - mount to temporary location
@@ -1210,48 +1214,62 @@ switch_storage_location() {
                 switch_storage_location
                 return
             fi
-            current_mount="$temp_mount"
+            source_mount="$temp_mount"
             temp_mount_created=true
         elif [[ "$current_mount" == "$target_path" ]]; then
-            # Volume is mounted at target path - need to use it as source
+            # Volume is mounted at target path - need to remount to temporary location
             print_info "外部ボリュームは ${target_path} にマウントされています"
+            print_info "一時マウントポイントへ移動中..."
+            
+            # Unmount from target_path first
+            local volume_device=$(get_volume_device "$volume_name")
+            if ! sudo umount "$target_path" 2>/dev/null; then
+                print_error "アンマウントに失敗しました"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
+            
+            sleep 1  # Wait for unmount to complete
+            
+            # Mount to temporary location
+            local temp_mount="/tmp/playcover_temp_$$"
+            sudo mkdir -p "$temp_mount"
+            if ! sudo mount -t apfs "$volume_device" "$temp_mount"; then
+                print_error "一時マウントに失敗しました"
+                # Try to restore original mount
+                sudo mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
+                sudo rm -rf "$temp_mount"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
+            source_mount="$temp_mount"
+            temp_mount_created=true
+        else
+            # Volume is mounted elsewhere (not at target_path)
+            print_info "外部ボリュームは ${current_mount} にマウントされています"
+            source_mount="$current_mount"
         fi
         
         # Debug: Show source path and content
-        print_info "コピー元: ${current_mount}"
-        local file_count=$(sudo find "$current_mount" -type f 2>/dev/null | wc -l | xargs)
-        local total_size=$(sudo du -sh "$current_mount" 2>/dev/null | awk '{print $1}')
+        print_info "コピー元: ${source_mount}"
+        local file_count=$(sudo find "$source_mount" -type f 2>/dev/null | wc -l | xargs)
+        local total_size=$(sudo du -sh "$source_mount" 2>/dev/null | awk '{print $1}')
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
-        # If target path exists and is a mount point, we need to unmount first
-        if [[ -d "$target_path" ]]; then
-            local is_mount=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
-            if [[ -n "$is_mount" ]]; then
-                # Target is a mount point - unmount it first
-                print_info "既存のマウントポイントをアンマウント中..."
-                if ! sudo umount "$target_path" 2>/dev/null; then
-                    print_error "アンマウントに失敗しました"
-                    if [[ "$temp_mount_created" == true ]]; then
-                        sudo umount "$current_mount" 2>/dev/null || true
-                        sudo rm -rf "$current_mount"
-                    fi
-                    echo ""
-                    echo -n "Enterキーで続行..."
-                    read
-                    switch_storage_location
-                    return
-                fi
-                sleep 1  # Wait for unmount to complete
-            fi
-            
-            # Now backup the directory (no longer a mount point)
-            if [[ -e "$target_path" ]]; then
-                print_info "既存ディレクトリをバックアップ中..."
-                sudo mv "$target_path" "$backup_path" 2>/dev/null || {
-                    print_warning "バックアップに失敗しましたが続行します"
-                }
-            fi
+        # At this point, target_path is either empty or doesn't exist
+        # Backup if it exists
+        if [[ -e "$target_path" ]]; then
+            print_info "既存ディレクトリをバックアップ中..."
+            sudo mv "$target_path" "$backup_path" 2>/dev/null || {
+                print_warning "バックアップに失敗しましたが続行します"
+            }
         fi
         
         # Create new internal directory
@@ -1262,7 +1280,7 @@ switch_storage_location() {
         echo ""
         
         # Use rsync with better progress display
-        if sudo /usr/bin/rsync -avH --progress "$current_mount/" "$target_path/" 2>&1; then
+        if sudo /usr/bin/rsync -avH --progress "$source_mount/" "$target_path/" 2>&1; then
             echo ""
             print_success "データのコピーが完了しました"
             
@@ -1284,8 +1302,8 @@ switch_storage_location() {
             
             # Cleanup temp mount if created
             if [[ "$temp_mount_created" == true ]]; then
-                sudo umount "$current_mount" 2>/dev/null || true
-                sudo rm -rf "$current_mount"
+                sudo umount "$source_mount" 2>/dev/null || true
+                sudo rm -rf "$source_mount"
             fi
             
             echo ""
@@ -1295,13 +1313,13 @@ switch_storage_location() {
             return
         fi
         
-        # Unmount volume (if it was at target_path or temp mount)
+        # Unmount volume (cleanup temp mount if created)
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
-            sudo umount "$current_mount" 2>/dev/null || true
-            sudo rm -rf "$current_mount"
+            sudo umount "$source_mount" 2>/dev/null || true
+            sudo rm -rf "$source_mount"
         else
-            # Volume was mounted at target_path, now unmount it completely
+            # Volume was mounted elsewhere (not at target_path), unmount it
             print_info "外部ボリュームをアンマウント中..."
             unmount_volume "$volume_name" "$display_name" || true
         fi
@@ -1412,7 +1430,7 @@ show_menu() {
     echo "║            ${GREEN}PlayCover ボリューム管理${CYAN}                     ║"
     echo "║                                                           ║"
     echo "║              ${BLUE}macOS Tahoe 26.0.1 対応版${CYAN}                    ║"
-    echo "║                 ${BLUE}Version 1.5.6${CYAN}                              ║"
+    echo "║                 ${BLUE}Version 1.5.7${CYAN}                              ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo "${NC}"
