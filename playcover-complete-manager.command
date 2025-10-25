@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.4.4 - Complete PlayCover Removal + Terminal Exit
+# Version: 4.5.0 - Streamlined Installation Output
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -142,21 +142,14 @@ authenticate_sudo() {
 }
 
 check_playcover_app() {
-    print_info "PlayCover アプリの確認中..."
-    
     if [[ ! -d "/Applications/PlayCover.app" ]]; then
         print_error "PlayCover が見つかりません"
         print_warning "PlayCover を /Applications にインストールしてください"
         exit_with_cleanup 1 "PlayCover が見つかりません"
     fi
-    
-    print_success "PlayCover が見つかりました"
-    echo ""
 }
 
 check_full_disk_access() {
-    print_info "フルディスクアクセス権限の確認中..."
-    
     # Check if we can access a protected directory (e.g., Safari's directory)
     # This is a more reliable test for Full Disk Access
     local test_path="${HOME}/Library/Safari"
@@ -168,25 +161,19 @@ check_full_disk_access() {
     
     # Try to list the directory - if FDA is granted, this will succeed
     if /bin/ls "$test_path" >/dev/null 2>&1; then
-        print_success "フルディスクアクセス権限が確認されました"
-        echo ""
         return 0
     else
         print_warning "Terminal にフルディスクアクセス権限がありません"
-        print_info "システム設定 > プライバシーとセキュリティ > フルディスクアクセス"
-        print_info "から Terminal を有効にしてください"
+        print_info "システム設定 > プライバシーとセキュリティ > フルディスクアクセス から有効にしてください"
         echo ""
         echo -n "設定完了後、Enterキーを押してください..."
         read
         
         # Re-check after user confirmation
         if /bin/ls "$test_path" >/dev/null 2>&1; then
-            print_success "権限が確認されました"
-            echo ""
             return 0
         else
             print_error "権限が確認できませんでした"
-            print_warning "この状態で続行すると、エラーが発生する可能性があります"
             echo ""
             echo -n "それでも続行しますか？ (y/N): "
             read continue_choice
@@ -557,8 +544,6 @@ is_on_external_volume() {
 #######################################################
 
 check_playcover_volume_mount() {
-    print_header "PlayCover ボリュームのマウント確認"
-    
     if [[ ! -d "$PLAYCOVER_CONTAINER" ]]; then
         sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER"
     fi
@@ -566,17 +551,13 @@ check_playcover_volume_mount() {
     local is_mounted=$(/sbin/mount | /usr/bin/grep " on ${PLAYCOVER_CONTAINER} " | /usr/bin/grep -c "apfs")
     
     if [[ $is_mounted -gt 0 ]]; then
-        print_success "PlayCover ボリュームは既にマウント済みです"
         PLAYCOVER_VOLUME_DEVICE=$(/sbin/mount | /usr/bin/grep " on ${PLAYCOVER_CONTAINER} " | /usr/bin/awk '{print $1}')
-        print_info "デバイス: ${PLAYCOVER_VOLUME_DEVICE}"
-        echo ""
         return 0
     fi
     
     if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         print_error "PlayCover ボリュームが見つかりません"
         print_info "初期セットアップスクリプトを実行してください"
-        print_info "実行: ${INITIAL_SETUP_SCRIPT}"
         exit_with_cleanup 1 "PlayCover ボリュームが見つかりません"
     fi
     
@@ -588,23 +569,18 @@ check_playcover_volume_mount() {
     fi
     
     PLAYCOVER_VOLUME_DEVICE="/dev/${volume_device}"
-    print_info "ボリュームを発見: ${PLAYCOVER_VOLUME_DEVICE}"
     
     local current_mount=$(/usr/sbin/diskutil info "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
     
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
-        print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
         if ! sudo /usr/sbin/diskutil unmount force "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null; then
             print_error "ボリュームのアンマウントに失敗しました"
             exit_with_cleanup 1 "ボリュームアンマウントエラー"
         fi
     fi
     
-    print_info "PlayCover ボリュームをマウント中..."
     if sudo /sbin/mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
-        print_success "ボリュームを正常にマウントしました"
         sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
-        echo ""
     else
         print_error "ボリュームのマウントに失敗しました"
         exit_with_cleanup 1 "ボリュームマウントエラー"
@@ -671,20 +647,11 @@ EOF
         exit_with_cleanup 1 "有効なファイルなし"
     fi
     
-    print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
-    
-    echo ""
-    print_info "選択されたファイル:"
-    local idx=1
-    for ipa in "${SELECTED_IPAS[@]}"; do
-        echo "  ${idx}. $(basename "$ipa")"
-        ((idx++))
-    done
-    
     if [[ $TOTAL_IPAS -gt 1 ]]; then
         BATCH_MODE=true
-        echo ""
-        print_info "複数の IPA ファイルを順次処理します"
+        print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
+    else
+        print_success "$(basename "${SELECTED_IPAS[0]}")"
     fi
     
     echo ""
@@ -692,12 +659,8 @@ EOF
 
 extract_ipa_info() {
     local ipa_file=$1
-    print_header "IPA 情報の取得"
     
     local temp_dir=$(mktemp -d)
-    
-    print_info "IPA ファイルを解析中..."
-    print_info "ファイル: $(basename "$ipa_file")"
     
     local plist_path=$(unzip -l "$ipa_file" 2>/dev/null | /usr/bin/grep -E "Payload/.*\.app/Info\.plist" | head -n 1 | /usr/bin/awk '{print $NF}')
     
@@ -768,14 +731,7 @@ extract_ipa_info() {
     
     rm -rf "$temp_dir"
     
-    print_success "IPA 情報を取得しました"
-    print_info "アプリ名: ${APP_NAME}"
-    if [[ -n "$APP_VERSION" ]]; then
-        print_info "バージョン: ${APP_VERSION}"
-    fi
-    print_info "Bundle ID: ${APP_BUNDLE_ID}"
-    print_info "ボリューム名: ${APP_VOLUME_NAME}"
-    
+    print_info "${APP_NAME} (${APP_VERSION})"
     echo ""
     return 0
 }
@@ -808,27 +764,14 @@ find_apfs_container() {
 }
 
 select_installation_disk() {
-    if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
-        print_header "インストール先ディスクの選択"
-    fi
-    
     local playcover_disk=""
     
     if [[ -n "$PLAYCOVER_VOLUME_DEVICE" ]]; then
         playcover_disk=$(echo "$PLAYCOVER_VOLUME_DEVICE" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
-        
-        if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
-            print_info "PlayCover ボリュームが存在するディスク: ${playcover_disk}"
-            print_info "PlayCover ボリュームデバイス: ${PLAYCOVER_VOLUME_DEVICE}"
-        fi
-        
         local container=$(find_apfs_container "${playcover_disk}")
         
         if [[ -n "$container" ]]; then
             SELECTED_DISK="$container"
-            if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
-                print_success "インストール先を自動選択しました: ${SELECTED_DISK}"
-            fi
         else
             print_error "APFS コンテナの検出に失敗しました"
             return 1
@@ -838,15 +781,10 @@ select_installation_disk() {
         return 1
     fi
     
-    if [[ "$BATCH_MODE" != true ]] || [[ $CURRENT_IPA_INDEX -eq 1 ]]; then
-        echo ""
-    fi
     return 0
 }
 
 create_app_volume() {
-    print_header "アプリボリュームの作成"
-    
     local existing_volume=""
     existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/grep "Device Node:" | /usr/bin/awk '{print $NF}' | /usr/bin/sed 's|/dev/||')
     
@@ -855,18 +793,11 @@ create_app_volume() {
     fi
     
     if [[ -n "$existing_volume" ]]; then
-        print_warning "ボリューム「${APP_VOLUME_NAME}」は既に存在します"
-        print_info "既存のボリュームを使用します"
-        echo ""
         return 0
     fi
     
-    print_info "ボリューム「${APP_VOLUME_NAME}」を作成中..."
-    
     if sudo /usr/sbin/diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
-        print_success "ボリュームを作成しました"
         sleep 1
-        echo ""
         return 0
     else
         print_error "ボリュームの作成に失敗しました"
@@ -876,13 +807,9 @@ create_app_volume() {
 }
 
 mount_app_volume() {
-    print_header "アプリボリュームのマウント"
-    
     local target_path="${HOME}/Library/Containers/${APP_BUNDLE_ID}"
     
     if mount_volume "$APP_VOLUME_NAME" "$target_path"; then
-        print_success "ボリュームをマウントしました"
-        echo ""
         return 0
     else
         print_error "ボリュームのマウントに失敗しました"
@@ -892,14 +819,10 @@ mount_app_volume() {
 
 install_ipa_to_playcover() {
     local ipa_file=$1
-    print_header "PlayCover へのインストール"
     
     # Check if app is already installed
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     local existing_app_path=""
-    
-    print_info "既存アプリを検索中..."
-    
     local existing_version=""
     local overwrite_choice=""
     local existing_mtime=0
@@ -922,15 +845,12 @@ install_ipa_to_playcover() {
         
         # Check if existing app was found and ask for confirmation OUTSIDE the loop
         if [[ -n "$existing_app_path" ]]; then
-            print_warning "このアプリは既にインストールされています"
-            print_info "既存バージョン: ${existing_version}"
-            print_info "新バージョン: ${APP_VERSION}"
-            echo ""
-            echo -n "上書きインストールしますか？ (y/N): "
+            print_warning "${APP_NAME} (${existing_version}) は既にインストール済みです"
+            echo -n "上書きしますか？ (y/N): "
             read overwrite_choice </dev/tty
             
             if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
-                print_info "インストールをスキップしました"
+                print_info "スキップしました"
                 INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
                 
                 # Still update mapping even if skipped
@@ -943,11 +863,7 @@ install_ipa_to_playcover() {
     fi
     
     echo ""
-    print_info "PlayCover でインストールを開始します..."
-    print_info "ファイル: $(basename "$ipa_file")"
-    echo ""
-    print_warning "PlayCover ウィンドウが開きます"
-    print_info "インストールが完了するまでお待ちください"
+    print_info "PlayCover でインストール中（完了まで待機）..."
     echo ""
     
     # Open IPA with PlayCover
@@ -957,10 +873,7 @@ install_ipa_to_playcover() {
         return 1
     fi
     
-    # Wait for installation to complete
-    print_info "インストールの完了を待機中..."
-    print_info "（PlayCover設定ファイルとアプリ構造を監視しています）"
-    echo ""
+
     
     local max_wait=300  # 5 minutes
     local elapsed=0
