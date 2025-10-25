@@ -153,18 +153,45 @@ check_playcover_app() {
 check_full_disk_access() {
     print_info "フルディスクアクセス権限の確認中..."
     
-    # Try to access Terminal's container
-    if [[ ! -r "${HOME}/Library/Application Scripts/com.apple.Terminal" ]] 2>/dev/null; then
+    # Check if we can access a protected directory (e.g., Safari's directory)
+    # This is a more reliable test for Full Disk Access
+    local test_path="${HOME}/Library/Safari"
+    
+    if [[ ! -d "$test_path" ]]; then
+        # Safari directory doesn't exist, try another test
+        test_path="${HOME}/Library/Mail"
+    fi
+    
+    # Try to list the directory - if FDA is granted, this will succeed
+    if /bin/ls "$test_path" >/dev/null 2>&1; then
+        print_success "フルディスクアクセス権限が確認されました"
+        echo ""
+        return 0
+    else
         print_warning "Terminal にフルディスクアクセス権限がありません"
         print_info "システム設定 > プライバシーとセキュリティ > フルディスクアクセス"
         print_info "から Terminal を有効にしてください"
         echo ""
         echo -n "設定完了後、Enterキーを押してください..."
         read
-        echo ""
-    else
-        print_success "フルディスクアクセス権限が確認されました"
-        echo ""
+        
+        # Re-check after user confirmation
+        if /bin/ls "$test_path" >/dev/null 2>&1; then
+            print_success "権限が確認されました"
+            echo ""
+            return 0
+        else
+            print_error "権限が確認できませんでした"
+            print_warning "この状態で続行すると、エラーが発生する可能性があります"
+            echo ""
+            echo -n "それでも続行しますか？ (y/N): "
+            read continue_choice
+            
+            if [[ ! "$continue_choice" =~ ^[Yy]$ ]]; then
+                exit_with_cleanup 1 "フルディスクアクセス権限が必要です"
+            fi
+            echo ""
+        fi
     fi
 }
 
