@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Integrated Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 3.0.1 - Complete Integration (Fixed)
+# Version: 3.1.0 - Storage Capacity Check
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1620,6 +1620,75 @@ switch_storage_location() {
             return
         fi
         
+        # Check disk space before migration
+        print_info "転送前の容量チェック中..."
+        local source_size_bytes=$(sudo /usr/bin/du -sk "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+        if [[ -z "$source_size_bytes" ]]; then
+            print_error "コピー元のサイズを取得できませんでした"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
+        
+        # Get available space on external volume (mount temporarily to check)
+        local volume_device=$(get_volume_device "$volume_name")
+        local temp_check_mount="/tmp/playcover_check_$$"
+        sudo /bin/mkdir -p "$temp_check_mount"
+        
+        if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+            print_error "外部ボリュームの容量チェックに失敗しました"
+            sudo /bin/rm -rf "$temp_check_mount"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
+        
+        local available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
+        sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+        sudo /bin/rm -rf "$temp_check_mount"
+        
+        # Convert to human readable
+        local source_size_mb=$((source_size_bytes / 1024))
+        local available_mb=$((available_bytes / 1024))
+        local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+        
+        echo ""
+        print_info "容量チェック結果:"
+        echo "  コピー元サイズ: ${source_size_mb} MB"
+        echo "  転送先空き容量: ${available_mb} MB"
+        echo "  必要容量（余裕込み）: ${required_mb} MB"
+        echo ""
+        
+        if [[ $available_mb -lt $required_mb ]]; then
+            print_error "容量不足: 転送先の空き容量が不足しています"
+            echo ""
+            echo "不足分: $((required_mb - available_mb)) MB"
+            echo ""
+            print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
+            echo ""
+            echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+            read force_continue
+            
+            if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+                print_info "キャンセルしました"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
+            
+            print_warning "容量不足を承知で続行します..."
+            echo ""
+        else
+            print_success "容量チェック: OK（十分な空き容量があります）"
+            echo ""
+        fi
+        
         # Unmount if already mounted
         local current_mount=$(get_mount_point "$volume_name")
         if [[ -n "$current_mount" ]]; then
@@ -1750,6 +1819,97 @@ switch_storage_location() {
             read
             switch_storage_location
             return
+        fi
+        
+        # Check disk space before migration
+        print_info "転送前の容量チェック中..."
+        
+        # Mount volume temporarily to check size (if not already mounted)
+        local current_mount=$(get_mount_point "$volume_name")
+        local temp_check_mount=""
+        local check_mount_point=""
+        
+        if [[ -n "$current_mount" ]]; then
+            check_mount_point="$current_mount"
+        else
+            temp_check_mount="/tmp/playcover_check_$$"
+            sudo /bin/mkdir -p "$temp_check_mount"
+            local volume_device=$(get_volume_device "$volume_name")
+            
+            if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+                print_error "外部ボリュームの容量チェックに失敗しました"
+                sudo /bin/rm -rf "$temp_check_mount"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
+            check_mount_point="$temp_check_mount"
+        fi
+        
+        local source_size_bytes=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
+        
+        # Unmount temporary check mount if created
+        if [[ -n "$temp_check_mount" ]]; then
+            sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+            sudo /bin/rm -rf "$temp_check_mount"
+        fi
+        
+        if [[ -z "$source_size_bytes" ]]; then
+            print_error "コピー元のサイズを取得できませんでした"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            switch_storage_location
+            return
+        fi
+        
+        # Get available space on internal disk (where target_path will be created)
+        local internal_disk_path=$(dirname "$target_path")
+        # If parent doesn't exist, check its parent
+        while [[ ! -d "$internal_disk_path" ]] && [[ "$internal_disk_path" != "/" ]]; do
+            internal_disk_path=$(dirname "$internal_disk_path")
+        done
+        
+        local available_bytes=$(df -k "$internal_disk_path" | tail -1 | /usr/bin/awk '{print $4}')
+        
+        # Convert to human readable
+        local source_size_mb=$((source_size_bytes / 1024))
+        local available_mb=$((available_bytes / 1024))
+        local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+        
+        echo ""
+        print_info "容量チェック結果:"
+        echo "  コピー元サイズ: ${source_size_mb} MB"
+        echo "  転送先空き容量: ${available_mb} MB"
+        echo "  必要容量（余裕込み）: ${required_mb} MB"
+        echo ""
+        
+        if [[ $available_mb -lt $required_mb ]]; then
+            print_error "容量不足: 転送先の空き容量が不足しています"
+            echo ""
+            echo "不足分: $((required_mb - available_mb)) MB"
+            echo ""
+            print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
+            echo ""
+            echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+            read force_continue
+            
+            if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+                print_info "キャンセルしました"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                switch_storage_location
+                return
+            fi
+            
+            print_warning "容量不足を承知で続行します..."
+            echo ""
+        else
+            print_success "容量チェック: OK（十分な空き容量があります）"
+            echo ""
         fi
         
         # Determine current mount point
