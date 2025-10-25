@@ -926,19 +926,19 @@ install_ipa_to_playcover() {
         last_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
     fi
     
-    # Detection Method (v5.0.0 - Settings File Update Count):
+    # Detection Method (v5.0.1 - Settings File Update Count - Unified):
     # Ultra-simple approach based on real-world observation:
     # 
-    # NEW INSTALL:
-    #   - Wait for settings file to appear → Complete immediately
+    # BOTH NEW and OVERWRITE INSTALL:
+    #   - Wait for settings file 2nd update → Complete immediately
     # 
-    # OVERWRITE INSTALL:
-    #   - Settings file already exists
-    #   - Wait for 1st update → Skip (ignore)
-    #   - Wait for 2nd update → Complete immediately
+    # Reasoning:
+    #   - NEW: 1st update happens too early (still processing)
+    #   - OVERWRITE: 1st update is initial, 2nd is completion
+    #   - Unified approach: Always wait for 2nd update
     # 
     # No stability checks, no complex conditions.
-    # Just count settings file updates and complete on the right count.
+    # Just count settings file updates and complete on 2nd update.
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
@@ -1054,20 +1054,12 @@ install_ipa_to_playcover() {
                                     last_settings_mtime=$current_settings_mtime
                                 fi
                                 
-                                # v5.0.0: Simple completion logic
+                                # v5.0.1: Unified completion logic - Always wait for 2nd update
                                 if [[ "$structure_valid" == true ]]; then
-                                    if [[ "$initial_settings_exists" == false ]]; then
-                                        # NEW INSTALL: Settings file appeared = Complete
-                                        if [[ $settings_update_count -ge 1 ]]; then
-                                            found=true
-                                            break
-                                        fi
-                                    else
-                                        # OVERWRITE: Wait for 2nd update = Complete
-                                        if [[ $settings_update_count -ge 2 ]]; then
-                                            found=true
-                                            break
-                                        fi
+                                    # Both NEW and OVERWRITE: Wait for 2nd update = Complete
+                                    if [[ $settings_update_count -ge 2 ]]; then
+                                        found=true
+                                        break
                                     fi
                                 fi
                             fi
@@ -1113,25 +1105,15 @@ install_ipa_to_playcover() {
         sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
-        # Show progress indicator with detailed status (v5.0.0)
-        if [[ "$initial_settings_exists" == false ]]; then
-            # NEW INSTALL: Waiting for settings file
-            if [[ $settings_update_count -ge 1 ]]; then
-                echo -n "✓"  # Complete (shouldn't reach here)
-            elif [[ $last_settings_mtime -gt 0 ]]; then
-                echo -n "◆"  # Settings file detected
-            else
-                echo -n "."  # Waiting for settings
-            fi
+        # Show progress indicator with detailed status (v5.0.1 - Unified)
+        if [[ $settings_update_count -ge 2 ]]; then
+            echo -n "✓"  # Complete (shouldn't reach here)
+        elif [[ $settings_update_count -eq 1 ]]; then
+            echo -n "◇"  # 1st update (waiting for 2nd)
+        elif [[ $last_settings_mtime -gt 0 ]]; then
+            echo -n "◆"  # Settings file exists but not updated yet
         else
-            # OVERWRITE: Waiting for 2nd update
-            if [[ $settings_update_count -ge 2 ]]; then
-                echo -n "✓"  # Complete (shouldn't reach here)
-            elif [[ $settings_update_count -eq 1 ]]; then
-                echo -n "◇"  # 1st update (waiting for 2nd)
-            else
-                echo -n "."  # Waiting for 1st update
-            fi
+            echo -n "."  # Waiting for 1st update
         fi
     done
     
