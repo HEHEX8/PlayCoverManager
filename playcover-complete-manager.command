@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.9.0 - External App Installation System
+# Version: 4.10.0 - Storage Detection Fix
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1952,29 +1952,30 @@ switch_storage_location() {
         local storage_icon=""
         local mount_status=""
         
-        # Determine storage type first
-        local current_mount=$(echo "$mount_cache" | /usr/bin/grep " on ${target_path} " | /usr/bin/awk '{print $3}')
+        # Determine storage type using get_storage_type function
+        local storage_type="unknown"
+        if [[ -d "$target_path" ]]; then
+            storage_type=$(get_storage_type "$target_path")
+        fi
         
-        if [[ -n "$current_mount" ]]; then
-            # Mounted - it's external storage
-            storage_icon="🔌 外部"
-            mount_status="🟢 外部ストレージマウント済"
-        else
-            # Not mounted - check if internal storage has data
-            if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
-                local has_content=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/head -1)
-                if [[ -n "$has_content" ]]; then
-                    storage_icon="🏠 内部"
-                    mount_status="⚪️ 内部ストレージにデータ有"
-                else
-                    storage_icon="⚠️  データ無し"
-                    mount_status="⚪️ 外部ストレージ未マウント"
-                fi
-            else
+        case "$storage_type" in
+            "external")
+                storage_icon="🔌 外部"
+                mount_status="🟢 外部ストレージマウント済"
+                ;;
+            "internal")
+                storage_icon="🏠 内部"
+                mount_status="⚪️ 内部ストレージにデータ有"
+                ;;
+            "none")
                 storage_icon="⚠️  データ無し"
                 mount_status="⚪️ 外部ストレージ未マウント"
-            fi
-        fi
+                ;;
+            *)
+                storage_icon="⚠️  データ無し"
+                mount_status="⚪️ 外部ストレージ未マウント"
+                ;;
+        esac
         
         # Format with fixed spacing (20 chars for storage_icon column)
         printf "  %s. %s\n" "$index" "$display_name"
@@ -2836,7 +2837,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.9.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.10.0${NC}"
     echo ""
     
     show_quick_status
@@ -4274,46 +4275,6 @@ mount_playcover_main_volume() {
         print_success "ボリュームを正常にマウントしました"
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
         sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
-        
-        # PlayCover.app のシンボリックリンクを検証・作成
-        local external_app_path="${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-        
-        if [[ -d "$external_app_path" ]]; then
-            # 外部ストレージにPlayCover.appが存在する場合
-            if [[ -L "$PLAYCOVER_APP_PATH" ]]; then
-                # シンボリックリンクが存在する場合、リンク先を確認
-                local current_link=$(readlink "$PLAYCOVER_APP_PATH")
-                if [[ "$current_link" != "$external_app_path" ]]; then
-                    print_warning "シンボリックリンクが正しくありません。再作成します..."
-                    sudo rm -f "$PLAYCOVER_APP_PATH"
-                    sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                    print_success "シンボリックリンクを再作成しました"
-                fi
-            elif [[ -e "$PLAYCOVER_APP_PATH" ]]; then
-                # 実体のアプリが存在する場合（誤って内部にインストールされた場合）
-                print_warning "/Applications に実体のPlayCover.appが存在します"
-                print_info "外部ストレージに移動してシンボリックリンクを作成します..."
-                sudo rm -rf "$PLAYCOVER_APP_PATH"
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "シンボリックリンクを作成しました"
-            else
-                # シンボリックリンクが存在しない場合
-                print_info "シンボリックリンクを作成しています..."
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "シンボリックリンクを作成しました"
-                print_info "→ ${external_app_path}"
-            fi
-        else
-            # 外部ストレージにPlayCover.appが存在しない場合
-            if [[ -d "$PLAYCOVER_APP_PATH" ]] && [[ ! -L "$PLAYCOVER_APP_PATH" ]]; then
-                # /Applicationsに実体が存在する場合、移動する
-                print_info "PlayCover.app を外部ストレージに移動しています..."
-                sudo mv "$PLAYCOVER_APP_PATH" "$external_app_path"
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "PlayCover.app を外部ストレージに移動しました"
-                print_info "→ ${external_app_path}"
-            fi
-        fi
     else
         print_error "ボリュームのマウントに失敗しました"
         echo ""
@@ -4350,34 +4311,6 @@ install_playcover() {
     print_info "PlayCover をインストール中..."
     brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
     print_success "PlayCover のインストールが完了しました"
-    
-    # PlayCoverボリュームがマウントされている場合は外部ストレージに移動
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        print_info "PlayCover.app を外部ストレージに移動しています..."
-        
-        local external_app_path="${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-        
-        # 既存の外部アプリを削除
-        if [[ -d "$external_app_path" ]]; then
-            sudo rm -rf "$external_app_path"
-        fi
-        
-        # /Applicationsから外部ストレージに移動
-        if [[ -d "$PLAYCOVER_APP_PATH" ]] && [[ ! -L "$PLAYCOVER_APP_PATH" ]]; then
-            sudo mv "$PLAYCOVER_APP_PATH" "$external_app_path"
-            print_success "PlayCover.app を外部ストレージに移動しました"
-            
-            # シンボリックリンクを作成
-            sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-            print_success "シンボリックリンクを作成しました: ${PLAYCOVER_APP_PATH}"
-            print_info "→ ${external_app_path}"
-        else
-            print_warning "PlayCover.app が /Applications に見つかりません"
-        fi
-    else
-        print_warning "PlayCoverボリュームがマウントされていません"
-        print_info "後でボリュームをマウントしてから、手動で移動してください"
-    fi
 }
 
 perform_software_installations() {
