@@ -2767,8 +2767,6 @@ show_quick_status() {
         if [[ $unmounted_count -gt 0 ]]; then
             echo "${RED}⚠️ データが入っていないコンテナがあります。マウントを行ってください。${NC}"
         fi
-        
-        echo ""
     fi
 }
 
@@ -2776,7 +2774,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.16.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.7${NC}"
     echo ""
     
     show_quick_status
@@ -4462,7 +4460,7 @@ main() {
                 individual_volume_control
                 ;;
             3)
-                continue
+                switch_storage_location
                 ;;
             4)
                 eject_disk
