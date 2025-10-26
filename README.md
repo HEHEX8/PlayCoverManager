@@ -265,7 +265,13 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.24.0 (最新) - Exit After Nuclear Cleanup
+### v4.24.1 (最新) - Fix Environment Check
+- 🐛 **環境チェック修正**: 初期セットアップ後の環境検証失敗を修正
+- ✅ `diskutil info` → `volume_exists()` に変更
+- ✅ ボリュームの存在チェックを正しく実装
+- ✅ マウント状態に関係なくボリュームを検出
+
+### v4.24.0 - Exit After Nuclear Cleanup
 - 🚻 **終了動作変更**: クリーンアップ完了後にターミナルを閉じる
 - ✅ メインメニューに戻らず、再セットアップを促す
 - ✅ 3秒後に自動的にターミナルを閉じる
@@ -375,4 +381,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.24.0）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.24.1）
