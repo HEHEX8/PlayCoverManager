@@ -1997,52 +1997,52 @@ switch_storage_location() {
         declare -a mappings_array=()
         local index=1
         while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            continue
-        fi
-        
-        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
-        
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
-        local storage_icon=""
-        local mount_status=""
-        
-        # Determine storage type using get_storage_type function
-        local storage_type="unknown"
-        if [[ -d "$target_path" ]]; then
-            storage_type=$(get_storage_type "$target_path")
-        fi
-        
-        # Get container size
-        local container_size=$(get_container_size "$target_path")
-        
-        case "$storage_type" in
-            "external")
-                storage_icon="🔌 外部"
-                mount_status="🟢 外部ストレージマウント済"
-                ;;
-            "internal")
-                storage_icon="🏠 内部"
-                mount_status="⚪️ 内部ストレージにデータ有"
-                ;;
-            "none")
-                storage_icon="⚠️  データ無し"
-                mount_status="⚪️ 外部ストレージ未マウント"
-                container_size="0B"
-                ;;
-            *)
-                storage_icon="⚠️  データ無し"
-                mount_status="⚪️ 外部ストレージ未マウント"
-                container_size="0B"
-                ;;
-        esac
-        
-        # Format with fixed spacing
-        printf "  %s. %s\n" "$index" "$display_name"
-        printf "      %-20s %s\n" "$storage_icon" "$mount_status"
-        printf "      使用容量: %s\n" "$container_size"
-        echo ""
-        ((index++))
+            if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+                continue
+            fi
+            
+            mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+            
+            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            local storage_icon=""
+            local mount_status=""
+            
+            # Determine storage type using get_storage_type function
+            local storage_type="unknown"
+            if [[ -d "$target_path" ]]; then
+                storage_type=$(get_storage_type "$target_path")
+            fi
+            
+            # Get container size
+            local container_size=$(get_container_size "$target_path")
+            
+            case "$storage_type" in
+                "external")
+                    storage_icon="🔌 外部"
+                    mount_status="🟢 外部ストレージマウント済"
+                    ;;
+                "internal")
+                    storage_icon="🏠 内部"
+                    mount_status="⚪️ 内部ストレージにデータ有"
+                    ;;
+                "none")
+                    storage_icon="⚠️  データ無し"
+                    mount_status="⚪️ 外部ストレージ未マウント"
+                    container_size="0B"
+                    ;;
+                *)
+                    storage_icon="⚠️  データ無し"
+                    mount_status="⚪️ 外部ストレージ未マウント"
+                    container_size="0B"
+                    ;;
+            esac
+            
+            # Format with fixed spacing
+            printf "  %s. %s\n" "$index" "$display_name"
+            printf "      %-20s %s\n" "$storage_icon" "$mount_status"
+            printf "      使用容量: %s\n" "$container_size"
+            echo ""
+            ((index++))
         done <<< "$mappings_content"
         
         print_separator
@@ -4430,6 +4430,9 @@ run_initial_setup() {
 #######################################################
 
 main() {
+    # Clear screen to hide terminal session info
+    clear
+    
     # Check if PlayCover environment is ready
     if ! is_playcover_environment_ready; then
         run_initial_setup
