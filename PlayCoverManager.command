@@ -117,6 +117,18 @@ is_playcover_running() {
     pgrep -x "PlayCover" >/dev/null 2>&1
 }
 
+is_app_running() {
+    local bundle_id=$1
+    
+    # Skip if bundle_id is empty
+    if [[ -z "$bundle_id" ]]; then
+        return 1
+    fi
+    
+    # Check if any process is running with this bundle_id
+    /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1
+}
+
 get_playcover_external_path() {
     # PlayCoverボリュームがマウントされている場合、その場所を返す
     if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
@@ -1329,14 +1341,42 @@ individual_volume_control() {
     local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
     local mount_cache=$(/sbin/mount 2>/dev/null)
     
+    # Build selectable array (excluding locked volumes)
+    local -a selectable_array=()
+    local -a selectable_indices=()
+    
     # Display volumes with detailed status (single column)
-    local index=1
+    local display_index=1
     for ((i=0; i<${#mappings_array[@]}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local status_line=""
         local extra_info=""
+        local is_locked=false
+        
+        # Check if app is running (locked)
+        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+            if is_playcover_running; then
+                is_locked=true
+            fi
+        else
+            if is_app_running "$bundle_id"; then
+                is_locked=true
+            fi
+        fi
+        
+        # If locked, show without number
+        if $is_locked; then
+            echo "      ${display_name}"
+            echo "      🔒 ロック中（アプリ起動中）"
+            echo ""
+            continue
+        fi
+        
+        # Add to selectable array
+        selectable_array+=("${mappings_array[$i]}")
+        selectable_indices+=("$i")
         
         # Check if volume exists (using cached diskutil output)
         if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
@@ -1367,10 +1407,10 @@ individual_volume_control() {
             fi
         fi
         
-        echo "  ${index}. ${display_name}"
+        echo "  ${display_index}. ${display_name}"
         echo "      ${status_line}${extra_info}"
         echo ""
-        ((index++))
+        ((display_index++))
     done
     
     print_separator
@@ -1403,7 +1443,15 @@ individual_volume_control() {
         return
     fi
     
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
+    # Check if no selectable volumes
+    if [[ ${#selectable_array[@]} -eq 0 ]]; then
+        print_warning "選択可能なボリュームがありません（全てロック中）"
+        wait_for_enter
+        individual_volume_control
+        return
+    fi
+    
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#selectable_array[@]} ]]; then
         print_error "無効な選択です"
         sleep 2
         individual_volume_control
@@ -1412,7 +1460,7 @@ individual_volume_control() {
     
     # Convert 1-based user input to 0-based array index
     local array_index=$((choice - 1))
-    local selected_mapping="${mappings_array[$array_index]}"
+    local selected_mapping="${selectable_array[$array_index]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
     authenticate_sudo
@@ -1433,17 +1481,6 @@ individual_volume_control() {
             return
         fi
         
-        # Special check for PlayCover volume - ensure PlayCover is not running
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]] && is_playcover_running; then
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "PlayCoverが起動中です"
-            print_info "PlayCoverを終了してから再度実行してください"
-            wait_for_enter
-            individual_volume_control
-            return
-        fi
         
         # Quit app first
         if [[ -n "$bundle_id" ]]; then
