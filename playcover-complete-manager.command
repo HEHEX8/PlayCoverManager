@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.15.5 - Fix Sudo Authentication Timing
+# Version: 4.16.0 - Optimize Sudo Usage (Minimal Authentication)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1889,8 +1889,6 @@ eject_disk() {
     
     print_header "「${drive_name}」の取り外し"
     
-    authenticate_sudo
-    
     print_warning "このドライブの全てのボリュームをアンマウントします"
     echo ""
     print_info "注意: PlayCover関連ボリューム以外も含まれる可能性があります"
@@ -1905,6 +1903,9 @@ eject_disk() {
         read
         return
     fi
+    
+    # Authenticate sudo only when user confirms
+    authenticate_sudo
     
     echo ""
     
@@ -2005,9 +2006,6 @@ switch_storage_location() {
         read
         return
     fi
-    
-    # Authenticate sudo early for container size calculation
-    authenticate_sudo
     
     # Display volume list with storage type and mount status
     echo "データステータス:"
@@ -2188,6 +2186,9 @@ switch_storage_location() {
         switch_storage_location
         return
     fi
+    
+    # Authenticate sudo only when actually needed (before mount/copy operations)
+    authenticate_sudo
     
     echo ""
     
@@ -2832,7 +2833,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.5${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.16.0${NC}"
     echo ""
     
     show_quick_status
@@ -3708,6 +3709,9 @@ uninstall_workflow() {
         read
         return
     fi
+    
+    # Authenticate sudo before volume operations
+    authenticate_sudo
     
     # Start uninstallation
     echo ""
