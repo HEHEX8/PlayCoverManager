@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.15.3 - Fix Unregistered Volume Name Display
+# Version: 4.15.4 - Simplify Drive Eject Display
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1893,6 +1893,8 @@ eject_disk() {
     
     print_warning "このドライブの全てのボリュームをアンマウントします"
     echo ""
+    print_info "注意: PlayCover関連ボリューム以外も含まれる可能性があります"
+    echo ""
     echo -n "続行しますか？ (y/N): "
     read confirm
     
@@ -1966,80 +1968,9 @@ eject_disk() {
             done
             
             if [[ $success_count -gt 0 ]] || [[ $fail_count -gt 0 ]]; then
-                print_info "登録済みボリューム: 成功 ${success_count}個, 失敗 ${fail_count}個"
-            fi
-        fi
-    fi
-    
-    # Check for other volumes on this disk
-    echo ""
-    print_info "その他のボリュームを確認中..."
-    
-    # Get device IDs from diskutil list
-    local device_list=$(/usr/sbin/diskutil list "$disk_id" 2>/dev/null | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
-    local other_count=0
-    local other_success=0
-    local other_fail=0
-    
-    if [[ -n "$device_list" ]]; then
-        # Build list of registered volume names for comparison
-        local -a registered_volumes=()
-        if [[ -n "$mappings_content" ]]; then
-            while IFS=$'\t' read -r volume_name bundle_id display_name; do
-                registered_volumes+=("$volume_name")
-            done <<< "$mappings_content"
-        fi
-        
-        while IFS= read -r device_id; do
-            [[ -z "$device_id" ]] && continue
-            
-            # Get actual volume name from device ID
-            local vol_name=$(/usr/sbin/diskutil info "$device_id" 2>/dev/null | /usr/bin/grep "Volume Name:" | /usr/bin/sed 's/.*Volume Name: *//' | /usr/bin/xargs)
-            
-            # If no volume name, skip (not an APFS volume or unmounted)
-            [[ -z "$vol_name" ]] && continue
-            
-            # Check if this volume is already in registered list
-            local is_registered=false
-            for registered_vol in "${registered_volumes[@]}"; do
-                if [[ "$registered_vol" == "$vol_name" ]]; then
-                    is_registered=true
-                    break
-                fi
-            done
-            
-            # Skip if already processed
-            [[ "$is_registered" == true ]] && continue
-            
-            # This is an unregistered volume
-            ((other_count++))
-            
-            if [[ $other_count -eq 1 ]]; then
                 echo ""
+                print_info "PlayCover関連: 成功 ${success_count}個, 失敗 ${fail_count}個"
             fi
-            
-            echo "  ${YELLOW}${vol_name}${NC} (${device_id})"
-            
-            local current_mount=$(get_mount_point "$vol_name")
-            if [[ -z "$current_mount" ]]; then
-                echo "     ${GREEN}✅ 既にアンマウント済${NC}"
-                ((other_success++))
-            else
-                if sudo /usr/sbin/diskutil unmount "$device_id" >/dev/null 2>&1; then
-                    echo "     ${GREEN}✅ アンマウント成功${NC}"
-                    ((other_success++))
-                else
-                    echo "     ${RED}❌ アンマウント失敗${NC}"
-                    ((other_fail++))
-                fi
-            fi
-            echo ""
-        done <<< "$device_list"
-        
-        if [[ $other_count -gt 0 ]]; then
-            print_info "その他のボリューム: 成功 ${other_success}個, 失敗 ${other_fail}個"
-        else
-            print_info "その他のボリュームはありません"
         fi
     fi
     
@@ -2900,7 +2831,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.3${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.4${NC}"
     echo ""
     
     show_quick_status
