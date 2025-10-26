@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.22.1 - Fix command path issues (cut, tr)
+# Version: 4.22.2 - Fix all command paths (sudo, cut, tr)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -167,13 +167,13 @@ authenticate_sudo() {
     
     print_info "管理者権限が必要です"
     
-    if sudo -v; then
+    if /usr/bin/sudo -v; then
         SUDO_AUTHENTICATED=true
         print_success "認証成功"
         
-        # Keep sudo alive in background
+        # Keep /usr/bin/sudo alive in background
         while true; do
-            sudo -n true
+            /usr/bin/sudo -n true
             sleep 50
             kill -0 "$$" 2>/dev/null || exit
         done 2>/dev/null &
@@ -444,7 +444,7 @@ mount_volume() {
         print_info "アンマウント中..."
         
         local device=$(get_volume_device "$volume_name" "$diskutil_cache")
-        if ! sudo /usr/sbin/diskutil unmount "$device" 2>/dev/null; then
+        if ! /usr/bin/sudo /usr/sbin/diskutil unmount "$device" 2>/dev/null; then
             print_error "アンマウントに失敗しました"
             return 1
         fi
@@ -474,20 +474,20 @@ mount_volume() {
                 
                 # Create temporary mount point
                 local temp_migrate="/tmp/playcover_migrate_$$"
-                sudo /bin/mkdir -p "$temp_migrate"
+                /usr/bin/sudo /bin/mkdir -p "$temp_migrate"
                 
                 # Mount volume temporarily
-                if sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
+                if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
                     print_info "データをコピー中..."
-                    sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
+                    /usr/bin/sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
                     local rsync_exit=$?
-                    sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
-                    sudo /bin/rm -rf "$temp_migrate"
+                    /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
+                    /usr/bin/sudo /bin/rm -rf "$temp_migrate"
                     
                     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
                         print_success "データの移行が完了しました"
                         print_info "内部ストレージをクリア中..."
-                        sudo rm -rf "$target_path"
+                        /usr/bin/sudo rm -rf "$target_path"
                         # Continue to mount below
                     else
                         print_error "データの移行に失敗しました (rsync exit: $rsync_exit)"
@@ -495,14 +495,14 @@ mount_volume() {
                     fi
                 else
                     print_error "一時マウントに失敗しました"
-                    sudo /bin/rm -rf "$temp_migrate"
+                    /usr/bin/sudo /bin/rm -rf "$temp_migrate"
                     return 1
                 fi
             fi
         fi
     else
         # Create target directory if it doesn't exist
-        sudo /bin/mkdir -p "$target_path"
+        /usr/bin/sudo /bin/mkdir -p "$target_path"
     fi
     
     # Mount the volume with nobrowse option to hide from Finder/Desktop
@@ -510,7 +510,7 @@ mount_volume() {
     
     # Use mount command directly with nobrowse option
     # diskutil doesn't support nobrowse directly, so we use mount -o nobrowse
-    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
         print_success "マウント成功: $target_path"
         return 0
     else
@@ -564,7 +564,7 @@ unmount_volume() {
     
     local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
-    if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+    if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
         print_success "アンマウント成功"
         return 0
     else
@@ -586,7 +586,7 @@ get_container_size() {
         return
     fi
     
-    # Use du -sh for total size (no sudo needed for user's own files)
+    # Use du -sh for total size (no /usr/bin/sudo needed for user's own files)
     local size=$(/usr/bin/du -sh "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
     
     if [[ -z "$size" ]]; then
@@ -711,7 +711,7 @@ get_storage_type() {
 
 check_playcover_volume_mount() {
     if [[ ! -d "$PLAYCOVER_CONTAINER" ]]; then
-        sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER"
+        /usr/bin/sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER"
     fi
     
     local is_mounted=$(/sbin/mount | /usr/bin/grep " on ${PLAYCOVER_CONTAINER} " | /usr/bin/grep -c "apfs")
@@ -739,14 +739,14 @@ check_playcover_volume_mount() {
     local current_mount=$(/usr/sbin/diskutil info "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
     
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
-        if ! sudo /usr/sbin/diskutil unmount force "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null; then
+        if ! /usr/bin/sudo /usr/sbin/diskutil unmount force "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null; then
             print_error "ボリュームのアンマウントに失敗しました"
             exit_with_cleanup 1 "ボリュームアンマウントエラー"
         fi
     fi
     
-    if sudo /sbin/mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
-        sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
+        /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
         
         # Create necessary directory structure if it doesn't exist
         local playcover_apps="${PLAYCOVER_CONTAINER}/Applications"
@@ -977,7 +977,7 @@ create_app_volume() {
         return 0
     fi
     
-    if sudo /usr/sbin/diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
+    if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
         sleep 1
         return 0
     else
@@ -1508,7 +1508,7 @@ individual_volume_control() {
         fi
         
         local device=$(get_volume_device "$volume_name")
-        if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+        if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
             # Success - silently return to menu
             individual_volume_control
             return
@@ -1578,7 +1578,7 @@ individual_volume_control() {
         
         # Try to mount
         local device=$(get_volume_device "$volume_name")
-        if sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
+        if /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
             # Success - silently return to menu
             individual_volume_control
             return
@@ -1638,8 +1638,8 @@ batch_mount_all() {
             if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
                 echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
                 local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-                if sudo /usr/sbin/diskutil unmount "$pc_device" >/dev/null 2>&1; then
-                    if sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                if /usr/bin/sudo /usr/sbin/diskutil unmount "$pc_device" >/dev/null 2>&1; then
+                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
                         ((success_count++))
                     else
@@ -1659,7 +1659,7 @@ batch_mount_all() {
                     ((fail_count++))
                 else
                     local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-                    if sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
                         ((success_count++))
                     else
@@ -1675,8 +1675,8 @@ batch_mount_all() {
             if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
                 echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
                 local device=$(get_volume_device "$volume_name")
-                if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
-                    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                         ((success_count++))
                     else
@@ -1710,7 +1710,7 @@ batch_mount_all() {
                     fi
                     
                     local device=$(get_volume_device "$volume_name")
-                    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                         ((success_count++))
                     else
@@ -1801,7 +1801,7 @@ batch_unmount_all() {
             fi
             
             local device=$(get_volume_device "$volume_name")
-            if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
                 echo "     ${GREEN}✅ アンマウント成功${NC}"
                 ((success_count++))
             else
@@ -1902,7 +1902,7 @@ eject_disk() {
         return
     fi
     
-    # Authenticate sudo only when user confirms
+    # Authenticate /usr/bin/sudo only when user confirms
     authenticate_sudo
     
     echo ""
@@ -1951,7 +1951,7 @@ eject_disk() {
                         quit_app_for_bundle "$bundle_id"
                     fi
                     
-                    if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                    if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ アンマウント成功${NC}"
                         ((success_count++))
                     else
@@ -1976,7 +1976,7 @@ eject_disk() {
     echo ""
     print_info "ディスク ${drive_name} (${disk_id}) を取り外し中..."
     
-    if sudo /usr/sbin/diskutil eject "$disk_id"; then
+    if /usr/bin/sudo /usr/sbin/diskutil eject "$disk_id"; then
         print_success "ディスク ${drive_name} を安全に取り外しました"
         echo ""
         print_info "3秒後にターミナルを自動で閉じます..."
@@ -2299,7 +2299,7 @@ nuclear_cleanup() {
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  アンマウント中: ${vol_name} (${device})"
-            if sudo diskutil unmount "$device" >/dev/null 2>&1; then
+            if /usr/bin/sudo diskutil unmount "$device" >/dev/null 2>&1; then
                 ((unmount_count++))
                 print_success "  ✓ 完了"
             else
@@ -2330,7 +2330,7 @@ nuclear_cleanup() {
             local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${display}"
-            if sudo rm -rf "$path" 2>/dev/null; then
+            if /usr/bin/sudo rm -rf "$path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
                 ((container_count++))
             else
@@ -2412,7 +2412,7 @@ nuclear_cleanup() {
             
             echo "  削除中: ${display} (${device})"
             
-            if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
+            if /usr/bin/sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
                 print_success "  ✓ 削除完了"
                 ((volume_count++))
             else
@@ -2674,7 +2674,7 @@ switch_storage_location() {
             return
         fi
         
-        # Authenticate sudo only when actually needed (before mount/copy operations)
+        # Authenticate /usr/bin/sudo only when actually needed (before mount/copy operations)
         authenticate_sudo
         
         echo ""
@@ -2773,7 +2773,7 @@ switch_storage_location() {
             print_info "外部ボリューム: $volume_device"
             
             local temp_check_mount="/tmp/playcover_check_$$"
-            sudo /bin/mkdir -p "$temp_check_mount"
+            /usr/bin/sudo /bin/mkdir -p "$temp_check_mount"
             
             # Check if volume is already mounted
             local existing_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point" | sed 's/.*: *//')
@@ -2788,7 +2788,7 @@ switch_storage_location() {
             else
                 # Volume not mounted - mount it temporarily for capacity check
                 print_info "外部ボリュームをマウント中..."
-                if sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+                if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
                     print_success "マウント成功"
                     available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
                     existing_mount="$temp_check_mount"
@@ -2804,7 +2804,7 @@ switch_storage_location() {
                     echo "  - ボリュームが破損している"
                     echo "  - ディスクが接続されていない"
                     echo "  - 権限の問題"
-                    sudo /bin/rm -rf "$temp_check_mount"
+                    /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
                     wait_for_enter
                     continue
                     return
@@ -2814,10 +2814,10 @@ switch_storage_location() {
             # Cleanup: Unmount after capacity check for clean state
             if [[ "$mount_cleanup_needed" == true ]]; then
                 print_info "容量チェック完了、一時マウントをクリーンアップ中..."
-                sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
+                /usr/bin/sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
                 sleep 1
             fi
-            sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
+            /usr/bin/sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
             
             # Convert to human readable
             local source_size_mb=$((source_size_bytes / 1024))
@@ -2865,14 +2865,14 @@ switch_storage_location() {
             
             # Create temporary mount point
             local temp_mount="/tmp/playcover_temp_$$"
-            sudo /bin/mkdir -p "$temp_mount"
+            /usr/bin/sudo /bin/mkdir -p "$temp_mount"
             
             # Mount volume temporarily (with nobrowse to hide from Finder)
             local volume_device=$(get_volume_device "$volume_name")
             print_info "ボリュームを一時マウント中..."
-            if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+            if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                 print_error "ボリュームのマウントに失敗しました"
-                sudo /bin/rm -rf "$temp_mount"
+                /usr/bin/sudo /bin/rm -rf "$temp_mount"
                 wait_for_enter
                 continue
                 return
@@ -2895,7 +2895,7 @@ switch_storage_location() {
             # This is much faster when re-running after interruption
             # Exclude system metadata files and backup directories
             # Note: macOS rsync doesn't support --info=progress2, use --progress instead
-            sudo /usr/bin/rsync -avH --update --progress \
+            /usr/bin/sudo /usr/bin/rsync -avH --update --progress \
                 --exclude='.Spotlight-V100' \
                 --exclude='.fseventsd' \
                 --exclude='.Trashes' \
@@ -2916,11 +2916,11 @@ switch_storage_location() {
                 echo ""
                 print_error "データのコピーに失敗しました"
                 print_info "一時マウントをクリーンアップ中..."
-                sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
-                    sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
+                /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
+                    /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
                 }
                 sleep 1  # Wait for unmount to complete
-                sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
+                /usr/bin/sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
                 wait_for_enter
                 continue
                 return
@@ -2928,16 +2928,16 @@ switch_storage_location() {
             
             # Unmount temporary mount
             print_info "一時マウントをアンマウント中..."
-            sudo /usr/sbin/diskutil unmount "$temp_mount" || {
+            /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" || {
                 print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
-                sudo /usr/sbin/diskutil unmount force "$temp_mount"
+                /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount"
             }
             sleep 1  # Wait for unmount to complete
-            sudo /bin/rm -rf "$temp_mount"
+            /usr/bin/sudo /bin/rm -rf "$temp_mount"
             
             # Delete internal data (no backup needed)
             print_info "内蔵データを削除中..."
-            sudo /bin/rm -rf "$target_path"
+            /usr/bin/sudo /bin/rm -rf "$target_path"
             
             # Mount volume to proper location
             print_info "ボリュームを正式にマウント中..."
@@ -2973,12 +2973,12 @@ switch_storage_location() {
                 check_mount_point="$current_mount"
             else
                 temp_check_mount="/tmp/playcover_check_$$"
-                sudo /bin/mkdir -p "$temp_check_mount"
+                /usr/bin/sudo /bin/mkdir -p "$temp_check_mount"
                 local volume_device=$(get_volume_device "$volume_name")
                 
-                if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+                if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
                     print_error "外部ボリュームの容量チェックに失敗しました"
-                    sudo /bin/rm -rf "$temp_check_mount"
+                    /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
                     wait_for_enter
                     continue
                     return
@@ -2990,8 +2990,8 @@ switch_storage_location() {
             
             # Unmount temporary check mount if created
             if [[ -n "$temp_check_mount" ]]; then
-                sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
-                sudo /bin/rm -rf "$temp_check_mount"
+                /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+                /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
             fi
             
             if [[ -z "$source_size_bytes" ]]; then
@@ -3055,11 +3055,11 @@ switch_storage_location() {
                 # Volume not mounted - mount to temporary location
                 print_info "ボリュームを一時マウント中..."
                 local temp_mount="/tmp/playcover_temp_$$"
-                sudo /bin/mkdir -p "$temp_mount"
+                /usr/bin/sudo /bin/mkdir -p "$temp_mount"
                 local volume_device=$(get_volume_device "$volume_name")
-                if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+                if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                     print_error "ボリュームのマウントに失敗しました"
-                    sudo /bin/rm -rf "$temp_mount"
+                    /usr/bin/sudo /bin/rm -rf "$temp_mount"
                     wait_for_enter
                     continue
                     return
@@ -3109,11 +3109,11 @@ switch_storage_location() {
                 sleep 1
                 
                 local temp_mount="/tmp/playcover_temp_$$"
-                sudo /bin/mkdir -p "$temp_mount"
-                if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+                /usr/bin/sudo /bin/mkdir -p "$temp_mount"
+                if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                     print_error "一時マウントに失敗しました"
-                    sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
-                    sudo /bin/rm -rf "$temp_mount"
+                    /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
+                    /usr/bin/sudo /bin/rm -rf "$temp_mount"
                     wait_for_enter
                     continue
                     return
@@ -3136,11 +3136,11 @@ switch_storage_location() {
             # Remove existing internal data/mount point if it exists
             if [[ -e "$target_path" ]]; then
                 print_info "既存データをクリーンアップ中..."
-                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+                /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
             fi
             
             # Create new internal directory
-            sudo /bin/mkdir -p "$target_path"
+            /usr/bin/sudo /bin/mkdir -p "$target_path"
             
             # Copy data from external to internal
             print_info "データをコピー中... (進捗が表示されます)"
@@ -3148,7 +3148,7 @@ switch_storage_location() {
             
             # Use rsync with progress for real-time progress (macOS compatible)
             # Exclude system metadata files and backup directories
-            sudo /usr/bin/rsync -avH --ignore-errors --progress \
+            /usr/bin/sudo /usr/bin/rsync -avH --ignore-errors --progress \
                 --exclude='.Spotlight-V100' \
                 --exclude='.fseventsd' \
                 --exclude='.Trashes' \
@@ -3163,7 +3163,7 @@ switch_storage_location() {
                 print_success "データのコピーが完了しました"
                 
                 # Change ownership first, then check without sudo
-                sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
+                /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
                 
                 local copied_count=$(/usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
                 local copied_size=$(/usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
@@ -3175,15 +3175,15 @@ switch_storage_location() {
                 # Cleanup: Unmount first, then clean up directories
                 if [[ "$temp_mount_created" == true ]]; then
                     print_info "一時マウントをクリーンアップ中..."
-                    sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
-                        sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
+                    /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
+                        /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
                     }
                     sleep 1  # Wait for unmount to complete
-                    sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
+                    /usr/bin/sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
                 fi
                 
                 # Remove failed copy
-                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+                /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
                 
                 wait_for_enter
                 continue
@@ -3193,11 +3193,11 @@ switch_storage_location() {
             # Unmount volume
             if [[ "$temp_mount_created" == true ]]; then
                 print_info "一時マウントをクリーンアップ中..."
-                sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
-                    sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
+                /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
+                    /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
                 }
                 sleep 1  # Wait for unmount to complete
-                sudo /bin/rm -rf "$source_mount"
+                /usr/bin/sudo /bin/rm -rf "$source_mount"
             else
                 print_info "外部ボリュームをアンマウント中..."
                 unmount_volume "$volume_name" "$bundle_id" || true
@@ -4145,7 +4145,7 @@ uninstall_workflow() {
         return
     fi
     
-    # Authenticate sudo before volume operations
+    # Authenticate /usr/bin/sudo before volume operations
     authenticate_sudo
     
     # Start uninstallation
@@ -4188,10 +4188,10 @@ uninstall_workflow() {
     local volume_device=$(diskutil list | grep "$selected_volume" | awk '{print $NF}')
     
     if [[ -n "$volume_device" ]]; then
-        if ! sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+        if ! /usr/bin/sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
             print_error "ボリュームの削除に失敗しました"
             echo ""
-            echo "手動で削除してください: sudo diskutil apfs deleteVolume $volume_device"
+            echo "手動で削除してください: /usr/bin/sudo diskutil apfs deleteVolume $volume_device"
             wait_for_enter
             return
         fi
@@ -4365,7 +4365,7 @@ uninstall_all_apps() {
         # Find and delete volume
         local volume_device=$(diskutil list | grep "$volume_name" | awk '{print $NF}')
         if [[ -n "$volume_device" ]]; then
-            if sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+            if /usr/bin/sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
                 print_success "${app_name}"
                 ((success_count++))
             else
@@ -4664,7 +4664,7 @@ create_playcover_main_volume() {
         exit 1
     fi
     
-    if sudo diskutil apfs addVolume "$container" APFS "${PLAYCOVER_VOLUME_NAME}" -nomount > /tmp/apfs_create.log 2>&1; then
+    if /usr/bin/sudo diskutil apfs addVolume "$container" APFS "${PLAYCOVER_VOLUME_NAME}" -nomount > /tmp/apfs_create.log 2>&1; then
         print_success "ボリューム「${PLAYCOVER_VOLUME_NAME}」を作成しました"
     else
         print_error "ボリュームの作成に失敗しました"
@@ -4697,7 +4697,7 @@ mount_playcover_main_volume() {
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
         print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
         print_info "アンマウント中..."
-        if ! sudo diskutil unmount force "$volume_device" 2>/dev/null; then
+        if ! /usr/bin/sudo diskutil unmount force "$volume_device" 2>/dev/null; then
             print_error "ボリュームのアンマウントに失敗しました"
             wait_for_enter
             exit 1
@@ -4717,11 +4717,11 @@ mount_playcover_main_volume() {
     local temp_mount="/tmp/playcover_temp_mount_$$"
     mkdir -p "$temp_mount"
     
-    if sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
+    if /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
         if [[ $(find "$temp_mount" -mindepth 1 -maxdepth 1 ! -name ".*" 2>/dev/null | wc -l) -gt 0 ]]; then
             has_external_data=true
         fi
-        sudo umount "$temp_mount" 2>/dev/null
+        /usr/bin/sudo umount "$temp_mount" 2>/dev/null
     fi
     
     rmdir "$temp_mount" 2>/dev/null
@@ -4733,13 +4733,13 @@ mount_playcover_main_volume() {
         echo ""
         
         mkdir -p "$temp_mount"
-        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
         print_info "内部データを外部に統合中..."
-        sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
-        sudo umount "$temp_mount"
+        /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+        /usr/bin/sudo umount "$temp_mount"
         rmdir "$temp_mount"
         print_info "内部ストレージをクリア中..."
-        sudo rm -rf "$PLAYCOVER_CONTAINER"
+        /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
         print_success "内部データを外部に統合しました"
     elif $has_internal_data; then
         print_warning "⚠️  PlayCoverボリューム未マウント状態でPlayCoverが起動され、内部ストレージにデータが作成されています"
@@ -4748,27 +4748,27 @@ mount_playcover_main_volume() {
         echo ""
         
         mkdir -p "$temp_mount"
-        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
         print_info "データをコピー中..."
-        sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
-        sudo umount "$temp_mount"
+        /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+        /usr/bin/sudo umount "$temp_mount"
         rmdir "$temp_mount"
         print_info "内部ストレージをクリア中..."
-        sudo rm -rf "$PLAYCOVER_CONTAINER"
+        /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
         print_success "内部データを外部に移行しました"
     else
         if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-            sudo rm -rf "$PLAYCOVER_CONTAINER"
+            /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
         fi
     fi
     
-    sudo mkdir -p "$PLAYCOVER_CONTAINER"
+    /usr/bin/sudo mkdir -p "$PLAYCOVER_CONTAINER"
     
     print_info "ボリュームをマウント中..."
-    if sudo mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
+    if /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
         print_success "ボリュームを正常にマウントしました"
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
-        sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+        /usr/bin/sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
     else
         print_error "ボリュームのマウントに失敗しました"
         wait_for_enter

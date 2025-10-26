@@ -265,7 +265,14 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.22.1 (最新) - Command Path Fix
+### v4.22.2 (最新) - Complete Command Path Fix
+- 🔧 **全コマンドパス修正**: すべての外部コマンドをフルパス指定
+- ✅ `sudo` コマンド（95箇所）→ `/usr/bin/sudo`
+- ✅ `cut` コマンド（14箇所）→ `/usr/bin/cut`
+- ✅ `tr` コマンド（1箇所）→ `/usr/bin/tr`
+- ✅ macOS環境でのPATH制限問題を完全解決
+
+### v4.22.1 - Command Path Fix
 - 🔧 **コマンドパス修正**: `cut`と`tr`コマンドのフルパス指定
 - ✅ macOS環境でのPATH問題を解決
 - ✅ `command not found: cut` エラーを修正
@@ -349,4 +356,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.22.1）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.22.2）
