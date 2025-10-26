@@ -2774,7 +2774,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.16.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.7${NC}"
     echo ""
     
     show_quick_status
@@ -3242,7 +3242,7 @@ show_installed_apps() {
     fi
     
     if [[ "$display_only" == "true" ]]; then
-        echo "${YELLOW}インストール済みアプリ:${NC}"
+        echo "${YELLOW}インストール済みアプリ${NC}"
         echo ""
     fi
     
@@ -3291,22 +3291,22 @@ show_installed_apps() {
             
             case "$storage_type" in
                 "external")
-                    storage_icon="${CYAN}💾${NC}"
+                    storage_icon="🔌"
                     ;;
                 "internal")
-                    storage_icon="${YELLOW}💽${NC}"
+                    storage_icon="🏠"
                     ;;
                 "none")
-                    storage_icon="${MAGENTA}📦${NC}"
+                    storage_icon="⚠️ "
                     container_size="0B"
                     ;;
                 *)
-                    storage_icon="${RED}?${NC}"
+                    storage_icon="？"
                     ;;
             esac
             
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC} ${storage_icon} ${container_size}"
+                printf " ・ %s %6s (v%s) %s\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
             else
                 echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${BLUE}(v${app_version})${NC}"
                 echo "      Bundle ID: ${bundle_id}"
@@ -3329,12 +3329,9 @@ show_installed_apps() {
     done <<< "$mappings_content"
     
     if [[ "$display_only" == "true" ]]; then
+        print_separator
         echo ""
-        if [[ $missing_count -eq 0 ]]; then
-            echo "${GREEN}合計: ${installed_count}個${NC}"
-        else
-            echo "${GREEN}インストール済: ${installed_count}個${NC}  ${RED}見つからない: ${missing_count}個${NC}"
-        fi
+        echo "${CYAN}操作を選択してください${NC}"
     fi
     
     # Return installed count for uninstall workflow
@@ -3422,7 +3419,6 @@ app_management_menu() {
         echo "${BLUE}アプリ管理${NC}"
         echo ""
         show_installed_apps
-        echo ""
         echo "  ${GREEN}1.${NC} アプリをインストール"
         echo "  ${RED}2.${NC} アプリをアンインストール"
         echo "  ${CYAN}0.${NC} メインメニューに戻る"
