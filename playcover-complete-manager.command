@@ -477,7 +477,7 @@ unmount_volume() {
     local current_mount=$(get_mount_point "$volume_name")
     
     if [[ -z "$current_mount" ]]; then
-        print_info "既に未マウント状態です"
+        print_info "既にアンマウント済みです"
         return 0
     fi
     
@@ -1373,7 +1373,7 @@ unmount_all_volumes() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ 既に未マウント状態${NC}"
+            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
             ((success_count++))
         else
             # Try to quit app first
@@ -1939,7 +1939,7 @@ batch_unmount_all() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ 既に未マウント状態${NC}"
+            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
             ((success_count++))
         else
             if [[ -n "$bundle_id" ]]; then
