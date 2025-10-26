@@ -747,6 +747,25 @@ check_playcover_volume_mount() {
     
     if sudo /sbin/mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
         sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+        
+        # Create necessary directory structure if it doesn't exist
+        local playcover_apps="${PLAYCOVER_CONTAINER}/Applications"
+        local playcover_settings="${PLAYCOVER_CONTAINER}/App Settings"
+        local playcover_entitlements="${PLAYCOVER_CONTAINER}/Entitlements"
+        local playcover_keymapping="${PLAYCOVER_CONTAINER}/Keymapping"
+        
+        if [[ ! -d "$playcover_apps" ]]; then
+            mkdir -p "$playcover_apps" 2>/dev/null || true
+        fi
+        if [[ ! -d "$playcover_settings" ]]; then
+            mkdir -p "$playcover_settings" 2>/dev/null || true
+        fi
+        if [[ ! -d "$playcover_entitlements" ]]; then
+            mkdir -p "$playcover_entitlements" 2>/dev/null || true
+        fi
+        if [[ ! -d "$playcover_keymapping" ]]; then
+            mkdir -p "$playcover_keymapping" 2>/dev/null || true
+        fi
     else
         print_error "ボリュームのマウントに失敗しました"
         exit_with_cleanup 1 "ボリュームマウントエラー"
@@ -2774,7 +2793,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.20.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.20.1${NC}"
     echo ""
     
     show_quick_status
