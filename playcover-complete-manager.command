@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.11.1 - Fix rsync and Auto-Mount
+# Version: 4.12.0 - Auto-Mount LaunchAgent Setup
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2897,7 +2897,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.11.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.12.0${NC}"
     echo ""
     
     show_quick_status
