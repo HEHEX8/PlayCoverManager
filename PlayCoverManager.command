@@ -1398,7 +1398,7 @@ individual_volume_control() {
         # Display with lock status or number
         if $is_locked; then
             # Locked: show with lock icon, no number
-            echo "  🔒 ${display_name}（アプリ起動中）"
+            echo "  🔒 ${YELLOW}アプリ起動中${NC} ${display_name}"
             echo "      ${status_line}${extra_info}"
             echo ""
         else
@@ -1410,6 +1410,7 @@ individual_volume_control() {
             echo "      ${status_line}${extra_info}"
             echo ""
             ((display_index++))
+        fi
     done
     
     print_separator
