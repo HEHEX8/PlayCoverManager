@@ -3076,8 +3076,7 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                       ${YELLOW}【ボリューム管理】${NC}                  ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール              3. ボリューム操作                   4. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール"
+    echo "  1. アプリ管理                        2. ボリューム操作                   3. ストレージ切り替え（内蔵⇄外部）"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -3094,13 +3093,13 @@ show_menu() {
     fi
     
     echo "  ${RED}【システム】${NC}"
-    echo "  5. ${eject_label}"
-    echo "  6. マッピング情報を表示"
+    echo "  4. ${eject_label}"
+    echo "  5. マッピング情報を表示"
     echo "  0. 終了"
     echo ""
     print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
-    echo -n "${CYAN}選択 (0-6):${NC} "
+    echo -n "${CYAN}選択 (0-5):${NC} "
 }
 
 show_mapping_info() {
@@ -3144,6 +3143,41 @@ show_mapping_info() {
 #######################################################
 # Module 10: Main Execution
 #######################################################
+
+app_management_menu() {
+    while true; do
+        clear
+        print_header "アプリ管理"
+        
+        echo ""
+        echo "${BLUE}▼ 操作を選択してください${NC}"
+        echo ""
+        echo "  ${GREEN}1.${NC} アプリをインストール"
+        echo "  ${RED}2.${NC} アプリをアンインストール"
+        echo "  ${CYAN}0.${NC} メインメニューに戻る"
+        echo ""
+        echo -n "${YELLOW}選択:${NC} "
+        read choice
+        
+        case "$choice" in
+            1)
+                install_workflow
+                ;;
+            2)
+                uninstall_workflow
+                ;;
+            0)
+                return
+                ;;
+            *)
+                print_error "無効な選択です"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                ;;
+        esac
+    done
+}
 
 install_workflow() {
     clear
@@ -4247,21 +4281,18 @@ main() {
         
         case "$choice" in
             1)
-                install_workflow
+                app_management_menu
                 ;;
             2)
-                uninstall_workflow
-                ;;
-            3)
                 individual_volume_control
                 ;;
-            4)
+            3)
                 switch_storage_location
                 ;;
-            5)
+            4)
                 eject_disk
                 ;;
-            6)
+            5)
                 show_mapping_info
                 ;;
             0)
