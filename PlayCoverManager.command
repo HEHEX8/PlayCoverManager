@@ -2774,7 +2774,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.8${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.9${NC}"
     echo ""
     
     show_quick_status
@@ -3691,7 +3691,7 @@ uninstall_workflow() {
         
         print_success "PlayCover を完全にアンインストールしました"
         echo ""
-        print_warning "このスクリプトは今後使用できません（PlayCoverを再インストールすると使用可能）"
+        print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
         echo ""
         echo -n "Enterキーでターミナルを終了します..."
         read
@@ -3875,7 +3875,7 @@ uninstall_all_apps() {
         echo "  ${RED}失敗: ${fail_count} 個${NC}"
     fi
     echo ""
-    print_warning "このスクリプトは今後使用できません（PlayCoverを再インストールすると使用可能）"
+    print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
     echo ""
     sleep 2
     osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
@@ -4260,9 +4260,33 @@ install_xcode_tools() {
     xcode-select --install 2>/dev/null || true
     print_warning "Xcode Command Line Tools のインストールダイアログが表示されます"
     print_info "インストールが完了するまでお待ちください..."
+    echo ""
+    
+    local wait_count=0
+    local max_wait=600
+    
     while ! xcode-select -p >/dev/null 2>&1; do
         sleep 5
+        ((wait_count++))
+        
+        if [[ $((wait_count % 12)) -eq 0 ]]; then
+            local minutes=$((wait_count / 12))
+            echo -n "."
+            if [[ $((wait_count % 60)) -eq 0 ]]; then
+                echo " ${minutes}分経過"
+            fi
+        fi
+        
+        if [[ $wait_count -ge $max_wait ]]; then
+            echo ""
+            print_error "Xcode Command Line Tools のインストールがタイムアウトしました"
+            print_warning "手動でインストールを完了させてから、再度このスクリプトを実行してください"
+            wait_for_enter
+            exit 1
+        fi
     done
+    
+    echo ""
     print_success "Xcode Command Line Tools のインストールが完了しました"
 }
 
@@ -4309,8 +4333,16 @@ perform_software_installations() {
 create_initial_mapping() {
     print_header "マッピングデータの作成"
     
+    # Clean up stale lock file if it exists (from previous interrupted runs)
+    if [[ -d "$MAPPING_LOCK_FILE" ]]; then
+        local lock_age=$(($(date +%s) - $(stat -f %m "$MAPPING_LOCK_FILE" 2>/dev/null || echo 0)))
+        if [[ $lock_age -gt 60 ]]; then
+            print_warning "古いロックファイルを削除します"
+            rmdir "$MAPPING_LOCK_FILE" 2>/dev/null || true
+        fi
+    fi
+    
     if ! acquire_mapping_lock; then
-        print_error "マッピングファイルのロック取得に失敗しました"
         wait_for_enter
         exit 1
     fi
