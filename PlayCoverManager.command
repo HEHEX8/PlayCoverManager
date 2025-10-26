@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.19.6 - Fix indentation and clean startup
+# Version: 4.21.0 - Add nuclear cleanup feature
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1989,6 +1989,269 @@ eject_disk() {
 }
 
 #######################################################
+# Module 7.5: Nuclear Cleanup Functions
+#######################################################
+
+nuclear_cleanup() {
+    clear
+    print_separator "=" "$RED"
+    echo ""
+    echo "${RED}🔥 超強力クリーンアップ（完全リセット）🔥${NC}"
+    echo ""
+    print_separator "=" "$RED"
+    echo ""
+    
+    echo "${YELLOW}⚠️  警告: この操作は以下を完全に削除します：${NC}"
+    echo ""
+    echo "  ${RED}•${NC} すべてのPlayCoverアプリとコンテナ"
+    echo "  ${RED}•${NC} すべてのAPFSボリューム（内蔵・外部両方）"
+    echo "  ${RED}•${NC} PlayCoverの設定・キャッシュ・ログ"
+    echo "  ${RED}•${NC} マッピングファイル（playcover-map.txt）"
+    echo ""
+    echo "${YELLOW}⚠️  この操作は取り消せません！${NC}"
+    echo ""
+    echo "${CYAN}ℹ️  ゲームデータはアカウントに紐付いているため、再インストール後に復元できます${NC}"
+    echo ""
+    
+    # First confirmation
+    echo -n "${RED}本当に実行しますか？ (yes/no):${NC} "
+    read first_confirm
+    
+    if [[ "$first_confirm" != "yes" ]]; then
+        print_info "キャンセルしました"
+        wait_for_enter
+        return
+    fi
+    
+    echo ""
+    echo "${RED}⚠️  最終確認: 'DELETE ALL' と正確に入力してください:${NC} "
+    read final_confirm
+    
+    if [[ "$final_confirm" != "DELETE ALL" ]]; then
+        print_info "キャンセルしました"
+        wait_for_enter
+        return
+    fi
+    
+    echo ""
+    print_separator "─" "$YELLOW"
+    echo ""
+    print_info "クリーンアップを開始します..."
+    echo ""
+    
+    # Authenticate sudo
+    authenticate_sudo
+    
+    #######################################################
+    # Step 1: Unmount all volumes
+    #######################################################
+    
+    echo "${BLUE}【ステップ 1/6】すべてのボリュームをアンマウント${NC}"
+    echo ""
+    
+    # Quit all running apps
+    local mappings_content=$(read_mappings 2>/dev/null || true)
+    if [[ -n "$mappings_content" ]]; then
+        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+            [[ -z "$bundle_id" ]] && continue
+            if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
+                quit_app_for_bundle "$bundle_id" 2>/dev/null || true
+            fi
+        done <<< "$mappings_content"
+    fi
+    
+    # Unmount all PlayCover-related volumes
+    local unmount_count=0
+    local all_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
+    
+    if [[ -n "$all_volumes" ]]; then
+        while IFS= read -r device; do
+            if [[ -n "$device" ]]; then
+                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                echo "  アンマウント中: ${vol_name} (${device})"
+                sudo diskutil unmount "$device" >/dev/null 2>&1 && ((unmount_count++)) || true
+            fi
+        done <<< "$all_volumes"
+    fi
+    
+    print_success "ボリュームアンマウント完了: ${unmount_count}個"
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Step 2: Delete all containers
+    #######################################################
+    
+    echo "${BLUE}【ステップ 2/6】すべてのコンテナを削除${NC}"
+    echo ""
+    
+    local container_count=0
+    
+    # Delete PlayCover container
+    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+        echo "  削除中: PlayCoverコンテナ"
+        sudo rm -rf "$PLAYCOVER_CONTAINER" 2>/dev/null && {
+            print_success "  ✓ 削除完了"
+            ((container_count++))
+        } || print_warning "  ⚠ 削除失敗（既に削除済み?）"
+    fi
+    
+    # Delete all app containers
+    local app_containers=(
+        "com.miHoYo.GenshinImpact"
+        "com.HoYoverse.hkrpgoversea"
+        "com.HoYoverse.Nap"
+    )
+    
+    for container in "${app_containers[@]}"; do
+        local container_path="${HOME}/Library/Containers/${container}"
+        if [[ -d "$container_path" ]]; then
+            echo "  削除中: ${container}"
+            sudo rm -rf "$container_path" 2>/dev/null && {
+                print_success "  ✓ 削除完了"
+                ((container_count++))
+            } || print_warning "  ⚠ 削除失敗"
+        fi
+    done
+    
+    print_success "コンテナ削除完了: ${container_count}個"
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Step 3: Delete PlayTools.framework
+    #######################################################
+    
+    echo "${BLUE}【ステップ 3/6】PlayTools.frameworkを削除${NC}"
+    echo ""
+    
+    local playtools_path="${HOME}/Library/Frameworks/PlayTools.framework"
+    if [[ -d "$playtools_path" ]]; then
+        echo "  削除中: ${playtools_path}"
+        rm -rf "$playtools_path" 2>/dev/null && {
+            print_success "  ✓ 削除完了"
+        } || print_warning "  ⚠ 削除失敗"
+    else
+        print_info "  PlayTools.frameworkは存在しません"
+    fi
+    
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Step 4: Delete caches and preferences
+    #######################################################
+    
+    echo "${BLUE}【ステップ 4/6】キャッシュと設定を削除${NC}"
+    echo ""
+    
+    local cleanup_paths=(
+        "${HOME}/Library/Caches/io.playcover.PlayCover"
+        "${HOME}/Library/Saved Application State/io.playcover.PlayCover.savedState"
+        "${HOME}/Library/Preferences/io.playcover.PlayCover.plist"
+        "${HOME}/Library/Logs/PlayCover"
+    )
+    
+    for path in "${cleanup_paths[@]}"; do
+        if [[ -e "$path" ]]; then
+            local item_name=$(basename "$path")
+            echo "  削除中: ${item_name}"
+            rm -rf "$path" 2>/dev/null && {
+                print_success "  ✓ 削除完了"
+            } || print_warning "  ⚠ 削除失敗"
+        fi
+    done
+    
+    print_success "キャッシュと設定削除完了"
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Step 5: Delete APFS volumes
+    #######################################################
+    
+    echo "${BLUE}【ステップ 5/6】APFSボリュームを削除${NC}"
+    echo ""
+    
+    local volume_count=0
+    local playcover_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
+    
+    if [[ -n "$playcover_volumes" ]]; then
+        while IFS= read -r device; do
+            if [[ -n "$device" ]]; then
+                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                echo "  削除中: ${vol_name} (${device})"
+                
+                # Try to delete the volume
+                if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
+                    print_success "  ✓ 削除完了"
+                    ((volume_count++))
+                else
+                    print_warning "  ⚠ 削除失敗（マウント済み?）"
+                fi
+            fi
+        done <<< "$playcover_volumes"
+    else
+        print_info "  削除対象のボリュームが見つかりません"
+    fi
+    
+    print_success "APFSボリューム削除完了: ${volume_count}個"
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Step 6: Delete mapping file
+    #######################################################
+    
+    echo "${BLUE}【ステップ 6/6】マッピングファイルを削除${NC}"
+    echo ""
+    
+    if [[ -f "$MAPPING_FILE" ]]; then
+        echo "  削除中: playcover-map.txt"
+        rm -f "$MAPPING_FILE" 2>/dev/null && {
+            print_success "  ✓ 削除完了"
+        } || print_warning "  ⚠ 削除失敗"
+    else
+        print_info "  マッピングファイルは存在しません"
+    fi
+    
+    # Delete lock file if exists
+    if [[ -f "$MAPPING_LOCK_FILE" ]]; then
+        rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
+    fi
+    
+    echo ""
+    sleep 1
+    
+    #######################################################
+    # Final summary
+    #######################################################
+    
+    echo ""
+    print_separator "=" "$GREEN"
+    echo ""
+    echo "${GREEN}✅ クリーンアップ完了${NC}"
+    echo ""
+    print_separator "=" "$GREEN"
+    echo ""
+    
+    echo "${CYAN}次のステップ:${NC}"
+    echo ""
+    echo "  ${GREEN}1.${NC} PlayCoverアプリを起動"
+    echo "  ${GREEN}2.${NC} IPAファイルを再インストール"
+    echo "  ${GREEN}3.${NC} アプリを起動して動作確認"
+    echo ""
+    echo "${YELLOW}⚠️  注意:${NC}"
+    echo "  • 初回インストール時にPlayCoverがクラッシュする場合があります"
+    echo "  • その場合は、PlayCoverを再起動して再度IPAをインストールしてください"
+    echo "  • ${RED}外部ボリュームの古いデータは完全に削除されました${NC}"
+    echo "  • ${RED}外部ボリュームを再マウントしても問題ありません${NC}"
+    echo ""
+    
+    wait_for_enter
+}
+
+#######################################################
 # Module 8: Storage Switching Functions (Complete Implementation)
 #######################################################
 
@@ -2793,7 +3056,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.20.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.21.0${NC}"
     echo ""
     
     show_quick_status
@@ -2819,9 +3082,10 @@ show_menu() {
     fi
     
     echo "  ${RED}4.${NC} ${eject_label}"
+    echo "  ${MAGENTA}5.${NC} 🔥 超強力クリーンアップ（完全リセット）"
     echo "  ${BLUE}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-4):${NC} "
+    echo -n "${CYAN}選択 (0-5):${NC} "
 }
 
 show_mapping_info() {
@@ -4523,6 +4787,9 @@ main() {
                 ;;
             4)
                 eject_disk
+                ;;
+            5)
+                nuclear_cleanup
                 ;;
             0)
                 echo ""
