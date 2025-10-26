@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.15.1 - Simplify Drive Eject Using Batch Unmount Logic
+# Version: 4.15.2 - Fix Mount Detection and Show All Volumes on Drive Eject
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1373,18 +1373,18 @@ individual_volume_control() {
         if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
             status_line="❌ ボリュームが見つかりません"
         else
-            # Get mount point (using cached mount output)
-            local current_mount=$(echo "$mount_cache" | /usr/bin/grep " on ${target_path} " | /usr/bin/awk '{print $3}')
+            # Check actual mount point of the volume (could be anywhere)
+            local actual_mount=$(get_mount_point "$volume_name")
             
-            if [[ -n "$current_mount" ]]; then
-                # Volume is mounted - show mount path
-                if [[ "$current_mount" == "$target_path" ]]; then
-                    status_line="🟢 マウント済: ${current_mount}"
+            if [[ -n "$actual_mount" ]]; then
+                # Volume is mounted somewhere
+                if [[ "$actual_mount" == "$target_path" ]]; then
+                    status_line="🟢 マウント済: ${actual_mount}"
                 else
-                    status_line="⚠️  マウント位置異常: ${current_mount}"
+                    status_line="⚠️  マウント位置異常: ${actual_mount}"
                 fi
             else
-                # Volume is unmounted - quick check for internal storage
+                # Volume is not mounted - check for internal storage
                 status_line="⚪️ 未マウント"
                 
                 # Quick check: only if path exists and not a mount point
@@ -1966,9 +1966,74 @@ eject_disk() {
             done
             
             if [[ $success_count -gt 0 ]] || [[ $fail_count -gt 0 ]]; then
-                print_info "アンマウント完了: 成功 ${success_count}個, 失敗 ${fail_count}個"
+                print_info "登録済みボリューム: 成功 ${success_count}個, 失敗 ${fail_count}個"
+            fi
+        fi
+    fi
+    
+    # Check for other unmounted volumes on this disk
+    echo ""
+    print_info "その他のボリュームを確認中..."
+    
+    local other_volumes=$(/usr/sbin/diskutil list "$disk_id" 2>/dev/null | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
+    local other_count=0
+    local other_success=0
+    local other_fail=0
+    
+    if [[ -n "$other_volumes" ]]; then
+        # Build list of registered volume names for comparison
+        local -a registered_volumes=()
+        if [[ -n "$mappings_content" ]]; then
+            while IFS=$'\t' read -r volume_name bundle_id display_name; do
+                registered_volumes+=("$volume_name")
+            done <<< "$mappings_content"
+        fi
+        
+        while IFS= read -r vol_name; do
+            [[ -z "$vol_name" ]] && continue
+            
+            # Check if this volume is already in registered list
+            local is_registered=false
+            for registered_vol in "${registered_volumes[@]}"; do
+                if [[ "$registered_vol" == "$vol_name" ]]; then
+                    is_registered=true
+                    break
+                fi
+            done
+            
+            # Skip if already processed
+            [[ "$is_registered" == true ]] && continue
+            
+            # This is an unregistered volume
+            ((other_count++))
+            
+            if [[ $other_count -eq 1 ]]; then
                 echo ""
             fi
+            
+            echo "  ${YELLOW}${vol_name}${NC} (未登録ボリューム)"
+            
+            local current_mount=$(get_mount_point "$vol_name")
+            if [[ -z "$current_mount" ]]; then
+                echo "     ${GREEN}✅ 既にアンマウント済${NC}"
+                ((other_success++))
+            else
+                local device=$(get_volume_device "$vol_name" 2>/dev/null)
+                if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                    echo "     ${GREEN}✅ アンマウント成功${NC}"
+                    ((other_success++))
+                else
+                    echo "     ${RED}❌ アンマウント失敗${NC}"
+                    ((other_fail++))
+                fi
+            fi
+            echo ""
+        done <<< "$other_volumes"
+        
+        if [[ $other_count -gt 0 ]]; then
+            print_info "その他のボリューム: 成功 ${other_success}個, 失敗 ${other_fail}個"
+        else
+            print_info "その他のボリュームはありません"
         fi
     fi
     
@@ -2829,7 +2894,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.2${NC}"
     echo ""
     
     show_quick_status
