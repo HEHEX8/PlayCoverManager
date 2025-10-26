@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.22.0 - Add deletion preview for nuclear cleanup
+# Version: 4.22.1 - Fix command path issues (cut, tr)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -69,7 +69,7 @@ print_separator() {
     local char="${1:-$SEPARATOR_CHAR}"
     local color="${2:-$BLUE}"
     printf "${color}"
-    printf '%*s' "$DISPLAY_WIDTH" | tr ' ' "$char"
+    printf '%*s' "$DISPLAY_WIDTH" | /usr/bin/tr ' ' "$char"
     printf "${NC}\n"
 }
 
@@ -2107,7 +2107,7 @@ nuclear_cleanup() {
                 # Check if already in list
                 local already_listed=false
                 for vol_info in "${volumes_to_delete[@]}"; do
-                    local existing_vol=$(echo "$vol_info" | cut -d'|' -f2)
+                    local existing_vol=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
                     if [[ "$existing_vol" == "$vol_name" ]]; then
                         already_listed=true
                         break
@@ -2145,8 +2145,8 @@ nuclear_cleanup() {
     if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
         echo "${CYAN}【1】アンマウントされるボリューム: ${#volumes_to_unmount[@]}個${NC}"
         for vol_info in "${volumes_to_unmount[@]}"; do
-            local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
-            local device=$(echo "$vol_info" | cut -d'|' -f2)
+            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             echo "  ${YELLOW}⏏${NC}  ${vol_name} (${device})"
             ((total_items++))
         done
@@ -2160,8 +2160,8 @@ nuclear_cleanup() {
     if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
         echo "${CYAN}【2】削除されるコンテナ: ${#containers_to_delete[@]}個${NC}"
         for container_info in "${containers_to_delete[@]}"; do
-            local display=$(echo "$container_info" | cut -d'|' -f1)
-            local path=$(echo "$container_info" | cut -d'|' -f2)
+            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
+            local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             echo "  ${RED}🗑${NC}  ${display}"
             echo "      ${path}"
             ((total_items++))
@@ -2186,7 +2186,7 @@ nuclear_cleanup() {
     if [[ ${#cleanup_items[@]} -gt 0 ]]; then
         echo "${CYAN}【4】キャッシュと設定: ${#cleanup_items[@]}個${NC}"
         for item_info in "${cleanup_items[@]}"; do
-            local item_name=$(echo "$item_info" | cut -d'|' -f1)
+            local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
             echo "  ${RED}🗑${NC}  ${item_name}"
             ((total_items++))
         done
@@ -2200,9 +2200,9 @@ nuclear_cleanup() {
     if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
         echo "${CYAN}【5】削除されるAPFSボリューム: ${#volumes_to_delete[@]}個${NC}"
         for vol_info in "${volumes_to_delete[@]}"; do
-            local display=$(echo "$vol_info" | cut -d'|' -f1)
-            local vol_name=$(echo "$vol_info" | cut -d'|' -f2)
-            local device=$(echo "$vol_info" | cut -d'|' -f3)
+            local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             echo "  ${RED}💥${NC}  ${display} (${device})"
             ((total_items++))
         done
@@ -2295,8 +2295,8 @@ nuclear_cleanup() {
     local unmount_count=0
     if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
         for vol_info in "${volumes_to_unmount[@]}"; do
-            local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
-            local device=$(echo "$vol_info" | cut -d'|' -f2)
+            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  アンマウント中: ${vol_name} (${device})"
             if sudo diskutil unmount "$device" >/dev/null 2>&1; then
@@ -2326,8 +2326,8 @@ nuclear_cleanup() {
     # Delete containers using collected list
     if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
         for container_info in "${containers_to_delete[@]}"; do
-            local display=$(echo "$container_info" | cut -d'|' -f1)
-            local path=$(echo "$container_info" | cut -d'|' -f2)
+            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
+            local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${display}"
             if sudo rm -rf "$path" 2>/dev/null; then
@@ -2376,8 +2376,8 @@ nuclear_cleanup() {
     # Delete items using collected list
     if [[ ${#cleanup_items[@]} -gt 0 ]]; then
         for item_info in "${cleanup_items[@]}"; do
-            local item_name=$(echo "$item_info" | cut -d'|' -f1)
-            local path=$(echo "$item_info" | cut -d'|' -f2)
+            local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
+            local path=$(echo "$item_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${item_name}"
             if rm -rf "$path" 2>/dev/null; then
@@ -2406,9 +2406,9 @@ nuclear_cleanup() {
     # Delete volumes using collected list
     if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
         for vol_info in "${volumes_to_delete[@]}"; do
-            local display=$(echo "$vol_info" | cut -d'|' -f1)
-            local vol_name=$(echo "$vol_info" | cut -d'|' -f2)
-            local device=$(echo "$vol_info" | cut -d'|' -f3)
+            local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             
             echo "  削除中: ${display} (${device})"
             

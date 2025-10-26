@@ -265,7 +265,13 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.22.0 (最新) - Deletion Preview
+### v4.22.1 (最新) - Command Path Fix
+- 🔧 **コマンドパス修正**: `cut`と`tr`コマンドのフルパス指定
+- ✅ macOS環境でのPATH問題を解決
+- ✅ `command not found: cut` エラーを修正
+- ✅ `command not found: tr` エラーを修正
+
+### v4.22.0 - Deletion Preview
 - 📋 **削除プレビュー機能**: 実行前に削除対象を完全表示
 - ✅ 2フェーズアプローチ（スキャン → 確認 → 実行）
 - ✅ 削除対象の詳細情報を6カテゴリに分けて表示
@@ -343,4 +349,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.22.0）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.22.1）
