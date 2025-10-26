@@ -270,7 +270,16 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.24.2 (最新) - Fix Volume Detection Pattern
+### v4.25.0 (最新) - Fix Initial Setup with Proper Container Initialization
+- 🎯 **初期セットアップフロー修正**: PlayCoverコンテナの正しい初期化手順を実装
+- ✅ PlayCoverインストール後、一度起動してコンテナを作成
+- ✅ 作成された完全なコンテナを外部ストレージにコピー
+- ✅ 設定ファイル、フレームワーク、キャッシュが正しく配置される
+- ✅ 超強力クリーンアップでPlayCoverを正しくアンインストール（`brew uninstall --cask playcover-community`）
+- ✅ 削除プレビューにPlayCoverアプリを追加（7項目に拡張）
+- ✅ 初期セットアップの実行順序を最適化（ソフトウェアインストール → ボリューム作成）
+
+### v4.24.2 - Fix Volume Detection Pattern
 - 🐛 **ボリューム検出パターン修正**: 2段階grepアプローチで柔軟な検出
 - ✅ `diskutil list` 出力の異なるフォーマットに対応
 - ✅ `volume_exists()` と `get_volume_device()` を改善
@@ -346,4 +355,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.24.2）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.25.0）

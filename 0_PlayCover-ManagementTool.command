@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.24.2 - Fix volume detection pattern matching
+# Version: 4.25.0 - Fix initial setup with proper container initialization
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2055,6 +2055,17 @@ nuclear_cleanup() {
         fi
     done
     
+    # Collect PlayCover app
+    local playcover_app_exists=false
+    local playcover_homebrew=false
+    if /usr/local/bin/brew list --cask playcover-community &>/dev/null 2>&1; then
+        playcover_app_exists=true
+        playcover_homebrew=true
+    elif [[ -d "/Applications/PlayCover.app" ]]; then
+        playcover_app_exists=true
+        playcover_homebrew=false
+    fi
+    
     # Collect PlayTools.framework
     local playtools_exists=false
     local playtools_path="${HOME}/Library/Frameworks/PlayTools.framework"
@@ -2174,8 +2185,23 @@ nuclear_cleanup() {
         echo ""
     fi
     
-    # 3. PlayTools.framework
-    echo "${CYAN}【3】PlayTools.framework${NC}"
+    # 3. PlayCover app
+    echo "${CYAN}【3】PlayCoverアプリ${NC}"
+    if [[ "$playcover_app_exists" == true ]]; then
+        if [[ "$playcover_homebrew" == true ]]; then
+            echo "  ${RED}🗑${NC}  PlayCover (Homebrew Cask)"
+            echo "      brew uninstall --cask playcover-community"
+        else
+            echo "  ${RED}🗑${NC}  /Applications/PlayCover.app（手動インストール版）"
+        fi
+        ((total_items++))
+    else
+        echo "  ${GREEN}✓${NC}  インストールされていません"
+    fi
+    echo ""
+    
+    # 4. PlayTools.framework
+    echo "${CYAN}【4】PlayTools.framework${NC}"
     if [[ "$playtools_exists" == true ]]; then
         echo "  ${RED}🗑${NC}  ${playtools_path}"
         ((total_items++))
@@ -2184,9 +2210,9 @@ nuclear_cleanup() {
     fi
     echo ""
     
-    # 4. Caches and preferences
+    # 5. Caches and preferences
     if [[ ${#cleanup_items[@]} -gt 0 ]]; then
-        echo "${CYAN}【4】キャッシュと設定: ${#cleanup_items[@]}個${NC}"
+        echo "${CYAN}【5】キャッシュと設定: ${#cleanup_items[@]}個${NC}"
         for item_info in "${cleanup_items[@]}"; do
             local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
             echo "  ${RED}🗑${NC}  ${item_name}"
@@ -2194,13 +2220,13 @@ nuclear_cleanup() {
         done
         echo ""
     else
-        echo "${CYAN}【4】キャッシュと設定: なし${NC}"
+        echo "${CYAN}【5】キャッシュと設定: なし${NC}"
         echo ""
     fi
     
-    # 5. Volumes to delete
+    # 6. Volumes to delete
     if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
-        echo "${CYAN}【5】削除されるAPFSボリューム: ${#volumes_to_delete[@]}個${NC}"
+        echo "${CYAN}【6】削除されるAPFSボリューム: ${#volumes_to_delete[@]}個${NC}"
         for vol_info in "${volumes_to_delete[@]}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
@@ -2210,12 +2236,12 @@ nuclear_cleanup() {
         done
         echo ""
     else
-        echo "${CYAN}【5】削除されるAPFSボリューム: なし${NC}"
+        echo "${CYAN}【6】削除されるAPFSボリューム: なし${NC}"
         echo ""
     fi
     
-    # 6. Mapping file
-    echo "${CYAN}【6】マッピングファイル${NC}"
+    # 7. Mapping file
+    echo "${CYAN}【7】マッピングファイル${NC}"
     if [[ "$mapping_exists" == true ]]; then
         echo "  ${RED}🗑${NC}  playcover-map.txt"
         ((total_items++))
@@ -2348,10 +2374,42 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 3: Delete PlayTools.framework
+    # Step 3: Uninstall PlayCover app (Homebrew)
     #######################################################
     
-    echo "${BLUE}【ステップ 3/6】PlayTools.frameworkを削除${NC}"
+    echo "${BLUE}【ステップ 3/7】PlayCoverアプリをアンインストール${NC}"
+    echo ""
+    
+    # Check if PlayCover is installed via Homebrew
+    if /usr/local/bin/brew list --cask playcover-community &>/dev/null 2>&1; then
+        echo "  アンインストール中: PlayCover (Homebrew Cask)"
+        if /usr/local/bin/brew uninstall --cask playcover-community >/dev/null 2>&1; then
+            print_success "  ✓ Homebrewからアンインストール完了"
+        else
+            print_warning "  ⚠ Homebrewアンインストール失敗"
+        fi
+    else
+        print_info "  Homebrew管理のPlayCoverは見つかりません"
+    fi
+    
+    # Check for manual installation and clean up
+    if [[ -d "/Applications/PlayCover.app" ]]; then
+        echo "  削除中: /Applications/PlayCover.app（残骸）"
+        if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
+            print_success "  ✓ 削除完了"
+        else
+            print_warning "  ⚠ 削除失敗"
+        fi
+    fi
+    
+    echo ""
+    /bin/sleep 1
+    
+    #######################################################
+    # Step 4: Delete PlayTools.framework
+    #######################################################
+    
+    echo "${BLUE}【ステップ 4/7】PlayTools.frameworkを削除${NC}"
     echo ""
     
     if [[ "$playtools_exists" == true ]]; then
@@ -2369,10 +2427,10 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 4: Delete caches and preferences
+    # Step 5: Delete caches and preferences
     #######################################################
     
-    echo "${BLUE}【ステップ 4/6】キャッシュと設定を削除${NC}"
+    echo "${BLUE}【ステップ 5/7】キャッシュと設定を削除${NC}"
     echo ""
     
     # Delete items using collected list
@@ -2397,10 +2455,10 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 5: Delete APFS volumes
+    # Step 6: Delete APFS volumes
     #######################################################
     
-    echo "${BLUE}【ステップ 5/6】APFSボリュームを削除${NC}"
+    echo "${BLUE}【ステップ 6/7】APFSボリュームを削除${NC}"
     echo ""
     
     local volume_count=0
@@ -2430,10 +2488,10 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 6: Delete mapping file
+    # Step 7: Delete mapping file
     #######################################################
     
-    echo "${BLUE}【ステップ 6/6】マッピングファイルを削除${NC}"
+    echo "${BLUE}【ステップ 7/7】マッピングファイルを削除${NC}"
     echo ""
     
     if [[ "$mapping_exists" == true ]]; then
@@ -4740,38 +4798,58 @@ mount_playcover_main_volume() {
     
     rmdir "$temp_mount" 2>/dev/null
     
-    if $has_internal_data && $has_external_data; then
-        print_warning "内部ストレージと外部ストレージの両方にデータが存在します"
-        echo ""
-        print_info "内部データを外部ストレージに統合してクリーンアップします"
-        echo ""
-        
-        /bin/mkdir -p "$temp_mount"
-        /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
-        print_info "内部データを外部に統合中..."
-        /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
-        /usr/bin/sudo umount "$temp_mount"
-        rmdir "$temp_mount"
-        print_info "内部ストレージをクリア中..."
-        /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
-        print_success "内部データを外部に統合しました"
-    elif $has_internal_data; then
-        print_warning "⚠️  PlayCoverボリューム未マウント状態でPlayCoverが起動され、内部ストレージにデータが作成されています"
-        echo ""
-        print_info "内部データを外部に移行してクリーンアップします"
+    # New approach: Always copy internal container to external volume
+    # This ensures proper initialization with all required files
+    if $has_internal_data; then
+        print_info "内部ストレージのPlayCoverコンテナを外部に移行します"
         echo ""
         
+        # Mount to temporary location
         /bin/mkdir -p "$temp_mount"
-        /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
-        print_info "データをコピー中..."
-        /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
-        /usr/bin/sudo umount "$temp_mount"
+        if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+            print_error "一時マウントに失敗しました"
+            rmdir "$temp_mount" 2>/dev/null
+            wait_for_enter
+            exit 1
+        fi
+        
+        # Copy internal container to external volume
+        print_info "PlayCoverコンテナを外部ストレージにコピー中..."
+        if $has_external_data; then
+            print_warning "外部ボリュームに既存データがあります - 統合します"
+            /usr/bin/sudo /usr/bin/rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/"
+        else
+            /usr/bin/sudo /usr/bin/rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/"
+        fi
+        
+        local rsync_status=$?
+        if [[ $rsync_status -ne 0 ]]; then
+            print_error "データのコピーに失敗しました (終了コード: $rsync_status)"
+            /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null
+            rmdir "$temp_mount" 2>/dev/null
+            wait_for_enter
+            exit 1
+        fi
+        
+        print_success "コピーが完了しました"
+        
+        # Unmount temporary mount
+        /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount"
         rmdir "$temp_mount"
-        print_info "内部ストレージをクリア中..."
-        /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
-        print_success "内部データを外部に移行しました"
+        
+        # Backup and remove internal container
+        print_info "内部ストレージをクリーンアップ中..."
+        if [[ -d "${PLAYCOVER_CONTAINER}.backup" ]]; then
+            /usr/bin/sudo /bin/rm -rf "${PLAYCOVER_CONTAINER}.backup"
+        fi
+        /usr/bin/sudo /bin/mv "$PLAYCOVER_CONTAINER" "${PLAYCOVER_CONTAINER}.backup"
+        print_success "内部コンテナをバックアップしました: ${PLAYCOVER_CONTAINER}.backup"
+        echo ""
+        print_info "バックアップは手動で削除できます"
     else
+        # No internal data - just clean up if exists
         if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+            print_info "空の内部ディレクトリを削除します"
             /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
         fi
     fi
@@ -4839,8 +4917,70 @@ install_homebrew() {
 
 install_playcover() {
     print_info "PlayCover をインストール中..."
-    brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
+    /usr/local/bin/brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
     print_success "PlayCover のインストールが完了しました"
+    echo ""
+    
+    # Critical: Launch PlayCover once to create proper container structure
+    print_header "PlayCover 初回起動による初期化"
+    print_warning "重要: PlayCoverを一度起動して完全なコンテナを作成します"
+    echo ""
+    print_info "手順:"
+    echo "  ${BLUE}1.${NC} PlayCoverが自動的に起動します"
+    echo "  ${BLUE}2.${NC} PlayCoverのウィンドウが表示されたら${YELLOW}すぐに終了${NC}してください"
+    echo "  ${BLUE}3.${NC} 終了後、このターミナルに戻ってEnterキーを押してください"
+    echo ""
+    print_info "これにより、設定ファイルやフレームワークが正しく配置されます"
+    echo ""
+    
+    echo -n "${YELLOW}Enterキーを押すとPlayCoverが起動します...${NC} "
+    read
+    
+    # Launch PlayCover
+    open -a PlayCover
+    
+    echo ""
+    print_info "PlayCoverが起動しました"
+    print_warning "PlayCoverを終了したら、このターミナルに戻ってください"
+    echo ""
+    echo -n "${YELLOW}PlayCoverを終了したらEnterキーを押してください...${NC} "
+    read
+    
+    # Verify container was created
+    if [[ ! -d "${PLAYCOVER_CONTAINER}" ]]; then
+        echo ""
+        print_error "PlayCoverコンテナが作成されていません"
+        print_info "コンテナ: ${PLAYCOVER_CONTAINER}"
+        print_warning "PlayCoverが正常に起動しなかった可能性があります"
+        echo ""
+        echo -n "${YELLOW}再試行しますか? (Y/n):${NC} "
+        read retry
+        case "$retry" in
+            [nN]|[nN][oO])
+                print_error "セットアップを中止します"
+                wait_for_enter
+                exit 1
+                ;;
+            *)
+                # Retry
+                open -a PlayCover
+                echo ""
+                echo -n "${YELLOW}PlayCoverを終了したらEnterキーを押してください...${NC} "
+                read
+                
+                if [[ ! -d "${PLAYCOVER_CONTAINER}" ]]; then
+                    print_error "コンテナの作成に失敗しました"
+                    wait_for_enter
+                    exit 1
+                fi
+                ;;
+        esac
+    fi
+    
+    echo ""
+    print_success "✓ PlayCoverコンテナが正常に作成されました"
+    print_info "コンテナ: ${PLAYCOVER_CONTAINER}"
+    echo ""
 }
 
 perform_software_installations() {
@@ -4978,10 +5118,13 @@ run_initial_setup() {
     select_external_disk
     confirm_software_installations
     
-    # Proceed directly to installation
+    # Critical: Install software FIRST to create internal container
+    # This ensures PlayCover creates its complete container structure
+    perform_software_installations
+    
+    # Then create volume and mount it (will copy internal container to external)
     create_playcover_main_volume
     mount_playcover_main_volume
-    perform_software_installations
     create_initial_mapping
     
     # Setup complete
