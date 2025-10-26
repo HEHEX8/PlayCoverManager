@@ -1528,34 +1528,45 @@ individual_volume_control() {
     echo "登録されているボリューム:"
     echo ""
     
+    # Cache diskutil output once for performance
+    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    local mount_cache=$(/sbin/mount 2>/dev/null)
+    
     # Display volumes with detailed status (single column)
     local index=1
     for ((i=0; i<${#mappings_array[@]}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
-        local current_mount=$(get_mount_point "$volume_name")
-        local storage_type=$(get_storage_type "$target_path")
         local status_line=""
         local extra_info=""
         
-        # Check if volume exists
-        if ! volume_exists "$volume_name"; then
+        # Check if volume exists (using cached diskutil output)
+        if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
             status_line="❌ ボリュームが見つかりません"
-        elif [[ -n "$current_mount" ]]; then
-            # Volume is mounted - show mount path
-            if [[ "$current_mount" == "$target_path" ]]; then
-                status_line="🟢 マウント済: ${current_mount}"
-            else
-                status_line="⚠️  マウント位置異常: ${current_mount}"
-            fi
         else
-            # Volume is unmounted - check storage type
-            status_line="⚪️ アンマウント済"
+            # Get mount point (using cached mount output)
+            local current_mount=$(echo "$mount_cache" | /usr/bin/grep " on ${target_path} " | /usr/bin/awk '{print $3}')
             
-            # Use get_storage_type() for accurate detection
-            if [[ "$storage_type" == "internal" ]]; then
-                extra_info=" | 🏠 内蔵ストレージにデータ有"
+            if [[ -n "$current_mount" ]]; then
+                # Volume is mounted - show mount path
+                if [[ "$current_mount" == "$target_path" ]]; then
+                    status_line="🟢 マウント済: ${current_mount}"
+                else
+                    status_line="⚠️  マウント位置異常: ${current_mount}"
+                fi
+            else
+                # Volume is unmounted - quick check for internal storage
+                status_line="⚪️ アンマウント済"
+                
+                # Quick check: only if path exists and not a mount point
+                if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
+                    # Check if directory has actual content (exclude macOS metadata)
+                    local has_content=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/head -1)
+                    if [[ -n "$has_content" ]]; then
+                        extra_info=" | 🏠 内蔵ストレージにデータ有"
+                    fi
+                fi
             fi
         fi
         
