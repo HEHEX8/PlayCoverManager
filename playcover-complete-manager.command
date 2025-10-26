@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.10.0 - Storage Detection Fix
+# Version: 4.11.0 - Internal Data Cleanup & Incremental Sync
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -444,22 +444,78 @@ mount_volume() {
             
             if [[ -n "$content_check" ]] && [[ "$force" != "true" ]]; then
                 # Directory has actual content (not just metadata) = internal storage data exists
-                print_error "❌ マウントがブロックされました"
-                print_warning "このアプリは現在、内蔵ストレージで動作しています"
+                print_warning "⚠️  内蔵ストレージにデータが存在します"
                 print_info "検出されたデータ:"
                 echo "$content_check" | while read -r line; do
                     echo "  - $line"
                 done
                 echo ""
-                print_info "外部ボリュームをマウントする前に、以下を実行してください:"
+                echo "${YELLOW}対処方法:${NC}"
+                echo "  1. 内部データを外部に移行してマウント（推奨）"
+                echo "  2. 内部データを削除してクリーンな状態でマウント"
+                echo "  3. キャンセルして手動で対処"
                 echo ""
-                echo "  1. ストレージ切り替え機能（メニュー6）を使用"
-                echo "  2. 「内蔵 → 外部」への切り替えを実行"
-                echo ""
-                print_info "または、内蔵データを手動でバックアップしてから削除:"
-                echo "  sudo mv \"$target_path\" \"${target_path}.backup\""
-                echo ""
-                return 1
+                echo -n "選択してください (1/2/3): "
+                read internal_data_choice
+                
+                case "$internal_data_choice" in
+                    1)
+                        # Migrate internal data to external volume
+                        print_info "内部データを外部ボリュームに移行します..."
+                        
+                        # Create temporary mount point
+                        local temp_migrate="/tmp/playcover_migrate_$$"
+                        sudo /bin/mkdir -p "$temp_migrate"
+                        
+                        # Mount volume temporarily
+                        if sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
+                            print_info "データをコピー中..."
+                            sudo /usr/bin/rsync -aH --info=progress2 "$target_path/" "$temp_migrate/" 2>/dev/null
+                            local rsync_exit=$?
+                            sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
+                            sudo /bin/rm -rf "$temp_migrate"
+                            
+                            if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+                                print_success "データの移行が完了しました"
+                                print_info "内部ストレージをクリア中..."
+                                sudo rm -rf "$target_path"
+                                # Continue to mount below
+                            else
+                                print_error "データの移行に失敗しました (rsync exit: $rsync_exit)"
+                                return 1
+                            fi
+                        else
+                            print_error "一時マウントに失敗しました"
+                            sudo /bin/rm -rf "$temp_migrate"
+                            return 1
+                        fi
+                        ;;
+                    2)
+                        # Delete internal data
+                        print_warning "内部ストレージのデータを削除します"
+                        echo ""
+                        echo -n "${RED}本当に削除しますか？ (yes/no):${NC} "
+                        read delete_confirm
+                        if [[ "$delete_confirm" == "yes" ]]; then
+                            print_info "内部ストレージをクリア中..."
+                            sudo rm -rf "$target_path"
+                            print_success "内部データを削除しました"
+                            # Continue to mount below
+                        else
+                            print_info "キャンセルしました"
+                            return 1
+                        fi
+                        ;;
+                    3)
+                        # Cancel
+                        print_info "キャンセルしました"
+                        return 1
+                        ;;
+                    *)
+                        print_error "無効な選択です"
+                        return 1
+                        ;;
+                esac
             fi
         fi
     else
@@ -2315,13 +2371,16 @@ switch_storage_location() {
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
-        # Copy data from internal to external
-        print_info "データをコピー中... (進捗が表示されます)"
+        # Copy data from internal to external (incremental sync)
+        print_info "データを差分転送中... (進捗が表示されます)"
+        echo ""
+        print_info "💡 差分コピーモード: 既存ファイルはスキップされます"
         echo ""
         
-        # Use rsync with progress for real-time progress (macOS compatible)
+        # Use rsync with --update flag for incremental sync (skip existing files)
+        # This is much faster when re-running after interruption
         # Exclude system metadata files and backup directories
-        sudo /usr/bin/rsync -avH --ignore-errors --progress \
+        sudo /usr/bin/rsync -avH --update --info=progress2 \
             --exclude='.Spotlight-V100' \
             --exclude='.fseventsd' \
             --exclude='.Trashes' \
@@ -2837,7 +2896,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.10.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.11.0${NC}"
     echo ""
     
     show_quick_status
@@ -4252,16 +4311,53 @@ mount_playcover_main_volume() {
                 ;;
         esac
     elif $has_internal_data; then
-        print_info "内部ストレージのデータを外部に移行します"
-        mkdir -p "$temp_mount"
-        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
-        print_info "データをコピー中..."
-        sudo cp -R "$PLAYCOVER_CONTAINER"/* "$temp_mount"/ 2>/dev/null || true
-        sudo cp -R "$PLAYCOVER_CONTAINER"/.[!.]* "$temp_mount"/ 2>/dev/null || true
-        sudo umount "$temp_mount"
-        rmdir "$temp_mount"
-        print_info "内部ストレージをクリア中..."
-        sudo rm -rf "$PLAYCOVER_CONTAINER"
+        print_warning "⚠️  PlayCoverボリューム未マウント状態でPlayCoverが起動され、内部ストレージにデータが作成されています"
+        echo ""
+        echo "${YELLOW}対処方法:${NC}"
+        echo "  1. 内部データを外部に移行してクリーンアップ（推奨）"
+        echo "  2. 内部データを削除してクリーンな状態でマウント"
+        echo ""
+        echo -n "選択してください (1/2): "
+        read cleanup_choice
+        
+        case "$cleanup_choice" in
+            1)
+                print_info "内部ストレージのデータを外部に移行します"
+                mkdir -p "$temp_mount"
+                sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+                print_info "データをコピー中..."
+                sudo rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+                sudo umount "$temp_mount"
+                rmdir "$temp_mount"
+                print_info "内部ストレージをクリア中..."
+                sudo rm -rf "$PLAYCOVER_CONTAINER"
+                print_success "内部データを外部に移行しました"
+                ;;
+            2)
+                print_warning "内部ストレージのデータを削除します"
+                echo ""
+                echo -n "${RED}本当に削除しますか？ (yes/no):${NC} "
+                read delete_confirm
+                if [[ "$delete_confirm" == "yes" ]]; then
+                    print_info "内部ストレージをクリア中..."
+                    sudo rm -rf "$PLAYCOVER_CONTAINER"
+                    print_success "内部データを削除しました"
+                else
+                    print_info "キャンセルしました。内部データはそのまま残ります"
+                    echo ""
+                    echo -n "Enterキーで続行..."
+                    read
+                    exit 1
+                fi
+                ;;
+            *)
+                print_error "無効な選択です"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                exit 1
+                ;;
+        esac
     else
         if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
             sudo rm -rf "$PLAYCOVER_CONTAINER"
