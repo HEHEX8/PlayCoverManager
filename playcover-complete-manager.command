@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.13.0 - Simplified Manual Mount Focus
+# Version: 4.14.0 - Add Storage Size Display
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -592,8 +592,68 @@ unmount_volume() {
 }
 
 #######################################################
-# Module 5: Storage Detection
+# Module 5: Storage Detection & Size Calculation
 #######################################################
+
+# Get container size in human-readable format
+get_container_size() {
+    local container_path=$1
+    
+    if [[ ! -e "$container_path" ]]; then
+        echo "0B"
+        return
+    fi
+    
+    # Use du -sh for total size
+    local size=$(sudo /usr/bin/du -sh "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    
+    if [[ -z "$size" ]]; then
+        echo "0B"
+    else
+        echo "$size"
+    fi
+}
+
+# Get volume free space (for external volumes)
+get_volume_free_space() {
+    local volume_name=$1
+    
+    # Get volume device
+    local device=$(get_volume_device "$volume_name")
+    if [[ -z "$device" ]]; then
+        echo "不明"
+        return
+    fi
+    
+    # Get mount point
+    local mount_point=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
+    
+    if [[ -z "$mount_point" ]]; then
+        echo "未マウント"
+        return
+    fi
+    
+    # Get free space using df
+    local free_space=$(/bin/df -h "$mount_point" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    
+    if [[ -z "$free_space" ]]; then
+        echo "不明"
+    else
+        echo "$free_space"
+    fi
+}
+
+# Get internal storage free space (from main disk)
+get_internal_free_space() {
+    # Get free space from the home directory's filesystem
+    local free_space=$(/bin/df -h "$HOME" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    
+    if [[ -z "$free_space" ]]; then
+        echo "不明"
+    else
+        echo "$free_space"
+    fi
+}
 
 # CRITICAL FIX (v1.5.12): Renamed 'path' to 'container_path' to avoid zsh conflict
 # zsh has a special 'path' array variable that syncs with PATH environment variable
@@ -2014,28 +2074,42 @@ switch_storage_location() {
             storage_type=$(get_storage_type "$target_path")
         fi
         
+        # Get container size
+        local container_size=$(get_container_size "$target_path")
+        local volume_free=""
+        local free_space_display=""
+        
         case "$storage_type" in
             "external")
                 storage_icon="🔌 外部"
                 mount_status="🟢 外部ストレージマウント済"
+                volume_free=$(get_volume_free_space "$volume_name")
+                free_space_display="空き: ${volume_free}"
                 ;;
             "internal")
                 storage_icon="🏠 内部"
                 mount_status="⚪️ 内部ストレージにデータ有"
+                volume_free=$(get_internal_free_space)
+                free_space_display="空き: ${volume_free}"
                 ;;
             "none")
                 storage_icon="⚠️  データ無し"
                 mount_status="⚪️ 外部ストレージ未マウント"
+                container_size="0B"
+                free_space_display=""
                 ;;
             *)
                 storage_icon="⚠️  データ無し"
                 mount_status="⚪️ 外部ストレージ未マウント"
+                container_size="0B"
+                free_space_display=""
                 ;;
         esac
         
-        # Format with fixed spacing (20 chars for storage_icon column)
+        # Format with fixed spacing
         printf "  %s. %s\n" "$index" "$display_name"
         printf "      %-20s %s\n" "$storage_icon" "$mount_status"
+        printf "      使用容量: %-10s %s\n" "$container_size" "$free_space_display"
         echo ""
         ((index++))
     done <<< "$mappings_content"
@@ -2079,13 +2153,22 @@ switch_storage_location() {
         current_storage=$(get_storage_type "$target_path")
     fi
     
+    # Get current size and free space
+    local current_size=$(get_container_size "$target_path")
+    local internal_free=$(get_internal_free_space)
+    local external_free=$(get_volume_free_space "$volume_name")
+    
     echo "${CYAN}現在の状態:${NC}"
     case "$current_storage" in
         "internal")
             echo "  💾 内蔵ストレージ"
+            echo "     使用容量: ${current_size}"
+            echo "     内蔵空き: ${internal_free}"
             ;;
         "external")
             echo "  🔌 外部ストレージ"
+            echo "     使用容量: ${current_size}"
+            echo "     外部空き: ${external_free}"
             ;;
         *)
             echo "  ❓ 不明 / データなし"
@@ -2099,10 +2182,12 @@ switch_storage_location() {
         "internal")
             action="external"
             echo "${CYAN}実行する操作:${NC} 内蔵 → 外部ストレージへ移動"
+            echo "${CYAN}移行先の空き容量:${NC} ${external_free}"
             ;;
         "external")
             action="internal"
             echo "${CYAN}実行する操作:${NC} 外部 → 内蔵ストレージへ移動"
+            echo "${CYAN}移行先の空き容量:${NC} ${internal_free}"
             ;;
         "none")
             print_error "ストレージ切り替えを実行できません"
@@ -2790,7 +2875,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.13.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.0${NC}"
     echo ""
     
     show_quick_status
@@ -3310,12 +3395,35 @@ show_installed_apps() {
         fi
         
         if [[ "$app_found" == true ]]; then
+            # Get container path and size
+            local container_path="${HOME}/Library/Containers/${bundle_id}"
+            local container_size=$(get_container_size "$container_path")
+            local storage_type=$(get_storage_type "$container_path")
+            local storage_icon=""
+            
+            case "$storage_type" in
+                "external")
+                    storage_icon="${CYAN}💾${NC}"
+                    ;;
+                "internal")
+                    storage_icon="${YELLOW}💽${NC}"
+                    ;;
+                "none")
+                    storage_icon="${MAGENTA}📦${NC}"
+                    container_size="0B"
+                    ;;
+                *)
+                    storage_icon="${RED}?${NC}"
+                    ;;
+            esac
+            
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC}"
+                echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC} ${storage_icon} ${container_size}"
             else
                 echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${BLUE}(v${app_version})${NC}"
                 echo "      Bundle ID: ${bundle_id}"
                 echo "      ボリューム: ${volume_name}"
+                echo "      使用容量: ${storage_icon} ${container_size}"
                 echo ""
                 apps_list+=("$display_name")
                 volumes_list+=("$volume_name")
