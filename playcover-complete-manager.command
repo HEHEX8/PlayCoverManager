@@ -1196,7 +1196,7 @@ mount_all_volumes() {
     
     # Process in file order (first to last)
     # PlayCover should be listed first in playcover-map.txt
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name || [[ -n "$volume_name" ]]; do
         # Skip empty lines
         if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
             continue
@@ -1219,7 +1219,7 @@ mount_all_volumes() {
                 ((fail_count++))
             fi
         fi
-    done <<< "$mappings_content"
+    done < <(echo "$mappings_content")
     
     echo ""
     print_success "全ボリュームのマウント完了"
@@ -1251,14 +1251,16 @@ unmount_all_volumes() {
     # Read mappings into array for reverse processing
     declare -a mappings_array=()
     local read_count=0
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    
+    # Use process substitution to avoid subshell issues
+    while IFS=$'\t' read -r volume_name bundle_id display_name || [[ -n "$volume_name" ]]; do
         # Skip empty lines
         if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
             continue
         fi
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
         ((read_count++))
-    done <<< "$mappings_content"
+    done < <(echo "$mappings_content")
     
     if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "処理するボリュームがありません"
