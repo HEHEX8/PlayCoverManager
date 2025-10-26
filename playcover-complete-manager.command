@@ -3146,31 +3146,49 @@ show_mapping_info() {
 
 show_installed_apps() {
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    local display_only="${1:-true}"  # Default to display mode
     
     # Check if mapping file exists
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        if [[ "$display_only" == "true" ]]; then
+            echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        fi
         return
     fi
     
     local mappings_content=$(read_mappings)
     
     if [[ -z "$mappings_content" ]]; then
-        echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        if [[ "$display_only" == "true" ]]; then
+            echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        fi
         return
     fi
     
     # Check if PlayCover Applications directory exists
     if [[ ! -d "$playcover_apps" ]]; then
-        echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+        if [[ "$display_only" == "true" ]]; then
+            echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+        fi
         return
     fi
     
-    echo "${YELLOW}インストール済みアプリ:${NC}"
-    echo ""
+    if [[ "$display_only" == "true" ]]; then
+        echo "${YELLOW}インストール済みアプリ:${NC}"
+        echo ""
+    fi
     
     local installed_count=0
     local missing_count=0
+    local index=1
+    
+    # Global arrays for uninstall workflow (declared in main if needed)
+    if [[ "$display_only" == "false" ]]; then
+        apps_list=()
+        volumes_list=()
+        bundles_list=()
+        versions_list=()
+    fi
     
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
         # Skip PlayCover itself (it's not an iOS app)
@@ -3197,19 +3215,40 @@ show_installed_apps() {
         fi
         
         if [[ "$app_found" == true ]]; then
-            echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC}"
+            if [[ "$display_only" == "true" ]]; then
+                echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC}"
+            else
+                echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${BLUE}(v${app_version})${NC}"
+                echo "      Bundle ID: ${bundle_id}"
+                echo "      ボリューム: ${volume_name}"
+                echo ""
+                apps_list+=("$display_name")
+                volumes_list+=("$volume_name")
+                bundles_list+=("$bundle_id")
+                versions_list+=("$app_version")
+                ((index++))
+            fi
             ((installed_count++))
         else
-            echo "  ${RED}✗${NC} ${display_name} ${RED}(見つかりません)${NC}"
+            if [[ "$display_only" == "true" ]]; then
+                echo "  ${RED}✗${NC} ${display_name} ${RED}(見つかりません)${NC}"
+            fi
             ((missing_count++))
         fi
     done <<< "$mappings_content"
     
-    echo ""
-    if [[ $missing_count -eq 0 ]]; then
-        echo "${GREEN}合計: ${installed_count}個${NC}"
-    else
-        echo "${GREEN}インストール済: ${installed_count}個${NC}  ${RED}見つからない: ${missing_count}個${NC}"
+    if [[ "$display_only" == "true" ]]; then
+        echo ""
+        if [[ $missing_count -eq 0 ]]; then
+            echo "${GREEN}合計: ${installed_count}個${NC}"
+        else
+            echo "${GREEN}インストール済: ${installed_count}個${NC}  ${RED}見つからない: ${missing_count}個${NC}"
+        fi
+    fi
+    
+    # Return installed count for uninstall workflow
+    if [[ "$display_only" == "false" ]]; then
+        return $installed_count
     fi
 }
 
@@ -3353,28 +3392,10 @@ uninstall_workflow() {
             return
         fi
     
-    # Display installed apps
+    # Display installed apps using shared function
     echo ""
-    echo "インストールされているアプリ:"
-    echo ""
-    
-    local -a apps_list=()
-    local -a volumes_list=()
-    local -a bundles_list=()
-    local index=1
-    
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        apps_list+=("$display_name")
-        volumes_list+=("$volume_name")
-        bundles_list+=("$bundle_id")
-        echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC}"
-        echo "      Bundle ID: ${bundle_id}"
-        echo "      ボリューム: ${volume_name}"
-        echo ""
-        ((index++))
-    done <<< "$mappings_content"
-    
-    local total_apps=${#apps_list[@]}
+    show_installed_apps "false"
+    local total_apps=$?
     
     if [[ $total_apps -eq 0 ]]; then
         print_warning "インストールされているアプリがありません"
