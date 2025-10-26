@@ -270,7 +270,19 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.25.0 (最新) - Fix Initial Setup with Proper Container Initialization
+### v4.26.0 (最新) - Simplify Nuclear Cleanup with Mapping-Based Approach
+- 🧹 **超強力クリーンアップの簡素化**: マッピングファイルベースの処理に変更
+- ✅ 削除対象: 7項目 → 4項目に整理
+- ✅ 処理手順の最適化:
+  1. マップ登録ボリューム全アンマウント
+  2. マップ登録ボリューム全削除
+  3. PlayCoverのアンインストール
+  4. マップ登録コンテナ（内蔵）を削除
+  5. マッピングファイル削除
+- ✅ 不要な処理を削除（PlayTools.framework、キャッシュなど）
+- ✅ より高速でシンプルな完全リセット
+
+### v4.25.0 - Fix Initial Setup with Proper Container Initialization
 - 🎯 **初期セットアップフロー修正**: PlayCoverコンテナの正しい初期化手順を実装
 - ✅ PlayCoverインストール後、一度起動してコンテナを作成
 - ✅ 作成された完全なコンテナを外部ストレージにコピー
@@ -355,4 +367,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.25.0）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.0）

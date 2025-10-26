@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.25.0 - Fix initial setup with proper container initialization
+# Version: 4.26.0 - Simplify nuclear cleanup with mapping-based approach
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2004,58 +2004,37 @@ nuclear_cleanup() {
     echo ""
     
     #######################################################
-    # Phase 1: Scan and display what will be deleted
+    # Phase 1: Scan and collect deletion targets
     #######################################################
     
     echo "${CYAN}【フェーズ 1/2】削除対象をスキャンしています...${NC}"
     echo ""
     
-    # Collect volumes to unmount
-    local volumes_to_unmount=()
-    local all_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
+    # Read mapping file and collect targets
+    local mapped_volumes=()
+    local mapped_containers=()
     
-    if [[ -n "$all_volumes" ]]; then
-        while IFS= read -r device; do
-            if [[ -n "$device" ]]; then
-                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
-                
-                # Skip system volumes
-                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
-                    continue
+    if [[ -f "$MAPPING_FILE" ]]; then
+        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+            [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]] && continue
+            
+            # Check if volume exists
+            if volume_exists "$volume_name"; then
+                local device=$(get_volume_device "$volume_name")
+                if [[ -n "$device" ]]; then
+                    mapped_volumes+=("${display_name:-$volume_name}|${volume_name}|${device}|${bundle_id}")
                 fi
-                
-                volumes_to_unmount+=("${vol_name}|${device}")
             fi
-        done <<< "$all_volumes"
+            
+            # Check if container exists
+            local container_path="${HOME}/Library/Containers/${bundle_id}"
+            if [[ -d "$container_path" ]]; then
+                mapped_containers+=("${display_name:-$bundle_id}|${container_path}")
+            fi
+        done < "$MAPPING_FILE"
     fi
     
-    # Collect containers to delete
-    local containers_to_delete=()
-    
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        containers_to_delete+=("PlayCover|${PLAYCOVER_CONTAINER}")
-    fi
-    
-    local app_containers=(
-        "com.miHoYo.GenshinImpact"
-        "com.HoYoverse.hkrpgoversea"
-        "com.HoYoverse.Nap"
-    )
-    
-    for container in "${app_containers[@]}"; do
-        local container_path="${HOME}/Library/Containers/${container}"
-        if [[ -d "$container_path" ]]; then
-            # Get display name from mapping if available
-            local display_name="$container"
-            if [[ -f "$MAPPING_FILE" ]]; then
-                local map_name=$(grep "$container" "$MAPPING_FILE" 2>/dev/null | awk -F'\t' '{print $3}')
-                [[ -n "$map_name" ]] && display_name="$map_name"
-            fi
-            containers_to_delete+=("${display_name}|${container_path}")
-        fi
-    done
-    
-    # Collect PlayCover app
+    # Check PlayCover app
     local playcover_app_exists=false
     local playcover_homebrew=false
     if /usr/local/bin/brew list --cask playcover-community &>/dev/null 2>&1; then
@@ -2064,74 +2043,6 @@ nuclear_cleanup() {
     elif [[ -d "/Applications/PlayCover.app" ]]; then
         playcover_app_exists=true
         playcover_homebrew=false
-    fi
-    
-    # Collect PlayTools.framework
-    local playtools_exists=false
-    local playtools_path="${HOME}/Library/Frameworks/PlayTools.framework"
-    if [[ -d "$playtools_path" ]]; then
-        playtools_exists=true
-    fi
-    
-    # Collect caches and preferences
-    local cleanup_items=()
-    local cleanup_paths=(
-        "${HOME}/Library/Caches/io.playcover.PlayCover"
-        "${HOME}/Library/Saved Application State/io.playcover.PlayCover.savedState"
-        "${HOME}/Library/Preferences/io.playcover.PlayCover.plist"
-        "${HOME}/Library/Logs/PlayCover"
-    )
-    
-    for path in "${cleanup_paths[@]}"; do
-        if [[ -e "$path" ]]; then
-            cleanup_items+=("$(basename "$path")|${path}")
-        fi
-    done
-    
-    # Collect volumes to delete
-    local volumes_to_delete=()
-    
-    if [[ -f "$MAPPING_FILE" ]]; then
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
-            [[ -z "$volume_name" ]] && continue
-            
-            if volume_exists "$volume_name"; then
-                local device=$(get_volume_device "$volume_name")
-                if [[ -n "$device" ]]; then
-                    volumes_to_delete+=("${display_name:-$volume_name}|${volume_name}|${device}")
-                fi
-            fi
-        done < "$MAPPING_FILE"
-    fi
-    
-    # Pattern matching for additional volumes
-    local playcover_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
-    
-    if [[ -n "$playcover_volumes" ]]; then
-        while IFS= read -r device; do
-            if [[ -n "$device" ]]; then
-                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
-                
-                # Skip system volumes
-                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
-                    continue
-                fi
-                
-                # Check if already in list
-                local already_listed=false
-                for vol_info in "${volumes_to_delete[@]}"; do
-                    local existing_vol=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
-                    if [[ "$existing_vol" == "$vol_name" ]]; then
-                        already_listed=true
-                        break
-                    fi
-                done
-                
-                if [[ "$already_listed" == false ]]; then
-                    volumes_to_delete+=("${vol_name}|${vol_name}|${device}")
-                fi
-            fi
-        done <<< "$playcover_volumes"
     fi
     
     # Check mapping file
@@ -2154,43 +2065,30 @@ nuclear_cleanup() {
     
     local total_items=0
     
-    # 1. Volumes to unmount
-    if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
-        echo "${CYAN}【1】アンマウントされるボリューム: ${#volumes_to_unmount[@]}個${NC}"
-        for vol_info in "${volumes_to_unmount[@]}"; do
-            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
-            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
-            echo "  ${YELLOW}⏏${NC}  ${vol_name} (${device})"
+    # 1. Volumes to unmount and delete
+    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
+        echo "${CYAN}【1】マップ登録ボリューム: ${#mapped_volumes[@]}個${NC}"
+        echo "     ${YELLOW}→ アンマウント後、削除されます${NC}"
+        for vol_info in "${mapped_volumes[@]}"; do
+            local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
+            echo "  ${RED}💥${NC}  ${display}"
+            echo "      ${YELLOW}${vol_name}${NC} (${device})"
             ((total_items++))
         done
         echo ""
     else
-        echo "${CYAN}【1】アンマウントされるボリューム: なし${NC}"
+        echo "${CYAN}【1】マップ登録ボリューム: なし${NC}"
         echo ""
     fi
     
-    # 2. Containers to delete
-    if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
-        echo "${CYAN}【2】削除されるコンテナ: ${#containers_to_delete[@]}個${NC}"
-        for container_info in "${containers_to_delete[@]}"; do
-            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
-            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
-            echo "  ${RED}🗑${NC}  ${display}"
-            echo "      ${container_path}"
-            ((total_items++))
-        done
-        echo ""
-    else
-        echo "${CYAN}【2】削除されるコンテナ: なし${NC}"
-        echo ""
-    fi
-    
-    # 3. PlayCover app
-    echo "${CYAN}【3】PlayCoverアプリ${NC}"
+    # 2. PlayCover app
+    echo "${CYAN}【2】PlayCoverアプリ${NC}"
     if [[ "$playcover_app_exists" == true ]]; then
         if [[ "$playcover_homebrew" == true ]]; then
             echo "  ${RED}🗑${NC}  PlayCover (Homebrew Cask)"
-            echo "      brew uninstall --cask playcover-community"
+            echo "      ${YELLOW}brew uninstall --cask playcover-community${NC}"
         else
             echo "  ${RED}🗑${NC}  /Applications/PlayCover.app（手動インストール版）"
         fi
@@ -2200,48 +2098,24 @@ nuclear_cleanup() {
     fi
     echo ""
     
-    # 4. PlayTools.framework
-    echo "${CYAN}【4】PlayTools.framework${NC}"
-    if [[ "$playtools_exists" == true ]]; then
-        echo "  ${RED}🗑${NC}  ${playtools_path}"
-        ((total_items++))
-    else
-        echo "  ${GREEN}✓${NC}  存在しません（削除不要）"
-    fi
-    echo ""
-    
-    # 5. Caches and preferences
-    if [[ ${#cleanup_items[@]} -gt 0 ]]; then
-        echo "${CYAN}【5】キャッシュと設定: ${#cleanup_items[@]}個${NC}"
-        for item_info in "${cleanup_items[@]}"; do
-            local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
-            echo "  ${RED}🗑${NC}  ${item_name}"
+    # 3. Mapped containers
+    if [[ ${#mapped_containers[@]} -gt 0 ]]; then
+        echo "${CYAN}【3】マップ登録コンテナ（内蔵）: ${#mapped_containers[@]}個${NC}"
+        for container_info in "${mapped_containers[@]}"; do
+            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
+            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
+            echo "  ${RED}🗑${NC}  ${display}"
+            echo "      ${container_path}"
             ((total_items++))
         done
         echo ""
     else
-        echo "${CYAN}【5】キャッシュと設定: なし${NC}"
+        echo "${CYAN}【3】マップ登録コンテナ（内蔵）: なし${NC}"
         echo ""
     fi
     
-    # 6. Volumes to delete
-    if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
-        echo "${CYAN}【6】削除されるAPFSボリューム: ${#volumes_to_delete[@]}個${NC}"
-        for vol_info in "${volumes_to_delete[@]}"; do
-            local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
-            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
-            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
-            echo "  ${RED}💥${NC}  ${display} (${device})"
-            ((total_items++))
-        done
-        echo ""
-    else
-        echo "${CYAN}【6】削除されるAPFSボリューム: なし${NC}"
-        echo ""
-    fi
-    
-    # 7. Mapping file
-    echo "${CYAN}【7】マッピングファイル${NC}"
+    # 4. Mapping file
+    echo "${CYAN}【4】マッピングファイル${NC}"
     if [[ "$mapping_exists" == true ]]; then
         echo "  ${RED}🗑${NC}  playcover-map.txt"
         ((total_items++))
@@ -2302,36 +2176,33 @@ nuclear_cleanup() {
     authenticate_sudo
     
     #######################################################
-    # Step 1: Unmount all volumes
+    # Step 1: Unmount all mapped volumes
     #######################################################
     
-    echo "${BLUE}【ステップ 1/6】すべてのボリュームをアンマウント${NC}"
+    echo "${BLUE}【ステップ 1/5】マップ登録ボリュームをアンマウント${NC}"
     echo ""
     
-    # Quit all running apps
-    local mappings_content=$(read_mappings 2>/dev/null || true)
-    if [[ -n "$mappings_content" ]]; then
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
-            [[ -z "$bundle_id" ]] && continue
+    local unmount_count=0
+    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
+        # Quit all running apps first
+        for vol_info in "${mapped_volumes[@]}"; do
+            local bundle_id=$(echo "$vol_info" | /usr/bin/cut -d'|' -f4)
             if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
                 quit_app_for_bundle "$bundle_id" 2>/dev/null || true
             fi
-        done <<< "$mappings_content"
-    fi
-    
-    # Unmount volumes using collected list
-    local unmount_count=0
-    if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
-        for vol_info in "${volumes_to_unmount[@]}"; do
-            local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
-            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
+        done
+        
+        # Unmount volumes
+        for vol_info in "${mapped_volumes[@]}"; do
+            local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
+            local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             
-            echo "  アンマウント中: ${vol_name} (${device})"
-            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            echo "  アンマウント中: ${display} (${device})"
+            if /usr/bin/sudo /usr/sbin/diskutil unmount force "$device" >/dev/null 2>&1; then
                 ((unmount_count++))
                 print_success "  ✓ 完了"
             else
-                print_warning "  ⚠ 失敗"
+                print_warning "  ⚠ 失敗（既にアンマウント済み）"
             fi
         done
     else
@@ -2343,129 +2214,15 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 2: Delete all containers
+    # Step 2: Delete all mapped volumes
     #######################################################
     
-    echo "${BLUE}【ステップ 2/6】すべてのコンテナを削除${NC}"
-    echo ""
-    
-    local container_count=0
-    
-    # Delete containers using collected list
-    if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
-        for container_info in "${containers_to_delete[@]}"; do
-            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
-            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
-            
-            echo "  削除中: ${display}"
-            if /usr/bin/sudo /bin/rm -rf "$container_path" 2>/dev/null; then
-                print_success "  ✓ 削除完了"
-                ((container_count++))
-            else
-                print_warning "  ⚠ 削除失敗"
-            fi
-        done
-    else
-        print_info "  削除対象なし"
-    fi
-    
-    print_success "コンテナ削除完了: ${container_count}個"
-    echo ""
-    /bin/sleep 1
-    
-    #######################################################
-    # Step 3: Uninstall PlayCover app (Homebrew)
-    #######################################################
-    
-    echo "${BLUE}【ステップ 3/7】PlayCoverアプリをアンインストール${NC}"
-    echo ""
-    
-    # Check if PlayCover is installed via Homebrew
-    if /usr/local/bin/brew list --cask playcover-community &>/dev/null 2>&1; then
-        echo "  アンインストール中: PlayCover (Homebrew Cask)"
-        if /usr/local/bin/brew uninstall --cask playcover-community >/dev/null 2>&1; then
-            print_success "  ✓ Homebrewからアンインストール完了"
-        else
-            print_warning "  ⚠ Homebrewアンインストール失敗"
-        fi
-    else
-        print_info "  Homebrew管理のPlayCoverは見つかりません"
-    fi
-    
-    # Check for manual installation and clean up
-    if [[ -d "/Applications/PlayCover.app" ]]; then
-        echo "  削除中: /Applications/PlayCover.app（残骸）"
-        if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
-            print_success "  ✓ 削除完了"
-        else
-            print_warning "  ⚠ 削除失敗"
-        fi
-    fi
-    
-    echo ""
-    /bin/sleep 1
-    
-    #######################################################
-    # Step 4: Delete PlayTools.framework
-    #######################################################
-    
-    echo "${BLUE}【ステップ 4/7】PlayTools.frameworkを削除${NC}"
-    echo ""
-    
-    if [[ "$playtools_exists" == true ]]; then
-        echo "  削除中: ${playtools_path}"
-        if /bin/rm -rf "$playtools_path" 2>/dev/null; then
-            print_success "  ✓ 削除完了"
-        else
-            print_warning "  ⚠ 削除失敗"
-        fi
-    else
-        print_info "  削除対象なし"
-    fi
-    
-    echo ""
-    /bin/sleep 1
-    
-    #######################################################
-    # Step 5: Delete caches and preferences
-    #######################################################
-    
-    echo "${BLUE}【ステップ 5/7】キャッシュと設定を削除${NC}"
-    echo ""
-    
-    # Delete items using collected list
-    if [[ ${#cleanup_items[@]} -gt 0 ]]; then
-        for item_info in "${cleanup_items[@]}"; do
-            local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
-            local item_path=$(echo "$item_info" | /usr/bin/cut -d'|' -f2)
-            
-            echo "  削除中: ${item_name}"
-            if /bin/rm -rf "$item_path" 2>/dev/null; then
-                print_success "  ✓ 削除完了"
-            else
-                print_warning "  ⚠ 削除失敗"
-            fi
-        done
-    else
-        print_info "  削除対象なし"
-    fi
-    
-    print_success "キャッシュと設定削除完了"
-    echo ""
-    /bin/sleep 1
-    
-    #######################################################
-    # Step 6: Delete APFS volumes
-    #######################################################
-    
-    echo "${BLUE}【ステップ 6/7】APFSボリュームを削除${NC}"
+    echo "${BLUE}【ステップ 2/5】マップ登録ボリュームを削除${NC}"
     echo ""
     
     local volume_count=0
-    
-    # Delete volumes using collected list
-    if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
-        for vol_info in "${volumes_to_delete[@]}"; do
+    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
+        for vol_info in "${mapped_volumes[@]}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
@@ -2488,10 +2245,73 @@ nuclear_cleanup() {
     /bin/sleep 1
     
     #######################################################
-    # Step 7: Delete mapping file
+    # Step 3: Uninstall PlayCover app
     #######################################################
     
-    echo "${BLUE}【ステップ 7/7】マッピングファイルを削除${NC}"
+    echo "${BLUE}【ステップ 3/5】PlayCoverアプリをアンインストール${NC}"
+    echo ""
+    
+    if [[ "$playcover_app_exists" == true ]]; then
+        if [[ "$playcover_homebrew" == true ]]; then
+            echo "  アンインストール中: PlayCover (Homebrew Cask)"
+            if /usr/local/bin/brew uninstall --cask playcover-community >/dev/null 2>&1; then
+                print_success "  ✓ Homebrewからアンインストール完了"
+            else
+                print_warning "  ⚠ Homebrewアンインストール失敗"
+            fi
+        else
+            echo "  削除中: /Applications/PlayCover.app（手動インストール版）"
+        fi
+        
+        # Clean up manual installation remnants
+        if [[ -d "/Applications/PlayCover.app" ]]; then
+            if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
+                print_success "  ✓ 削除完了"
+            else
+                print_warning "  ⚠ 削除失敗"
+            fi
+        fi
+    else
+        print_info "  アンインストール対象なし"
+    fi
+    
+    echo ""
+    /bin/sleep 1
+    
+    #######################################################
+    # Step 4: Delete all mapped containers
+    #######################################################
+    
+    echo "${BLUE}【ステップ 4/5】マップ登録コンテナ（内蔵）を削除${NC}"
+    echo ""
+    
+    local container_count=0
+    if [[ ${#mapped_containers[@]} -gt 0 ]]; then
+        for container_info in "${mapped_containers[@]}"; do
+            local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
+            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
+            
+            echo "  削除中: ${display}"
+            if /usr/bin/sudo /bin/rm -rf "$container_path" 2>/dev/null; then
+                print_success "  ✓ 削除完了"
+                ((container_count++))
+            else
+                print_warning "  ⚠ 削除失敗"
+            fi
+        done
+    else
+        print_info "  削除対象なし"
+    fi
+    
+    print_success "コンテナ削除完了: ${container_count}個"
+    echo ""
+    /bin/sleep 1
+    
+    #######################################################
+    # Step 5: Delete mapping file
+    #######################################################
+    
+    echo "${BLUE}【ステップ 5/5】マッピングファイルを削除${NC}"
     echo ""
     
     if [[ "$mapping_exists" == true ]]; then
@@ -2503,8 +2323,8 @@ nuclear_cleanup() {
         fi
         
         # Delete lock file if exists
-        if [[ -f "$MAPPING_LOCK_FILE" ]]; then
-            /bin/rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
+        if [[ -d "$MAPPING_LOCK_FILE" ]]; then
+            /bin/rmdir "$MAPPING_LOCK_FILE" 2>/dev/null || true
         fi
     else
         print_info "  削除対象なし"
@@ -2529,13 +2349,14 @@ nuclear_cleanup() {
     echo ""
     echo "${CYAN}次のステップ:${NC}"
     echo ""
-    echo "  ${GREEN}1.${NC} 初期セットアップスクリプトを実行"
-    echo "      ${BLUE}→ 0_playcover-initial-setup.command${NC}"
+    echo "  ${GREEN}1.${NC} このツールを再起動"
+    echo "      ${BLUE}→ 0_PlayCover-ManagementTool.command${NC}"
     echo ""
-    echo "  ${GREEN}2.${NC} IPAインストールスクリプトを実行"
-    echo "      ${BLUE}→ 1_playcover-ipa-install.command${NC}"
+    echo "  ${GREEN}2.${NC} メニューから初期セットアップを実行"
+    echo "      ${BLUE}→ [1] 初期セットアップ${NC}"
     echo ""
-    echo "  ${GREEN}3.${NC} アプリを起動して動作確認"
+    echo "  ${GREEN}3.${NC} IPAインストールを実行"
+    echo "      ${BLUE}→ [2] IPAインストール${NC}"
     echo ""
     echo "${YELLOW}📝 注意事項:${NC}"
     echo ""
