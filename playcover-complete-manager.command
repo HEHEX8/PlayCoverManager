@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.22.2 - Fix all command paths (sudo, cut, tr)
+# Version: 4.23.0 - Fix all external command paths
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -147,8 +147,8 @@ exit_with_cleanup() {
         print_success "$message"
         echo ""
         print_info "3秒後にターミナルを自動で閉じます..."
-        sleep 3
-        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+        /bin/sleep 3
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
     else
         print_error "$message"
         echo ""
@@ -156,7 +156,7 @@ exit_with_cleanup() {
         echo ""
         echo -n "Enterキーを押すとターミナルを閉じます..."
         read
-        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit "$exit_code"
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit "$exit_code"
     fi
 }
 
@@ -174,8 +174,8 @@ authenticate_sudo() {
         # Keep /usr/bin/sudo alive in background
         while true; do
             /usr/bin/sudo -n true
-            sleep 50
-            kill -0 "$$" 2>/dev/null || exit
+            /bin/sleep 50
+            /bin/kill -0 "$$" 2>/dev/null || exit
         done 2>/dev/null &
         
         echo ""
@@ -239,8 +239,8 @@ acquire_mapping_lock() {
     local timeout=10
     local elapsed=0
     
-    while ! mkdir "$MAPPING_LOCK_FILE" 2>/dev/null; do
-        sleep 0.1
+    while ! /bin/mkdir "$MAPPING_LOCK_FILE" 2>/dev/null; do
+        /bin/sleep 0.1
         elapsed=$((elapsed + 1))
         
         if [[ $elapsed -ge $((timeout * 10)) ]]; then
@@ -374,7 +374,7 @@ update_mapping() {
 # Module 4: Volume Operations
 #######################################################
 
-# Optimized: Accept optional cached diskutil output
+# Optimized: Accept optional cached /usr/sbin/diskutil output
 volume_exists() {
     local volume_name=$1
     local diskutil_cache="${2:-}"
@@ -386,7 +386,7 @@ volume_exists() {
     fi
 }
 
-# Optimized: Accept optional cached diskutil output
+# Optimized: Accept optional cached /usr/sbin/diskutil output
 get_volume_device() {
     local volume_name=$1
     local diskutil_cache="${2:-}"
@@ -398,7 +398,7 @@ get_volume_device() {
     fi
 }
 
-# Optimized: Accept optional cached diskutil output  
+# Optimized: Accept optional cached /usr/sbin/diskutil output  
 get_mount_point() {
     local volume_name=$1
     local diskutil_cache="${2:-}"
@@ -416,9 +416,9 @@ mount_volume() {
     local volume_name=$1
     local target_path=$2
     local force=${3:-false}
-    local diskutil_cache="${4:-}"  # Optional: pre-cached diskutil list output
+    local diskutil_cache="${4:-}"  # Optional: pre-cached /usr/sbin/diskutil list output
     
-    # Cache diskutil list output if not provided (execute only once)
+    # Cache /usr/sbin/diskutil list output if not provided (execute only once)
     if [[ -z "$diskutil_cache" ]]; then
         diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
     fi
@@ -429,7 +429,7 @@ mount_volume() {
         return 1
     fi
     
-    # Get current mount point using cached output
+    # Get current /sbin/mount point using cached output
     local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
     
     # If already mounted at target, nothing to do
@@ -455,8 +455,8 @@ mount_volume() {
         local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
         
         if [[ -z "$mount_check" ]]; then
-            # Directory exists but is NOT a mount point
-            # Check if it contains actual data (not just an empty mount point directory)
+            # Directory exists but is NOT a /sbin/mount point
+            # Check if it contains actual data (not just an empty /sbin/mount point directory)
             # Ignore macOS metadata files (.DS_Store, .Spotlight-V100, etc.)
             # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
             local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
@@ -472,7 +472,7 @@ mount_volume() {
                 print_info "内部データを外部ボリュームに統合します..."
                 echo ""
                 
-                # Create temporary mount point
+                # Create temporary /sbin/mount point
                 local temp_migrate="/tmp/playcover_migrate_$$"
                 /usr/bin/sudo /bin/mkdir -p "$temp_migrate"
                 
@@ -487,8 +487,8 @@ mount_volume() {
                     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
                         print_success "データの移行が完了しました"
                         print_info "内部ストレージをクリア中..."
-                        /usr/bin/sudo rm -rf "$target_path"
-                        # Continue to mount below
+                        /usr/bin/sudo /bin/rm -rf "$target_path"
+                        # Continue to /sbin/mount below
                     else
                         print_error "データの移行に失敗しました (rsync exit: $rsync_exit)"
                         return 1
@@ -508,8 +508,8 @@ mount_volume() {
     # Mount the volume with nobrowse option to hide from Finder/Desktop
     local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
-    # Use mount command directly with nobrowse option
-    # diskutil doesn't support nobrowse directly, so we use mount -o nobrowse
+    # Use /sbin/mount command directly with nobrowse option
+    # /usr/sbin/diskutil doesn't support nobrowse directly, so we use /sbin/mount -o nobrowse
     if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
         print_success "マウント成功: $target_path"
         return 0
@@ -532,15 +532,15 @@ quit_app_for_bundle() {
     /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
     
     # Wait a moment for cleanup
-    sleep 0.3
+    /bin/sleep 0.3
 }
 
 unmount_volume() {
     local volume_name=$1
     local bundle_id=$2  # Optional: if provided, quit the app first
-    local diskutil_cache="${3:-}"  # Optional: pre-cached diskutil list output
+    local diskutil_cache="${3:-}"  # Optional: pre-cached /usr/sbin/diskutil list output
     
-    # Cache diskutil list output if not provided (execute only once)
+    # Cache /usr/sbin/diskutil list output if not provided (execute only once)
     if [[ -z "$diskutil_cache" ]]; then
         diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
     fi
@@ -613,7 +613,7 @@ get_storage_free_space() {
 
 # Get external drive free space using PlayCover volume
 get_external_drive_free_space() {
-    # Always use PlayCover volume mount point to get external drive free space
+    # Always use PlayCover volume /sbin/mount point to get external drive free space
     # This is more reliable than checking individual app volumes
     
     # Check if PlayCover volume exists
@@ -622,7 +622,7 @@ get_external_drive_free_space() {
         return
     fi
     
-    # Get PlayCover volume mount point
+    # Get PlayCover volume /sbin/mount point
     local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
     
     if [[ -z "$playcover_mount" ]]; then
@@ -631,7 +631,7 @@ get_external_drive_free_space() {
         return
     fi
     
-    # Get free space from PlayCover volume mount point using df -H
+    # Get free space from PlayCover volume /sbin/mount point using df -H
     get_storage_free_space "$playcover_mount"
 }
 
@@ -648,17 +648,17 @@ get_storage_type() {
         return
     fi
     
-    # CRITICAL: First check if this path is a mount point for an APFS volume
+    # CRITICAL: First check if this path is a /sbin/mount point for an APFS volume
     # This is the most reliable way to detect external storage
     local mount_check=$(/sbin/mount | /usr/bin/grep " on ${container_path} ")
     if [[ -n "$mount_check" ]] && [[ "$mount_check" =~ "apfs" ]]; then
         # This path is mounted as an APFS volume = external storage
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Detected as mount point (external)" >&2
+        [[ "$debug" == "true" ]] && echo "[DEBUG] Detected as /sbin/mount point (external)" >&2
         echo "external"
         return
     fi
     
-    # If it's a directory but not a mount point, check if it has content
+    # If it's a directory but not a /sbin/mount point, check if it has content
     if [[ -d "$container_path" ]]; then
         # Ignore macOS metadata files when checking for content
         # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
@@ -668,7 +668,7 @@ get_storage_type() {
         
         if [[ -z "$content_check" ]]; then
             # Directory exists but is empty (or only has metadata) = no actual data
-            # This is just an empty mount point directory left after unmount
+            # This is just an empty /sbin/mount point directory left after unmount
             [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata (none)" >&2
             echo "none"
             return
@@ -677,7 +677,7 @@ get_storage_type() {
         fi
     fi
     
-    # If not a mount point and has content, it's a regular directory on some disk
+    # If not a /sbin/mount point and has content, it's a regular directory on some disk
     # Get the device info for the filesystem containing this path
     local device=$(/bin/df "$container_path" | /usr/bin/tail -1 | /usr/bin/awk '{print $1}')
     local disk_id=$(echo "$device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
@@ -755,16 +755,16 @@ check_playcover_volume_mount() {
         local playcover_keymapping="${PLAYCOVER_CONTAINER}/Keymapping"
         
         if [[ ! -d "$playcover_apps" ]]; then
-            mkdir -p "$playcover_apps" 2>/dev/null || true
+            /bin/mkdir -p "$playcover_apps" 2>/dev/null || true
         fi
         if [[ ! -d "$playcover_settings" ]]; then
-            mkdir -p "$playcover_settings" 2>/dev/null || true
+            /bin/mkdir -p "$playcover_settings" 2>/dev/null || true
         fi
         if [[ ! -d "$playcover_entitlements" ]]; then
-            mkdir -p "$playcover_entitlements" 2>/dev/null || true
+            /bin/mkdir -p "$playcover_entitlements" 2>/dev/null || true
         fi
         if [[ ! -d "$playcover_keymapping" ]]; then
-            mkdir -p "$playcover_keymapping" 2>/dev/null || true
+            /bin/mkdir -p "$playcover_keymapping" 2>/dev/null || true
         fi
     else
         print_error "ボリュームのマウントに失敗しました"
@@ -847,13 +847,13 @@ extract_ipa_info() {
     
     if [[ -z "$plist_path" ]]; then
         print_error "IPA 内に Info.plist が見つかりません"
-        rm -rf "$temp_dir"
+        /bin/rm -rf "$temp_dir"
         return 1
     fi
     
-    if ! unzip -q "$ipa_file" "$plist_path" -d "$temp_dir" 2>/dev/null; then
+    if ! /usr/bin/unzip -q "$ipa_file" "$plist_path" -d "$temp_dir" 2>/dev/null; then
         print_error "Info.plist の解凍に失敗しました"
-        rm -rf "$temp_dir"
+        /bin/rm -rf "$temp_dir"
         return 1
     fi
     
@@ -861,7 +861,7 @@ extract_ipa_info() {
     
     if [[ -z "$info_plist" ]]; then
         print_error "Info.plist が見つかりません"
-        rm -rf "$temp_dir"
+        /bin/rm -rf "$temp_dir"
         return 1
     fi
     
@@ -869,7 +869,7 @@ extract_ipa_info() {
     
     if [[ -z "$APP_BUNDLE_ID" ]]; then
         print_error "Bundle Identifier の取得に失敗しました"
-        rm -rf "$temp_dir"
+        /bin/rm -rf "$temp_dir"
         return 1
     fi
     
@@ -887,14 +887,14 @@ extract_ipa_info() {
     
     if [[ -z "$app_name_en" ]]; then
         print_error "アプリ名の取得に失敗しました"
-        rm -rf "$temp_dir"
+        /bin/rm -rf "$temp_dir"
         return 1
     fi
     
     local app_name_ja=""
     local strings_path=$(unzip -l "$ipa_file" 2>/dev/null | /usr/bin/grep -E "Payload/.*\.app/ja\.lproj/InfoPlist\.strings" | head -n 1 | /usr/bin/awk '{print $NF}')
     if [[ -n "$strings_path" ]]; then
-        unzip -q "$ipa_file" "$strings_path" -d "$temp_dir" 2>/dev/null || true
+        /usr/bin/unzip -q "$ipa_file" "$strings_path" -d "$temp_dir" 2>/dev/null || true
         local ja_strings="${temp_dir}/${strings_path}"
         if [[ -f "$ja_strings" ]]; then
             app_name_ja=$(plutil -convert xml1 -o - "$ja_strings" 2>/dev/null | /usr/bin/grep -A 1 "CFBundleDisplayName" | tail -n 1 | /usr/bin/sed 's/.*<string>\(.*\)<\/string>.*/\1/' || true)
@@ -910,7 +910,7 @@ extract_ipa_info() {
     APP_NAME_EN="$app_name_en"
     APP_VOLUME_NAME=$(echo "$APP_NAME_EN" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | /usr/bin/sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME_EN" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
     
-    rm -rf "$temp_dir"
+    /bin/rm -rf "$temp_dir"
     
     print_info "${APP_NAME} (${APP_VERSION})"
     echo ""
@@ -978,7 +978,7 @@ create_app_volume() {
     fi
     
     if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
-        sleep 1
+        /bin/sleep 1
         return 0
     else
         print_error "ボリュームの作成に失敗しました"
@@ -1094,7 +1094,7 @@ install_ipa_to_playcover() {
     # Just count settings file updates and complete on 2nd update.
     
     while [[ $elapsed -lt $max_wait ]]; do
-        # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
+        # Check if PlayCover is still running BEFORE /bin/sleep (v4.8.1 - immediate crash detection)
         if ! pgrep -x "PlayCover" > /dev/null; then
             echo ""
             echo ""
@@ -1138,7 +1138,7 @@ install_ipa_to_playcover() {
                 # Restart PlayCover for next installation if in batch mode
                 if [[ $BATCH_MODE == true ]] && [[ $CURRENT_IPA_INDEX -lt $TOTAL_IPAS ]]; then
                     print_info "次のインストールのため PlayCover を準備中..."
-                    sleep 2
+                    /bin/sleep 2
                 fi
                 
                 return 0
@@ -1158,7 +1158,7 @@ install_ipa_to_playcover() {
                         return 1
                     else
                         print_info "次のインストールのため PlayCover を準備中..."
-                        sleep 2
+                        /bin/sleep 2
                         return 0
                     fi
                 else
@@ -1228,7 +1228,7 @@ install_ipa_to_playcover() {
                     echo ""
                     print_warning "完了判定直後に PlayCover が終了しました"
                     print_info "最終確認を実施中..."
-                    sleep 2
+                    /bin/sleep 2
                     
                     # Re-verify the installation is truly complete
                     if [[ -f "${app_path}/Info.plist" ]] && [[ -f "$app_settings_plist" ]]; then
@@ -1255,7 +1255,7 @@ install_ipa_to_playcover() {
         
         initial_check_done=true
         
-        sleep $check_interval
+        /bin/sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
         # Show progress indicator with detailed status (v5.0.1 - Unified)
@@ -1356,7 +1356,7 @@ individual_volume_control() {
     echo "登録されているボリューム:"
     echo ""
     
-    # Cache diskutil output once for performance
+    # Cache /usr/sbin/diskutil output once for performance
     local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
     local mount_cache=$(/sbin/mount 2>/dev/null)
     
@@ -1385,11 +1385,11 @@ individual_volume_control() {
             fi
         fi
         
-        # Check if volume exists (using cached diskutil output)
+        # Check if volume exists (using cached /usr/sbin/diskutil output)
         if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
             status_line="❌ ボリュームが見つかりません"
         else
-            # Check actual mount point of the volume (could be anywhere)
+            # Check actual /sbin/mount point of the volume (could be anywhere)
             local actual_mount=$(get_mount_point "$volume_name")
             
             if [[ -n "$actual_mount" ]]; then
@@ -1403,7 +1403,7 @@ individual_volume_control() {
                 # Volume is not mounted - check for internal storage
                 status_line="⚪️ 未マウント"
                 
-                # Quick check: only if path exists and not a mount point
+                # Quick check: only if path exists and not a /sbin/mount point
                 if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
                     # Check if directory has actual content (exclude macOS metadata)
                     local has_content=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/head -1)
@@ -1472,7 +1472,7 @@ individual_volume_control() {
     
     if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#selectable_array[@]} ]]; then
         print_error "無効な選択です"
-        sleep 2
+        /bin/sleep 2
         individual_volume_control
         return
     fi
@@ -1504,7 +1504,7 @@ individual_volume_control() {
         # Quit app first
         if [[ -n "$bundle_id" ]]; then
             /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-            sleep 0.3
+            /bin/sleep 0.3
         fi
         
         local device=$(get_volume_device "$volume_name")
@@ -1543,7 +1543,7 @@ individual_volume_control() {
             local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
             
             if [[ -z "$mount_check" ]]; then
-                # Directory exists but is NOT a mount point
+                # Directory exists but is NOT a /sbin/mount point
                 # Check if it contains actual data (ignore macOS metadata)
                 local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
                 
@@ -1578,7 +1578,7 @@ individual_volume_control() {
         
         # Try to mount
         local device=$(get_volume_device "$volume_name")
-        if /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
+        if /usr/bin/sudo /usr/sbin/diskutil /sbin/mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
             # Success - silently return to menu
             individual_volume_control
             return
@@ -1595,7 +1595,7 @@ individual_volume_control() {
     fi
 }
 
-# Batch mount all volumes (for individual volume control menu)
+# Batch /sbin/mount all volumes (for individual volume control menu)
 batch_mount_all() {
     clear
     print_header "全ボリュームをマウント"
@@ -1797,7 +1797,7 @@ batch_unmount_all() {
         else
             if [[ -n "$bundle_id" ]]; then
                 /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-                sleep 0.3
+                /bin/sleep 0.3
             fi
             
             local device=$(get_volume_device "$volume_name")
@@ -1828,7 +1828,7 @@ batch_unmount_all() {
         echo "${YELLOW}対処法:${NC}"
         echo "  1. PlayCoverとアプリを終了してから再試行"
         echo "  2. Finderでファイルを開いている場合は閉じる"
-        echo "  3. 強制アンマウント: diskutil unmount force /dev/diskX"
+        echo "  3. 強制アンマウント: /usr/sbin/diskutil unmount force /dev/diskX"
     else
         echo "${YELLOW}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
     fi
@@ -1980,8 +1980,8 @@ eject_disk() {
         print_success "ディスク ${drive_name} を安全に取り外しました"
         echo ""
         print_info "3秒後にターミナルを自動で閉じます..."
-        sleep 3
-        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+        /bin/sleep 3
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
     else
         print_error "ディスクの取り外しに失敗しました"
         wait_for_enter
@@ -2299,7 +2299,7 @@ nuclear_cleanup() {
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  アンマウント中: ${vol_name} (${device})"
-            if /usr/bin/sudo diskutil unmount "$device" >/dev/null 2>&1; then
+            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
                 ((unmount_count++))
                 print_success "  ✓ 完了"
             else
@@ -2312,7 +2312,7 @@ nuclear_cleanup() {
     
     print_success "ボリュームアンマウント完了: ${unmount_count}個"
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Step 2: Delete all containers
@@ -2330,7 +2330,7 @@ nuclear_cleanup() {
             local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${display}"
-            if /usr/bin/sudo rm -rf "$path" 2>/dev/null; then
+            if /usr/bin/sudo /bin/rm -rf "$path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
                 ((container_count++))
             else
@@ -2343,7 +2343,7 @@ nuclear_cleanup() {
     
     print_success "コンテナ削除完了: ${container_count}個"
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Step 3: Delete PlayTools.framework
@@ -2354,7 +2354,7 @@ nuclear_cleanup() {
     
     if [[ "$playtools_exists" == true ]]; then
         echo "  削除中: ${playtools_path}"
-        if rm -rf "$playtools_path" 2>/dev/null; then
+        if /bin/rm -rf "$playtools_path" 2>/dev/null; then
             print_success "  ✓ 削除完了"
         else
             print_warning "  ⚠ 削除失敗"
@@ -2364,7 +2364,7 @@ nuclear_cleanup() {
     fi
     
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Step 4: Delete caches and preferences
@@ -2380,7 +2380,7 @@ nuclear_cleanup() {
             local path=$(echo "$item_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${item_name}"
-            if rm -rf "$path" 2>/dev/null; then
+            if /bin/rm -rf "$path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
             else
                 print_warning "  ⚠ 削除失敗"
@@ -2392,7 +2392,7 @@ nuclear_cleanup() {
     
     print_success "キャッシュと設定削除完了"
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Step 5: Delete APFS volumes
@@ -2412,7 +2412,7 @@ nuclear_cleanup() {
             
             echo "  削除中: ${display} (${device})"
             
-            if /usr/bin/sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
+            if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
                 print_success "  ✓ 削除完了"
                 ((volume_count++))
             else
@@ -2425,7 +2425,7 @@ nuclear_cleanup() {
     
     print_success "APFSボリューム削除完了: ${volume_count}個"
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Step 6: Delete mapping file
@@ -2436,7 +2436,7 @@ nuclear_cleanup() {
     
     if [[ "$mapping_exists" == true ]]; then
         echo "  削除中: playcover-map.txt"
-        if rm -f "$MAPPING_FILE" 2>/dev/null; then
+        if /bin/rm -f "$MAPPING_FILE" 2>/dev/null; then
             print_success "  ✓ 削除完了"
         else
             print_warning "  ⚠ 削除失敗"
@@ -2444,14 +2444,14 @@ nuclear_cleanup() {
         
         # Delete lock file if exists
         if [[ -f "$MAPPING_LOCK_FILE" ]]; then
-            rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
+            /bin/rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
         fi
     else
         print_info "  削除対象なし"
     fi
     
     echo ""
-    sleep 1
+    /bin/sleep 1
     
     #######################################################
     # Final summary
@@ -2498,11 +2498,11 @@ switch_storage_location() {
             return
         fi
         
-        # Display volume list with storage type and mount status
+        # Display volume list with storage type and /sbin/mount status
         echo "データステータス:"
         echo ""
         
-        # Cache diskutil and mount output for performance
+        # Cache /usr/sbin/diskutil and /sbin/mount output for performance
         local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
         local mount_cache=$(/sbin/mount 2>/dev/null)
         
@@ -2572,7 +2572,7 @@ switch_storage_location() {
         
         if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
             print_error "無効な選択です"
-            sleep 2
+            /bin/sleep 2
             continue
         fi
         
@@ -2781,12 +2781,12 @@ switch_storage_location() {
             local mount_cleanup_needed=false
             
             if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
-                # Volume already mounted - need to unmount it first for fresh mount later
+                # Volume already mounted - need to unmount it first for fresh /sbin/mount later
                 print_info "外部ボリュームは既にマウントされています: $existing_mount"
                 available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
                 mount_cleanup_needed=true
             else
-                # Volume not mounted - mount it temporarily for capacity check
+                # Volume not mounted - /sbin/mount it temporarily for capacity check
                 print_info "外部ボリュームをマウント中..."
                 if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
                     print_success "マウント成功"
@@ -2815,7 +2815,7 @@ switch_storage_location() {
             if [[ "$mount_cleanup_needed" == true ]]; then
                 print_info "容量チェック完了、一時マウントをクリーンアップ中..."
                 /usr/bin/sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
-                sleep 1
+                /bin/sleep 1
             fi
             /usr/bin/sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
             
@@ -2860,10 +2860,10 @@ switch_storage_location() {
             if [[ -n "$current_mount" ]]; then
                 print_info "既存のマウントをアンマウント中..."
                 unmount_volume "$volume_name" "$bundle_id" || true
-                sleep 1
+                /bin/sleep 1
             fi
             
-            # Create temporary mount point
+            # Create temporary /sbin/mount point
             local temp_mount="/tmp/playcover_temp_$$"
             /usr/bin/sudo /bin/mkdir -p "$temp_mount"
             
@@ -2919,7 +2919,7 @@ switch_storage_location() {
                 /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
                     /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
                 }
-                sleep 1  # Wait for unmount to complete
+                /bin/sleep 1  # Wait for unmount to complete
                 /usr/bin/sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
                 wait_for_enter
                 continue
@@ -2932,7 +2932,7 @@ switch_storage_location() {
                 print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
                 /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount"
             }
-            sleep 1  # Wait for unmount to complete
+            /bin/sleep 1  # Wait for unmount to complete
             /usr/bin/sudo /bin/rm -rf "$temp_mount"
             
             # Delete internal data (no backup needed)
@@ -2988,7 +2988,7 @@ switch_storage_location() {
             
             local source_size_bytes=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
             
-            # Unmount temporary check mount if created
+            # Unmount temporary check /sbin/mount if created
             if [[ -n "$temp_check_mount" ]]; then
                 /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
                 /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
@@ -3046,13 +3046,13 @@ switch_storage_location() {
                 echo ""
             fi
             
-            # Determine current mount point
+            # Determine current /sbin/mount point
             local current_mount=$(get_mount_point "$volume_name")
             local temp_mount_created=false
             local source_mount=""
             
             if [[ -z "$current_mount" ]]; then
-                # Volume not mounted - mount to temporary location
+                # Volume not mounted - /sbin/mount to temporary location
                 print_info "ボリュームを一時マウント中..."
                 local temp_mount="/tmp/playcover_temp_$$"
                 /usr/bin/sudo /bin/mkdir -p "$temp_mount"
@@ -3106,7 +3106,7 @@ switch_storage_location() {
                     fi
                 fi
                 
-                sleep 1
+                /bin/sleep 1
                 
                 local temp_mount="/tmp/playcover_temp_$$"
                 /usr/bin/sudo /bin/mkdir -p "$temp_mount"
@@ -3178,7 +3178,7 @@ switch_storage_location() {
                     /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
                         /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
                     }
-                    sleep 1  # Wait for unmount to complete
+                    /bin/sleep 1  # Wait for unmount to complete
                     /usr/bin/sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
                 fi
                 
@@ -3196,7 +3196,7 @@ switch_storage_location() {
                 /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
                     /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
                 }
-                sleep 1  # Wait for unmount to complete
+                /bin/sleep 1  # Wait for unmount to complete
                 /usr/bin/sudo /bin/rm -rf "$source_mount"
             else
                 print_info "外部ボリュームをアンマウント中..."
@@ -3416,7 +3416,7 @@ show_auto_mount_menu() {
                 ;;
             *)
                 print_error "無効な選択です"
-                sleep 1
+                /bin/sleep 1
                 ;;
         esac
     done
@@ -3453,8 +3453,8 @@ install_auto_mount() {
     # Step 1: Copy script
     print_info "スクリプトをコピー中..."
     if [[ -f "${SCRIPT_DIR}/playcover-auto-mount.sh" ]]; then
-        cp "${SCRIPT_DIR}/playcover-auto-mount.sh" "$script_path"
-        chmod +x "$script_path"
+        /bin/cp "${SCRIPT_DIR}/playcover-auto-mount.sh" "$script_path"
+        /bin/chmod +x "$script_path"
         print_success "スクリプトをコピーしました: $script_path"
     else
         print_error "スクリプトファイルが見つかりません: ${SCRIPT_DIR}/playcover-auto-mount.sh"
@@ -3465,13 +3465,13 @@ install_auto_mount() {
     # Step 2: Create LaunchAgents directory if not exists
     local launch_agents_dir="${HOME}/Library/LaunchAgents"
     if [[ ! -d "$launch_agents_dir" ]]; then
-        mkdir -p "$launch_agents_dir"
+        /bin/mkdir -p "$launch_agents_dir"
     fi
     
     # Step 3: Copy and modify plist
     print_info "LaunchAgent plistを設定中..."
     if [[ -f "${SCRIPT_DIR}/com.playcover.automount.plist" ]]; then
-        cp "${SCRIPT_DIR}/com.playcover.automount.plist" "$launch_agent_path"
+        /bin/cp "${SCRIPT_DIR}/com.playcover.automount.plist" "$launch_agent_path"
         
         # Replace YOUR_USERNAME with actual username
         sed -i '' "s|/Users/YOUR_USERNAME/|${HOME}/|g" "$launch_agent_path"
@@ -3545,14 +3545,14 @@ uninstall_auto_mount() {
         fi
         
         print_info "plistファイルを削除中..."
-        rm "$launch_agent_path"
+        /bin/rm "$launch_agent_path"
         print_success "plistファイルを削除しました"
     fi
     
     # Remove script
     if [[ -f "$script_path" ]]; then
         print_info "スクリプトを削除中..."
-        rm "$script_path"
+        /bin/rm "$script_path"
         print_success "スクリプトを削除しました"
     fi
     
@@ -3752,7 +3752,7 @@ show_installed_apps() {
         local playcover_container="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
         if [[ -d "$playcover_container" ]]; then
             # Container exists (mounted), create Applications directory
-            mkdir -p "$playcover_apps" 2>/dev/null || true
+            /bin/mkdir -p "$playcover_apps" 2>/dev/null || true
         fi
         
         # Check again after creation attempt
@@ -3871,7 +3871,7 @@ app_management_menu() {
         local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         
         if [[ -z "$pc_current_mount" ]]; then
-            # Volume exists but not mounted - try to mount it
+            # Volume exists but not mounted - try to /sbin/mount it
             authenticate_sudo
             
             # Clear internal data first if needed
@@ -3904,7 +3904,7 @@ app_management_menu() {
                             ;;
                     esac
                 else
-                    # No internal data, mount directly
+                    # No internal data, /sbin/mount directly
                     mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1
                     playcover_mounted=$?
                     [[ $playcover_mounted -eq 0 ]] && playcover_mounted=true || playcover_mounted=false
@@ -4158,7 +4158,7 @@ uninstall_workflow() {
     local app_path="${playcover_apps}/${selected_bundle}.app"
     
     if [[ -d "$app_path" ]]; then
-        if ! rm -rf "$app_path" 2>/dev/null; then
+        if ! /bin/rm -rf "$app_path" 2>/dev/null; then
             print_error "アプリの削除に失敗しました"
             wait_for_enter
             return
@@ -4167,31 +4167,31 @@ uninstall_workflow() {
     
     # Step 2-5: Remove settings, entitlements, keymapping, containers (silent)
     local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${selected_bundle}.plist"
-    rm -f "$app_settings" 2>/dev/null
+    /bin/rm -f "$app_settings" 2>/dev/null
     
     local entitlements_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements/${selected_bundle}.plist"
-    rm -f "$entitlements_file" 2>/dev/null
+    /bin/rm -f "$entitlements_file" 2>/dev/null
     
     local keymapping_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping/${selected_bundle}.plist"
-    rm -f "$keymapping_file" 2>/dev/null
+    /bin/rm -f "$keymapping_file" 2>/dev/null
     
     local containers_dir="${HOME}/Library/Containers/${selected_bundle}"
-    rm -rf "$containers_dir" 2>/dev/null
+    /bin/rm -rf "$containers_dir" 2>/dev/null
     
     # Step 7: Unmount volume if mounted (silent)
     local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
-    if mount | grep -q "$volume_mount_point"; then
-        diskutil unmount "$volume_mount_point" >/dev/null 2>&1
+    if /sbin/mount | grep -q "$volume_mount_point"; then
+        /usr/sbin/diskutil unmount "$volume_mount_point" >/dev/null 2>&1
     fi
     
     # Step 8: Delete APFS volume
     local volume_device=$(diskutil list | grep "$selected_volume" | awk '{print $NF}')
     
     if [[ -n "$volume_device" ]]; then
-        if ! /usr/bin/sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+        if ! /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
             print_error "ボリュームの削除に失敗しました"
             echo ""
-            echo "手動で削除してください: /usr/bin/sudo diskutil apfs deleteVolume $volume_device"
+            echo "手動で削除してください: /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume $volume_device"
             wait_for_enter
             return
         fi
@@ -4209,7 +4209,7 @@ uninstall_workflow() {
         echo ""
         local playcover_app="/Applications/PlayCover.app"
         if [[ -d "$playcover_app" ]]; then
-            rm -rf "$playcover_app" 2>/dev/null
+            /bin/rm -rf "$playcover_app" 2>/dev/null
         fi
         
         print_success "PlayCover を完全にアンインストールしました"
@@ -4329,43 +4329,43 @@ uninstall_all_apps() {
         local app_path="${playcover_apps}/${bundle_id}.app"
         
         if [[ -d "$app_path" ]]; then
-            rm -rf "$app_path" 2>/dev/null
+            /bin/rm -rf "$app_path" 2>/dev/null
         fi
         
         # Step 2: Remove app settings
         local app_settings="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings/${bundle_id}.plist"
         if [[ -f "$app_settings" ]]; then
-            rm -f "$app_settings" 2>/dev/null
+            /bin/rm -f "$app_settings" 2>/dev/null
         fi
         
         # Step 3: Remove entitlements
         local entitlements_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Entitlements/${bundle_id}.plist"
         if [[ -f "$entitlements_file" ]]; then
-            rm -f "$entitlements_file" 2>/dev/null
+            /bin/rm -f "$entitlements_file" 2>/dev/null
         fi
         
         # Step 4: Remove keymapping
         local keymapping_file="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Keymapping/${bundle_id}.plist"
         if [[ -f "$keymapping_file" ]]; then
-            rm -f "$keymapping_file" 2>/dev/null
+            /bin/rm -f "$keymapping_file" 2>/dev/null
         fi
         
         # Step 5: Remove Containers folder
         local containers_dir="${HOME}/Library/Containers/${bundle_id}"
         if [[ -d "$containers_dir" ]]; then
-            rm -rf "$containers_dir" 2>/dev/null
+            /bin/rm -rf "$containers_dir" 2>/dev/null
         fi
         
         # Step 6: Unmount and delete APFS volume
         local volume_mount_point="${PLAYCOVER_CONTAINER}/${volume_name}"
-        if mount | grep -q "$volume_mount_point"; then
-            diskutil unmount "$volume_mount_point" >/dev/null 2>&1
+        if /sbin/mount | grep -q "$volume_mount_point"; then
+            /usr/sbin/diskutil unmount "$volume_mount_point" >/dev/null 2>&1
         fi
         
         # Find and delete volume
         local volume_device=$(diskutil list | grep "$volume_name" | awk '{print $NF}')
         if [[ -n "$volume_device" ]]; then
-            if /usr/bin/sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
+            if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
                 print_success "${app_name}"
                 ((success_count++))
             else
@@ -4387,7 +4387,7 @@ uninstall_all_apps() {
     
     # Step 8: Remove PlayCover.app (silent)
     local playcover_app="/Applications/PlayCover.app"
-    rm -rf "$playcover_app" 2>/dev/null
+    /bin/rm -rf "$playcover_app" 2>/dev/null
     
     # Summary
     echo ""
@@ -4400,8 +4400,8 @@ uninstall_all_apps() {
     echo ""
     print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
     echo ""
-    sleep 2
-    osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+    /bin/sleep 2
+    /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
 }
 
 #######################################################
@@ -4574,8 +4574,8 @@ select_external_disk() {
         print_success "選択されたディスク: ${disk_info[$array_index]}"
     else
         print_error "無効な選択です"
-        sleep 1
-        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 1
+        /bin/sleep 1
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 1
     fi
     
     echo ""
@@ -4620,8 +4620,8 @@ confirm_software_installations() {
     case "$response" in
         [nN]|[nN][oO])
             print_info "ユーザーによりインストールがキャンセルされました"
-            sleep 1
-            osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+            /bin/sleep 1
+            /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
             ;;
         *)
             print_success "インストールを続行します"
@@ -4633,7 +4633,7 @@ confirm_software_installations() {
 create_playcover_main_volume() {
     print_header "PlayCover ボリュームの作成"
     
-    if diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
+    if /usr/sbin/diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
         local existing_volume=$(diskutil info "${PLAYCOVER_VOLUME_NAME}" | grep "Mount Point:" | sed 's/.*: *//')
         print_warning "「${PLAYCOVER_VOLUME_NAME}」ボリュームが既に存在します"
         print_info "既存のボリュームを使用します: ${existing_volume}"
@@ -4664,7 +4664,7 @@ create_playcover_main_volume() {
         exit 1
     fi
     
-    if /usr/bin/sudo diskutil apfs addVolume "$container" APFS "${PLAYCOVER_VOLUME_NAME}" -nomount > /tmp/apfs_create.log 2>&1; then
+    if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$container" APFS "${PLAYCOVER_VOLUME_NAME}" -nomount > /tmp/apfs_create.log 2>&1; then
         print_success "ボリューム「${PLAYCOVER_VOLUME_NAME}」を作成しました"
     else
         print_error "ボリュームの作成に失敗しました"
@@ -4697,7 +4697,7 @@ mount_playcover_main_volume() {
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
         print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
         print_info "アンマウント中..."
-        if ! /usr/bin/sudo diskutil unmount force "$volume_device" 2>/dev/null; then
+        if ! /usr/bin/sudo /usr/sbin/diskutil unmount force "$volume_device" 2>/dev/null; then
             print_error "ボリュームのアンマウントに失敗しました"
             wait_for_enter
             exit 1
@@ -4715,9 +4715,9 @@ mount_playcover_main_volume() {
     fi
     
     local temp_mount="/tmp/playcover_temp_mount_$$"
-    mkdir -p "$temp_mount"
+    /bin/mkdir -p "$temp_mount"
     
-    if /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
+    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount" 2>/dev/null; then
         if [[ $(find "$temp_mount" -mindepth 1 -maxdepth 1 ! -name ".*" 2>/dev/null | wc -l) -gt 0 ]]; then
             has_external_data=true
         fi
@@ -4732,14 +4732,14 @@ mount_playcover_main_volume() {
         print_info "内部データを外部ストレージに統合してクリーンアップします"
         echo ""
         
-        mkdir -p "$temp_mount"
-        /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        /bin/mkdir -p "$temp_mount"
+        /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
         print_info "内部データを外部に統合中..."
         /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
         /usr/bin/sudo umount "$temp_mount"
         rmdir "$temp_mount"
         print_info "内部ストレージをクリア中..."
-        /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
+        /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
         print_success "内部データを外部に統合しました"
     elif $has_internal_data; then
         print_warning "⚠️  PlayCoverボリューム未マウント状態でPlayCoverが起動され、内部ストレージにデータが作成されています"
@@ -4747,28 +4747,28 @@ mount_playcover_main_volume() {
         print_info "内部データを外部に移行してクリーンアップします"
         echo ""
         
-        mkdir -p "$temp_mount"
-        /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        /bin/mkdir -p "$temp_mount"
+        /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
         print_info "データをコピー中..."
         /usr/bin/sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
         /usr/bin/sudo umount "$temp_mount"
         rmdir "$temp_mount"
         print_info "内部ストレージをクリア中..."
-        /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
+        /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
         print_success "内部データを外部に移行しました"
     else
         if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-            /usr/bin/sudo rm -rf "$PLAYCOVER_CONTAINER"
+            /usr/bin/sudo /bin/rm -rf "$PLAYCOVER_CONTAINER"
         fi
     fi
     
-    /usr/bin/sudo mkdir -p "$PLAYCOVER_CONTAINER"
+    /usr/bin/sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER"
     
     print_info "ボリュームをマウント中..."
-    if /usr/bin/sudo mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
+    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$PLAYCOVER_CONTAINER"; then
         print_success "ボリュームを正常にマウントしました"
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
-        /usr/bin/sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+        /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
     else
         print_error "ボリュームのマウントに失敗しました"
         wait_for_enter
@@ -4789,7 +4789,7 @@ install_xcode_tools() {
     local max_wait=600
     
     while ! xcode-select -p >/dev/null 2>&1; do
-        sleep 5
+        /bin/sleep 5
         ((wait_count++))
         
         if [[ $((wait_count % 12)) -eq 0 ]]; then
@@ -4901,7 +4901,7 @@ is_playcover_environment_ready() {
     fi
     
     # Check if PlayCover volume exists
-    if ! diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
+    if ! /usr/sbin/diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
         return 1
     fi
     
@@ -4942,8 +4942,8 @@ run_initial_setup() {
             ;;
         *)
             print_info "セットアップをキャンセルしました"
-            sleep 1
-            osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+            /bin/sleep 1
+            /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
             ;;
     esac
     
@@ -4973,7 +4973,7 @@ run_initial_setup() {
     echo "  マッピングファイル: ${MAPPING_FILE}"
     echo ""
     print_info "PlayCover Complete Manager のメニューに移動します..."
-    sleep 3
+    /bin/sleep 3
 }
 
 #######################################################
@@ -5024,20 +5024,20 @@ main() {
             0)
                 echo ""
                 print_info "終了します"
-                sleep 1
-                osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+                /bin/sleep 1
+                /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
                 ;;
             *)
                 echo ""
                 print_error "無効な選択です"
-                sleep 2
+                /bin/sleep 2
                 ;;
         esac
     done
 }
 
 # Trap Ctrl+C
-trap 'echo ""; print_info "終了します"; sleep 1; osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
+trap 'echo ""; print_info "終了します"; /bin/sleep 1; /usr/bin/osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
 
 # Execute main
 main
@@ -5046,14 +5046,14 @@ inal" to close (every window whose name contains "playcover")' & exit 0
             *)
                 echo ""
                 print_error "無効な選択です"
-                sleep 2
+                /bin/sleep 2
                 ;;
         esac
     done
 }
 
 # Trap Ctrl+C
-trap 'echo ""; print_info "終了します"; sleep 1; osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
+trap 'echo ""; print_info "終了します"; /bin/sleep 1; /usr/bin/osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
 
 # Execute main
 main
