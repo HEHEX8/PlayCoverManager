@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.14.3 - Fix External Drive Container Free Space Detection
+# Version: 4.14.4 - Use PlayCover Volume for External Drive Free Space
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -629,61 +629,28 @@ get_storage_free_space() {
     fi
 }
 
-# Get external drive free space for a specific volume
+# Get external drive free space using PlayCover volume
 get_external_drive_free_space() {
-    local volume_name=$1
+    # Always use PlayCover volume mount point to get external drive free space
+    # This is more reliable than checking individual app volumes
     
-    # Get volume device
-    local device=$(get_volume_device "$volume_name")
-    if [[ -z "$device" ]]; then
-        # If volume not found, fallback to home directory space
+    # Check if PlayCover volume exists
+    if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         get_storage_free_space "$HOME"
         return
     fi
     
-    # Get APFS container free space (more accurate for APFS volumes)
-    # This shows the actual free space in the APFS container, not the volume
-    local container_free=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Container Free Space" | /usr/bin/awk '{print $4, $5}' | /usr/bin/sed 's/[()]//g')
+    # Get PlayCover volume mount point
+    local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
     
-    if [[ -n "$container_free" ]]; then
-        # Convert to decimal units (10^n) if needed
-        # diskutil shows binary units (GiB, TiB), convert to GB, TB
-        local size_value=$(echo "$container_free" | /usr/bin/awk '{print $1}')
-        local size_unit=$(echo "$container_free" | /usr/bin/awk '{print $2}')
-        
-        case "$size_unit" in
-            "GB"|"GiB")
-                # Convert GiB to GB: multiply by 1.073741824
-                size_value=$(echo "$size_value * 1.073741824" | /usr/bin/bc 2>/dev/null || echo "$size_value")
-                echo "${size_value}GB" | /usr/bin/sed 's/\.[0-9]*GB/GB/'
-                ;;
-            "TB"|"TiB")
-                # Convert TiB to TB: multiply by 1.099511627776
-                size_value=$(echo "$size_value * 1.099511627776" | /usr/bin/bc 2>/dev/null || echo "$size_value")
-                echo "${size_value}TB" | /usr/bin/sed 's/\.[0-9][0-9][0-9]*TB/TB/' | /usr/bin/sed 's/\([0-9]\)\.\([0-9][0-9]\)TB/\1.\2TB/'
-                ;;
-            "MB"|"MiB")
-                size_value=$(echo "$size_value * 1.048576" | /usr/bin/bc 2>/dev/null || echo "$size_value")
-                echo "${size_value}MB" | /usr/bin/sed 's/\.[0-9]*MB/MB/'
-                ;;
-            *)
-                echo "$container_free"
-                ;;
-        esac
-        return
-    fi
-    
-    # Fallback: try to get free space from mount point
-    local mount_point=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
-    
-    if [[ -z "$mount_point" ]]; then
-        # If not mounted, use home directory space (same APFS container)
+    if [[ -z "$playcover_mount" ]]; then
+        # Not mounted, use home directory space
         get_storage_free_space "$HOME"
         return
     fi
     
-    # Get free space from mounted volume using df
-    get_storage_free_space "$mount_point"
+    # Get free space from PlayCover volume mount point using df -H
+    get_storage_free_space "$playcover_mount"
 }
 
 # CRITICAL FIX (v1.5.12): Renamed 'path' to 'container_path' to avoid zsh conflict
@@ -2903,7 +2870,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.3${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.4${NC}"
     echo ""
     
     show_quick_status
