@@ -3111,8 +3111,9 @@ show_menu() {
     
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
-    echo "  ${GREEN}【アプリ管理】${NC}                       ${YELLOW}【ボリューム管理】${NC}                  ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリ管理                        2. ボリューム操作                   3. ストレージ切り替え（内蔵⇄外部）"
+    echo "  ${GREEN}1.${NC} アプリ管理"
+    echo "  ${YELLOW}2.${NC} ボリューム操作"
+    echo "  ${CYAN}3.${NC} ストレージ切り替え（内蔵⇄外部）"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -3128,14 +3129,12 @@ show_menu() {
         fi
     fi
     
-    echo "  ${RED}【システム】${NC}"
-    echo "  4. ${eject_label}"
-    echo "  5. マッピング情報を表示"
-    echo "  0. 終了"
+    echo "  ${RED}4.${NC} ${eject_label}"
+    echo "  ${BLUE}0.${NC} 終了"
     echo ""
     print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
-    echo -n "${CYAN}選択 (0-5):${NC} "
+    echo -n "${CYAN}選択 (0-4):${NC} "
 }
 
 show_mapping_info() {
@@ -4435,9 +4434,6 @@ main() {
                 ;;
             4)
                 eject_disk
-                ;;
-            5)
-                show_mapping_info
                 ;;
             0)
                 echo ""
