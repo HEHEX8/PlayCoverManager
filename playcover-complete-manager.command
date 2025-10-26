@@ -2220,21 +2220,21 @@ switch_storage_location() {
         if [[ -n "$current_mount" ]]; then
             # Mounted - it's external storage
             storage_icon="🔌 外部"
-            mount_status="🟢 マウント済"
+            mount_status="🟢 外部ストレージマウント済"
         else
             # Not mounted - check if internal storage has data
             if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
                 local has_content=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/head -1)
                 if [[ -n "$has_content" ]]; then
                     storage_icon="🏠 内部"
-                    mount_status="⚪️ アンマウント済"
+                    mount_status="⚪️ 内部ストレージにデータ有"
                 else
                     storage_icon="⚠️  データ無し"
-                    mount_status="⚪️ アンマウント済"
+                    mount_status="⚪️ 外部ボリュームアンマウント済"
                 fi
             else
                 storage_icon="⚠️  データ無し"
-                mount_status="⚪️ アンマウント済"
+                mount_status="⚪️ 外部ボリュームアンマウント済"
             fi
         fi
         
