@@ -340,19 +340,35 @@ update_mapping() {
 # Module 4: Volume Operations
 #######################################################
 
+# Optimized: Accept optional cached diskutil output
 volume_exists() {
     local volume_name=$1
-    /usr/sbin/diskutil list | /usr/bin/grep -q "APFS Volume ${volume_name}"
+    local diskutil_cache="${2:-}"
+    
+    if [[ -n "$diskutil_cache" ]]; then
+        echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"
+    else
+        /usr/sbin/diskutil list | /usr/bin/grep -q "APFS Volume ${volume_name}"
+    fi
 }
 
+# Optimized: Accept optional cached diskutil output
 get_volume_device() {
     local volume_name=$1
-    /usr/sbin/diskutil list | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
+    local diskutil_cache="${2:-}"
+    
+    if [[ -n "$diskutil_cache" ]]; then
+        echo "$diskutil_cache" | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
+    else
+        /usr/sbin/diskutil list | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
+    fi
 }
 
+# Optimized: Accept optional cached diskutil output  
 get_mount_point() {
     local volume_name=$1
-    local device=$(get_volume_device "$volume_name")
+    local diskutil_cache="${2:-}"
+    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
     if [[ -z "$device" ]]; then
         echo ""
@@ -366,15 +382,21 @@ mount_volume() {
     local volume_name=$1
     local target_path=$2
     local force=${3:-false}
+    local diskutil_cache="${4:-}"  # Optional: pre-cached diskutil list output
     
-    # Check if volume exists
-    if ! volume_exists "$volume_name"; then
+    # Cache diskutil list output if not provided (execute only once)
+    if [[ -z "$diskutil_cache" ]]; then
+        diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    fi
+    
+    # Check if volume exists using cached output
+    if ! volume_exists "$volume_name" "$diskutil_cache"; then
         print_error "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
-    # Get current mount point
-    local current_mount=$(get_mount_point "$volume_name")
+    # Get current mount point using cached output
+    local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
     
     # If already mounted at target, nothing to do
     if [[ "$current_mount" == "$target_path" ]]; then
@@ -387,7 +409,7 @@ mount_volume() {
         print_info "別の場所にマウントされています: $current_mount"
         print_info "アンマウント中..."
         
-        local device=$(get_volume_device "$volume_name")
+        local device=$(get_volume_device "$volume_name" "$diskutil_cache")
         if ! sudo /usr/sbin/diskutil unmount "$device" 2>/dev/null; then
             print_error "アンマウントに失敗しました"
             return 1
@@ -431,7 +453,7 @@ mount_volume() {
     fi
     
     # Mount the volume with nobrowse option to hide from Finder/Desktop
-    local device=$(get_volume_device "$volume_name")
+    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
     # Use mount command directly with nobrowse option
     # diskutil doesn't support nobrowse directly, so we use mount -o nobrowse
@@ -463,13 +485,19 @@ quit_app_for_bundle() {
 unmount_volume() {
     local volume_name=$1
     local bundle_id=$2  # Optional: if provided, quit the app first
+    local diskutil_cache="${3:-}"  # Optional: pre-cached diskutil list output
     
-    if ! volume_exists "$volume_name"; then
+    # Cache diskutil list output if not provided (execute only once)
+    if [[ -z "$diskutil_cache" ]]; then
+        diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    fi
+    
+    if ! volume_exists "$volume_name" "$diskutil_cache"; then
         print_warning "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
-    local current_mount=$(get_mount_point "$volume_name")
+    local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
     
     if [[ -z "$current_mount" ]]; then
         print_info "既にアンマウント済みです"
@@ -481,7 +509,7 @@ unmount_volume() {
         quit_app_for_bundle "$bundle_id"
     fi
     
-    local device=$(get_volume_device "$volume_name")
+    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
     if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
         print_success "アンマウント成功"
