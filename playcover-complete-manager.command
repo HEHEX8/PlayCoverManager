@@ -1252,15 +1252,32 @@ unmount_all_volumes() {
     declare -a mappings_array=()
     local read_count=0
     
+    # Debug: Show what we're reading
+    echo ""
+    print_info "デバッグ: ファイル内容の読み込み..."
+    local line_num=0
+    
     # Use process substitution to avoid subshell issues
     while IFS=$'\t' read -r volume_name bundle_id display_name || [[ -n "$volume_name" ]]; do
+        ((line_num++))
+        echo "  行$line_num: [$volume_name] [$bundle_id] [$display_name]"
+        
         # Skip empty lines
         if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
+            echo "    → スキップ（空行）"
             continue
         fi
+        
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+        echo "    → 配列[${#mappings_array[@]}-1]に追加"
         ((read_count++))
     done < <(echo "$mappings_content")
+    
+    echo ""
+    print_info "配列構築完了: ${#mappings_array[@]}個"
+    for ((idx=0; idx<${#mappings_array[@]}; idx++)); do
+        echo "  [$idx]: ${mappings_array[$idx]}"
+    done
     
     if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "処理するボリュームがありません"
