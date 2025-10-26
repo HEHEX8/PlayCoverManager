@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.24.0 - Exit after nuclear cleanup (requires re-setup)
+# Version: 4.24.1 - Fix environment check after initial setup
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -4912,8 +4912,8 @@ is_playcover_environment_ready() {
         return 1
     fi
     
-    # Check if PlayCover volume exists
-    if ! /usr/sbin/diskutil info "${PLAYCOVER_VOLUME_NAME}" >/dev/null 2>&1; then
+    # Check if PlayCover volume exists (use volume_exists function)
+    if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
         return 1
     fi
     
