@@ -3039,6 +3039,11 @@ show_quick_status() {
     local total_count=0
     
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip PlayCover itself
+        if [[ "$volume_name" == "PlayCover" ]]; then
+            continue
+        fi
+        
         ((total_count++))
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
@@ -3052,8 +3057,13 @@ show_quick_status() {
     done <<< "$mappings_content"
     
     if [[ $total_count -gt 0 ]]; then
-        echo "${CYAN}【現在のステータス】${NC}"
-        echo "  ${GREEN}🔌 外部ストレージ: ${external_count}/${total_count}${NC}     ${YELLOW}💾 内蔵ストレージ: ${internal_count}/${total_count}${NC}     ${BLUE}⚪ データなし: ${unmounted_count}/${total_count}${NC}"
+        echo "${CYAN}コンテナ情報${NC}"
+        echo "${GREEN}🔌 外部マウント: ${external_count}件${NC}　　${YELLOW}🏠 内部マウント: ${internal_count}件${NC}  ${BLUE}⚠️  データ無し: ${unmounted_count}件${NC}"
+        
+        if [[ $unmounted_count -gt 0 ]]; then
+            echo "${YELLOW}⚠️  データが入っていないコンテナがあります。マウントを行ってください。${NC}"
+        fi
+        
         echo ""
     fi
 }
