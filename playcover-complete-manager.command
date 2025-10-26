@@ -1528,8 +1528,7 @@ individual_volume_control() {
     echo "登録されているボリューム:"
     echo ""
     
-    # Prepare all volume data first
-    local -a volume_data=()
+    # Display volumes with detailed status (single column)
     local index=1
     for ((i=0; i<${#mappings_array[@]}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
@@ -1560,41 +1559,10 @@ individual_volume_control() {
             fi
         fi
         
-        volume_data+=("${index}|${display_name}|${status_line}${extra_info}")
-        ((index++))
-    done
-    
-    # Display in 2 columns with fixed spacing
-    local total=${#volume_data[@]}
-    local left_width=55  # Fixed width for left column
-    
-    for ((i=0; i<total; i+=2)); do
-        # Left column (always exists)
-        IFS='|' read -r idx1 name1 status1 <<< "${volume_data[$i]}"
-        
-        # Build left column string
-        local left_line1="  ${idx1}. ${name1}"
-        local left_line2="      ${status1}"
-        
-        # Pad left column to fixed width
-        while [[ ${#left_line1} -lt $left_width ]]; do
-            left_line1+=" "
-        done
-        while [[ ${#left_line2} -lt $left_width ]]; do
-            left_line2+=" "
-        done
-        
-        # Right column (if exists)
-        if [[ $((i+1)) -lt $total ]]; then
-            IFS='|' read -r idx2 name2 status2 <<< "${volume_data[$((i+1))]}"
-            echo "${left_line1}${idx2}. ${name2}"
-            echo "${left_line2}${status2}"
-        else
-            # Only left column (trim padding)
-            echo "  ${idx1}. ${name1}"
-            echo "      ${status1}"
-        fi
+        echo "  ${index}. ${display_name}"
+        echo "      ${status_line}${extra_info}"
         echo ""
+        ((index++))
     done
     
     print_separator
