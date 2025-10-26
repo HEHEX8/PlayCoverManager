@@ -2774,7 +2774,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.8${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.19.9${NC}"
     echo ""
     
     show_quick_status
@@ -3843,14 +3843,14 @@ uninstall_all_apps() {
         local volume_device=$(diskutil list | grep "$volume_name" | awk '{print $NF}')
         if [[ -n "$volume_device" ]]; then
             if sudo diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
-                print_success "✓ ${app_name}"
+                print_success "${app_name}"
                 ((success_count++))
             else
-                print_error "✗ ${app_name} (ボリューム削除失敗)"
+                print_error "${app_name} (ボリューム削除失敗)"
                 ((fail_count++))
             fi
         else
-            print_success "✓ ${app_name}"
+            print_success "${app_name}"
             ((success_count++))
         fi
     done
@@ -3867,6 +3867,9 @@ uninstall_all_apps() {
     rm -rf "$playcover_app" 2>/dev/null
     
     # Summary
+    echo ""
+    print_separator
+    echo ""
     print_success "PlayCover と全アプリを完全削除しました (${success_count} 個)"
     if [[ $fail_count -gt 0 ]]; then
         echo "  ${RED}失敗: ${fail_count} 個${NC}"
@@ -3874,9 +3877,8 @@ uninstall_all_apps() {
     echo ""
     print_warning "このスクリプトは今後使用できません（PlayCoverを再インストールすると使用可能）"
     echo ""
-    echo -n "Enterキーでターミナルを終了します..."
-    read
-    exit 0
+    sleep 2
+    osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
 }
 
 #######################################################
