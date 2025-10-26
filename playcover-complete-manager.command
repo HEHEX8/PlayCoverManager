@@ -477,7 +477,7 @@ unmount_volume() {
     local current_mount=$(get_mount_point "$volume_name")
     
     if [[ -z "$current_mount" ]]; then
-        print_info "既にアンマウント済みです"
+        print_info "既に未マウント状態です"
         return 0
     fi
     
@@ -1373,7 +1373,7 @@ unmount_all_volumes() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
+            echo "     ${GREEN}✅ 既に未マウント状態${NC}"
             ((success_count++))
         else
             # Try to quit app first
@@ -1475,7 +1475,7 @@ show_status() {
                 ;;
             "none")
                 status_icon="${BLUE}⚪${NC}"
-                status_text="データなし（アンマウント済み）"
+                status_text="データなし（未マウント）"
                 ;;
             *)
                 status_icon="❓"
@@ -1557,7 +1557,7 @@ individual_volume_control() {
                 fi
             else
                 # Volume is unmounted - quick check for internal storage
-                status_line="⚪️ アンマウント済"
+                status_line="⚪️ 未マウント"
                 
                 # Quick check: only if path exists and not a mount point
                 if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
@@ -1939,7 +1939,7 @@ batch_unmount_all() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
+            echo "     ${GREEN}✅ 既に未マウント状態${NC}"
             ((success_count++))
         else
             if [[ -n "$bundle_id" ]]; then
@@ -2230,11 +2230,11 @@ switch_storage_location() {
                     mount_status="⚪️ 内部ストレージにデータ有"
                 else
                     storage_icon="⚠️  データ無し"
-                    mount_status="⚪️ 外部ボリュームアンマウント済"
+                    mount_status="⚪️ 外部ストレージ未マウント"
                 fi
             else
                 storage_icon="⚠️  データ無し"
-                mount_status="⚪️ 外部ボリュームアンマウント済"
+                mount_status="⚪️ 外部ストレージ未マウント"
             fi
         fi
         
@@ -2312,7 +2312,7 @@ switch_storage_location() {
         "none")
             print_error "ストレージ切り替えを実行できません"
             echo ""
-            echo "理由: データが存在しません（アンマウント済み）"
+            echo "理由: データが存在しません（未マウント）"
             echo ""
             echo "推奨される操作:"
             echo "  ${CYAN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
