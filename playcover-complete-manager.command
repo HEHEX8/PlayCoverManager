@@ -3144,11 +3144,93 @@ show_mapping_info() {
 # Module 10: Main Execution
 #######################################################
 
+show_installed_apps() {
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    
+    # Check if mapping file exists
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        return
+    fi
+    
+    local mappings_content=$(read_mappings)
+    
+    if [[ -z "$mappings_content" ]]; then
+        echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+        return
+    fi
+    
+    # Check if PlayCover Applications directory exists
+    if [[ ! -d "$playcover_apps" ]]; then
+        echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+        return
+    fi
+    
+    echo "${YELLOW}インストール済みアプリ:${NC}"
+    echo ""
+    
+    local installed_count=0
+    local missing_count=0
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Search for app in PlayCover Applications
+        local app_found=false
+        local app_version=""
+        
+        if [[ -d "$playcover_apps" ]]; then
+            while IFS= read -r app_path; do
+                if [[ -f "${app_path}/Info.plist" ]]; then
+                    local found_bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                    
+                    if [[ "$found_bundle_id" == "$bundle_id" ]]; then
+                        app_found=true
+                        app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null || echo "不明")
+                        break
+                    fi
+                fi
+            done < <(find "$playcover_apps" -maxdepth 1 -name "*.app" -type d 2>/dev/null)
+        fi
+        
+        if [[ "$app_found" == true ]]; then
+            echo "  ${GREEN}✓${NC} ${display_name} ${BLUE}(v${app_version})${NC}"
+            ((installed_count++))
+        else
+            echo "  ${RED}✗${NC} ${display_name} ${RED}(見つかりません)${NC}"
+            ((missing_count++))
+        fi
+    done <<< "$mappings_content"
+    
+    echo ""
+    if [[ $missing_count -eq 0 ]]; then
+        echo "${GREEN}合計: ${installed_count}個${NC}"
+    else
+        echo "${GREEN}インストール済: ${installed_count}個${NC}  ${RED}見つからない: ${missing_count}個${NC}"
+    fi
+}
+
 app_management_menu() {
+    # Ensure PlayCover volume is mounted before showing menu
+    if volume_exists "$PLAYCOVER_VOLUME_NAME" 2>/dev/null; then
+        local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+        
+        if [[ -z "$pc_current_mount" ]]; then
+            # Volume exists but not mounted - mount it silently
+            mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1 || true
+        elif [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+            # Volume mounted to wrong location - remount
+            unmount_volume "$PLAYCOVER_VOLUME_NAME" >/dev/null 2>&1 || true
+            mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1 || true
+        fi
+    fi
+    
     while true; do
         clear
         print_header "アプリ管理"
         
+        echo ""
+        show_installed_apps
+        echo ""
+        print_separator "$SEPARATOR_CHAR" "$CYAN"
         echo ""
         echo "${BLUE}▼ 操作を選択してください${NC}"
         echo ""
