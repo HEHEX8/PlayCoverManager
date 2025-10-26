@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.14.1 - Show Shared APFS Container Free Space
+# Version: 4.14.2 - Show Correct Target Drive Free Space
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -615,16 +615,44 @@ get_container_size() {
 }
 
 # Get storage free space (APFS volumes share space in same container)
+# Uses df -H for decimal units (MB, GB, TB) instead of binary (MiB, GiB, TiB)
 get_storage_free_space() {
-    # Get free space from the home directory's filesystem
-    # This represents the shared APFS container free space
-    local free_space=$(/bin/df -h "$HOME" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    local path="${1:-$HOME}"  # Default to home directory if no path provided
+    
+    # Get free space using df -H (decimal units: 10^n)
+    local free_space=$(/bin/df -H "$path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
     
     if [[ -z "$free_space" ]]; then
         echo "不明"
     else
         echo "$free_space"
     fi
+}
+
+# Get external drive free space for a specific volume
+get_external_drive_free_space() {
+    local volume_name=$1
+    
+    # Get volume device
+    local device=$(get_volume_device "$volume_name")
+    if [[ -z "$device" ]]; then
+        # If volume not found, fallback to home directory space
+        get_storage_free_space "$HOME"
+        return
+    fi
+    
+    # Get mount point
+    local mount_point=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
+    
+    if [[ -z "$mount_point" ]]; then
+        # If not mounted, check if volume exists and get space from its APFS container
+        # For unmounted volumes, use home directory space (same APFS container)
+        get_storage_free_space "$HOME"
+        return
+    fi
+    
+    # Get free space from mounted volume
+    get_storage_free_space "$mount_point"
 }
 
 # CRITICAL FIX (v1.5.12): Renamed 'path' to 'container_path' to avoid zsh conflict
@@ -2117,9 +2145,8 @@ switch_storage_location() {
         current_storage=$(get_storage_type "$target_path")
     fi
     
-    # Get current size and shared APFS container free space
+    # Get current size
     local current_size=$(get_container_size "$target_path")
-    local storage_free=$(get_storage_free_space)
     
     echo "${CYAN}現在の状態:${NC}"
     case "$current_storage" in
@@ -2137,20 +2164,27 @@ switch_storage_location() {
     esac
     echo ""
     
-    # Show shared APFS container free space
-    echo "${CYAN}ストレージ空き容量:${NC} ${storage_free} ${MAGENTA}(APFS共有領域)${NC}"
-    echo ""
-    
-    # Determine target action
+    # Determine target action and show appropriate free space
     local action=""
+    local storage_free=""
+    local storage_location=""
+    
     case "$current_storage" in
         "internal")
             action="external"
+            # Moving to external - show external drive free space
+            storage_free=$(get_external_drive_free_space "$volume_name")
+            storage_location="外部ドライブ"
             echo "${CYAN}実行する操作:${NC} 内蔵 → 外部ストレージへ移動"
+            echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
             ;;
         "external")
             action="internal"
+            # Moving to internal - show internal drive free space
+            storage_free=$(get_storage_free_space "$HOME")
+            storage_location="内蔵ドライブ"
             echo "${CYAN}実行する操作:${NC} 外部 → 内蔵ストレージへ移動"
+            echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
             ;;
         "none")
             print_error "ストレージ切り替えを実行できません"
@@ -2838,7 +2872,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.2${NC}"
     echo ""
     
     show_quick_status
