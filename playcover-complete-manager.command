@@ -1591,45 +1591,113 @@ individual_volume_control() {
     
     authenticate_sudo
     
-    echo ""
-    print_header "${display_name} の操作"
-    
     local target_path="${HOME}/Library/Containers/${bundle_id}"
     local current_mount=$(get_mount_point "$volume_name")
     
+    # Quick switch without confirmation
     if [[ -n "$current_mount" ]]; then
-        echo "${CYAN}現在: マウント済み${NC}"
-        echo ""
-        echo -n "アンマウントしますか？ (y/N): "
-        read confirm
-        
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        # Currently mounted -> Unmount
+        if ! volume_exists "$volume_name"; then
+            clear
+            print_header "${display_name} の操作"
             echo ""
-            unmount_volume "$volume_name" "$bundle_id"
+            print_error "ボリュームが見つかりません"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            individual_volume_control
+            return
+        fi
+        
+        # Quit app first
+        if [[ -n "$bundle_id" ]]; then
+            /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+            sleep 0.3
+        fi
+        
+        local device=$(get_volume_device "$volume_name")
+        if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            # Success - return to menu silently
+            individual_volume_control
+            return
+        else
+            # Failed - show error
+            clear
+            print_header "${display_name} の操作"
+            echo ""
+            if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                print_error "アンマウント失敗: アプリが実行中です"
+            else
+                print_error "アンマウント失敗: ファイルが使用中の可能性があります"
+            fi
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            individual_volume_control
+            return
         fi
     else
-        echo "${CYAN}現在: アンマウント済み${NC}"
-        echo ""
-        echo -n "マウントしますか？ (Y/n): "
-        read confirm
-        
-        if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+        # Currently unmounted -> Mount
+        if ! volume_exists "$volume_name"; then
+            clear
+            print_header "${display_name} の操作"
             echo ""
-            # Ensure PlayCover volume is mounted first (dependency requirement)
-            if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
-                print_info "依存関係: PlayCoverボリュームを先にマウント中..."
-                ensure_playcover_main_volume
+            print_error "ボリュームが見つかりません"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            individual_volume_control
+            return
+        fi
+        
+        # Check for internal storage conflict
+        if [[ -d "$target_path" ]] && [[ ! -L "$target_path" ]]; then
+            clear
+            print_header "${display_name} の操作"
+            echo ""
+            print_error "内蔵ストレージにデータが存在します"
+            print_warning "先に内蔵データを削除またはバックアップしてください"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            individual_volume_control
+            return
+        fi
+        
+        # Ensure PlayCover volume is mounted first (dependency requirement)
+        if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
+            if ! ensure_playcover_main_volume >/dev/null 2>&1; then
+                clear
+                print_header "${display_name} の操作"
                 echo ""
+                print_error "PlayCover ボリュームのマウントに失敗しました"
+                echo ""
+                echo -n "Enterキーで続行..."
+                read
+                individual_volume_control
+                return
             fi
-            mount_volume "$volume_name" "$target_path"
+        fi
+        
+        # Try to mount
+        local device=$(get_volume_device "$volume_name")
+        if sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
+            # Success - return to menu silently
+            individual_volume_control
+            return
+        else
+            # Failed - show error
+            clear
+            print_header "${display_name} の操作"
+            echo ""
+            print_error "マウントに失敗しました"
+            echo ""
+            echo -n "Enterキーで続行..."
+            read
+            individual_volume_control
+            return
         fi
     fi
-    
-    echo ""
-    echo -n "Enterキーで続行..."
-    read
-    
-    individual_volume_control
 }
 
 # Get drive name for display (v4.7.0)
