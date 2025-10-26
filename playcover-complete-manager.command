@@ -73,8 +73,7 @@ print_separator() {
 
 print_header() {
     echo ""
-    echo "${BLUE}▼ $1${NC}"
-    print_separator
+    echo "${BLUE}$1${NC}"
     echo ""
 }
 
@@ -3098,18 +3097,12 @@ show_menu() {
     clear
     
     echo ""
-    print_separator "═" "$CYAN"
-    echo ""
-    echo "                               ${GREEN}PlayCover 統合管理ツール${NC}"
-    echo ""
-    echo "                         ${BLUE}macOS Tahoe 26.0.1 対応版${NC}  -  ${BLUE}Version 4.7.0${NC}"
-    echo ""
-    print_separator "═" "$CYAN"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.7.0${NC}"
     echo ""
     
     show_quick_status
     
-    echo "${BLUE}▼ メインメニュー${NC}"
+    echo "${BLUE}メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}1.${NC} アプリ管理"
     echo "  ${YELLOW}2.${NC} ボリューム操作"
@@ -3131,8 +3124,6 @@ show_menu() {
     
     echo "  ${RED}4.${NC} ${eject_label}"
     echo "  ${BLUE}0.${NC} 終了"
-    echo ""
-    print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
     echo -n "${CYAN}選択 (0-4):${NC} "
 }
@@ -3304,14 +3295,10 @@ app_management_menu() {
     
     while true; do
         clear
-        print_header "アプリ管理"
-        
+        echo ""
+        echo "${BLUE}アプリ管理${NC}"
         echo ""
         show_installed_apps
-        echo ""
-        print_separator "$SEPARATOR_CHAR" "$CYAN"
-        echo ""
-        echo "${BLUE}▼ 操作を選択してください${NC}"
         echo ""
         echo "  ${GREEN}1.${NC} アプリをインストール"
         echo "  ${RED}2.${NC} アプリをアンインストール"
