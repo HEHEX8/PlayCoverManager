@@ -106,6 +106,13 @@ print_batch_progress() {
     echo ""
 }
 
+wait_for_enter() {
+    local message="${1:-Enterキーで続行...}"
+    echo ""
+    echo -n "$message"
+    read
+}
+
 is_playcover_running() {
     pgrep -x "PlayCover" >/dev/null 2>&1
 }
@@ -1940,16 +1947,17 @@ eject_disk() {
 #######################################################
 
 switch_storage_location() {
-    clear
-    print_header "ストレージ切り替え（内蔵⇄外部）"
-    
-    local mappings_content=$(read_mappings)
-    
-    if [[ -z "$mappings_content" ]]; then
-        print_warning "登録されているアプリボリュームがありません"
-        wait_for_enter
-        return
-    fi
+    while true; do
+        clear
+        print_header "ストレージ切り替え（内蔵⇄外部）"
+        
+        local mappings_content=$(read_mappings)
+        
+        if [[ -z "$mappings_content" ]]; then
+            print_warning "登録されているアプリボリュームがありません"
+            wait_for_enter
+            return
+        fi
     
     # Display volume list with storage type and mount status
     echo "データステータス:"
@@ -2026,8 +2034,7 @@ switch_storage_location() {
     if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
         print_error "無効な選択です"
         sleep 2
-        switch_storage_location
-        return
+        continue
     fi
     
     # Convert 1-based user input to 0-based array index
@@ -2097,7 +2104,7 @@ switch_storage_location() {
             echo "  ${CYAN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
             echo "  ${CYAN}2.${NC} その後、このストレージ切り替え機能を使用"
             wait_for_enter
-            switch_storage_location
+            continue
             return
             ;;
         *)
@@ -2107,7 +2114,7 @@ switch_storage_location() {
             echo "  - アプリがまだインストールされていない"
             echo "  - データディレクトリが存在しない"
             wait_for_enter
-            switch_storage_location
+            continue
             return
             ;;
     esac
@@ -2124,7 +2131,7 @@ switch_storage_location() {
     if [[ ! "$confirm" =~ ^[Yy] ]]; then
         print_info "キャンセルしました"
         wait_for_enter
-        switch_storage_location
+        continue
         return
     fi
     
@@ -2141,7 +2148,7 @@ switch_storage_location() {
         if ! volume_exists "$volume_name"; then
             print_error "外部ボリュームが見つかりません: ${volume_name}"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2152,7 +2159,7 @@ switch_storage_location() {
         if [[ ! -d "$source_path" ]]; then
             print_error "コピー元が存在しません: $source_path"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2182,7 +2189,7 @@ switch_storage_location() {
                     echo ""
                     echo -n "Enterキーで続行..."
                     read
-                    switch_storage_location
+                continue
                     return
                 fi
             else
@@ -2196,7 +2203,7 @@ switch_storage_location() {
                 echo "  - 内蔵ストレージへの移行が完了していない"
                 echo "  - コンテナディレクトリが破損している"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
         fi
@@ -2207,7 +2214,7 @@ switch_storage_location() {
         if [[ -z "$source_size_bytes" ]]; then
             print_error "コピー元のサイズを取得できませんでした"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2220,7 +2227,7 @@ switch_storage_location() {
             print_info "デバッグ情報:"
             echo "  ボリューム名: $volume_name"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2260,7 +2267,7 @@ switch_storage_location() {
                 echo "  - 権限の問題"
                 sudo /bin/rm -rf "$temp_check_mount"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
         fi
@@ -2298,7 +2305,7 @@ switch_storage_location() {
             if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
                 print_info "キャンセルしました"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
             
@@ -2328,7 +2335,7 @@ switch_storage_location() {
             print_error "ボリュームのマウントに失敗しました"
             sudo /bin/rm -rf "$temp_mount"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2376,7 +2383,7 @@ switch_storage_location() {
             sleep 1  # Wait for unmount to complete
             sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2411,7 +2418,7 @@ switch_storage_location() {
         if ! volume_exists "$volume_name"; then
             print_error "外部ボリュームが見つかりません: ${volume_name}"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2434,7 +2441,7 @@ switch_storage_location() {
                 print_error "外部ボリュームの容量チェックに失敗しました"
                 sudo /bin/rm -rf "$temp_check_mount"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
             check_mount_point="$temp_check_mount"
@@ -2451,7 +2458,7 @@ switch_storage_location() {
         if [[ -z "$source_size_bytes" ]]; then
             print_error "コピー元のサイズを取得できませんでした"
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2489,7 +2496,7 @@ switch_storage_location() {
             if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
                 print_info "キャンセルしました"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
             
@@ -2515,7 +2522,7 @@ switch_storage_location() {
                 print_error "ボリュームのマウントに失敗しました"
                 sudo /bin/rm -rf "$temp_mount"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
             source_mount="$temp_mount"
@@ -2553,7 +2560,7 @@ switch_storage_location() {
                     echo ""
                     echo -n "Enterキーで続行..."
                     read </dev/tty
-                    switch_storage_location
+                continue
                     return
                 else
                     print_success "強制アンマウントに成功しました"
@@ -2569,7 +2576,7 @@ switch_storage_location() {
                 sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
                 sudo /bin/rm -rf "$temp_mount"
                 wait_for_enter
-                switch_storage_location
+                continue
                 return
             fi
             source_mount="$temp_mount"
@@ -2640,7 +2647,7 @@ switch_storage_location() {
             sudo /bin/rm -rf "$target_path" 2>/dev/null || true
             
             wait_for_enter
-            switch_storage_location
+            continue
             return
         fi
         
@@ -2663,6 +2670,7 @@ switch_storage_location() {
     fi
     
     wait_for_enter
+    done  # End of while true loop
 }
 
 #######################################################
@@ -4001,8 +4009,17 @@ select_external_disk() {
     done
     
     echo ""
-    echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}): "
-    read selection
+    
+    # If only one disk, auto-select with Enter key
+    if [[ ${#external_disks[@]} -eq 1 ]]; then
+        echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}) [Enter=1]: "
+        read selection
+        # Default to 1 if empty
+        selection=${selection:-1}
+    else
+        echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}): "
+        read selection
+    fi
     
     if [[ "$selection" =~ ^[0-9]+$ ]] && [[ $selection -ge 1 ]] && [[ $selection -le ${#external_disks[@]} ]]; then
         # Convert 1-based user input to 0-based array index
@@ -4011,8 +4028,8 @@ select_external_disk() {
         print_success "選択されたディスク: ${disk_info[$array_index]}"
     else
         print_error "無効な選択です"
-        wait_for_enter
-        exit 1
+        sleep 1
+        osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 1
     fi
     
     echo ""
@@ -4057,8 +4074,8 @@ confirm_software_installations() {
     case "$response" in
         [nN]|[nN][oO])
             print_info "ユーザーによりインストールがキャンセルされました"
-            wait_for_enter
-            exit 0
+            sleep 1
+            osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
             ;;
         *)
             print_success "インストールを続行します"
@@ -4334,20 +4351,21 @@ run_initial_setup() {
     echo "  - 外部ストレージ（SSD推奨）"
     echo ""
     
-    echo -n "${YELLOW}初回セットアップを開始しますか？ (Y/n):${NC} "
+    echo -n "${YELLOW}初回セットアップを開始しますか？ (y/N):${NC} "
     read response
     
+    # Default to No if empty
+    response=${response:-N}
+    
     case "$response" in
-        [nN]|[nN][oO])
-            print_info "セットアップをキャンセルしました"
-            echo ""
-            print_info "PlayCoverをインストール後、再度実行してください"
-            wait_for_enter
-            exit 0
-            ;;
-        *)
+        [yY]|[yY][eE][sS])
             print_success "セットアップを開始します"
             echo ""
+            ;;
+        *)
+            print_info "セットアップをキャンセルしました"
+            sleep 1
+            osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
             ;;
     esac
     
@@ -4361,33 +4379,7 @@ run_initial_setup() {
     select_external_disk
     confirm_software_installations
     
-    # Final confirmation
-    print_header "最終確認"
-    print_warning "以下の操作を実行します:"
-    echo "  1. 外部ストレージに PlayCover ボリュームを作成"
-    echo "  2. PlayCover コンテナを外部ストレージにマウント"
-    if $NEED_XCODE_TOOLS || $NEED_HOMEBREW || $NEED_PLAYCOVER; then
-        echo "  3. 不足しているソフトウェアをインストール"
-    fi
-    echo ""
-    print_info "選択されたディスク: ${SELECTED_DISK}"
-    print_info "マウント先: ${PLAYCOVER_CONTAINER}"
-    echo ""
-    echo -n "続行してもよろしいですか? (Y/n): "
-    read final_confirm
-    
-    case "$final_confirm" in
-        [nN]|[nN][oO])
-            print_info "ユーザーにより処理がキャンセルされました"
-            wait_for_enter
-            exit 0
-            ;;
-        *)
-            print_success "処理を開始します"
-            echo ""
-            ;;
-    esac
-    
+    # Proceed directly to installation
     create_playcover_main_volume
     mount_playcover_main_volume
     perform_software_installations
@@ -4440,7 +4432,7 @@ main() {
                 individual_volume_control
                 ;;
             3)
-                switch_storage_location
+                continue
                 ;;
             4)
                 eject_disk
