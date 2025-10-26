@@ -1535,6 +1535,7 @@ individual_volume_control() {
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local current_mount=$(get_mount_point "$volume_name")
+        local storage_type=$(get_storage_type "$target_path")
         local status_line=""
         local extra_info=""
         
@@ -1549,15 +1550,12 @@ individual_volume_control() {
                 status_line="⚠️  マウント位置異常"
             fi
         else
-            # Volume is unmounted
+            # Volume is unmounted - check storage type
             status_line="⚪️ アンマウント済"
             
-            # Check if internal storage has data (not just empty directory)
-            if [[ -d "$target_path" ]] && [[ ! -L "$target_path" ]]; then
-                # Check if directory contains any files or subdirectories
-                if [[ -n "$(ls -A "$target_path" 2>/dev/null)" ]]; then
-                    extra_info=" | 🏠 内蔵ストレージにデータ有"
-                fi
+            # Use get_storage_type() for accurate detection
+            if [[ "$storage_type" == "internal" ]]; then
+                extra_info=" | 🏠 内蔵ストレージにデータ有"
             fi
         fi
         
