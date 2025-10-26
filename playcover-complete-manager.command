@@ -1552,9 +1552,12 @@ individual_volume_control() {
             # Volume is unmounted
             status_line="⚪️ アンマウント済"
             
-            # Check if internal storage has data
+            # Check if internal storage has data (not just empty directory)
             if [[ -d "$target_path" ]] && [[ ! -L "$target_path" ]]; then
-                extra_info=" | 🏠 内蔵ストレージにデータ有"
+                # Check if directory contains any files or subdirectories
+                if [[ -n "$(ls -A "$target_path" 2>/dev/null)" ]]; then
+                    extra_info=" | 🏠 内蔵ストレージにデータ有"
+                fi
             fi
         fi
         
