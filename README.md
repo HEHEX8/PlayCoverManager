@@ -270,7 +270,15 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.26.1 (最新) - Fix PlayCover Installation Verification
+### v4.26.2 (最新) - Fix Homebrew Path Detection for Apple Silicon
+- 🐛 **Homebrewパス検出修正**: Apple Silicon/Intel両対応に
+- ✅ Apple Silicon: `/opt/homebrew/bin/brew`
+- ✅ Intel: `/usr/local/bin/brew`
+- ✅ 自動検出して `BREW_PATH` 定数に設定
+- ✅ すべてのbrewコマンドを `$BREW_PATH` に統一
+- ✅ install_homebrew関数も動的パス対応
+
+### v4.26.1 - Fix PlayCover Installation Verification
 - 🐛 **インストール検証修正**: PlayCoverインストール後の確認処理を追加
 - ✅ `brew install` 成功確認
 - ✅ `/Applications/PlayCover.app` 存在確認（最大10秒待機）
@@ -374,4 +382,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.1）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.2）

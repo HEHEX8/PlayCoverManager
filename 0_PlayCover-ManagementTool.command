@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.26.1 - Fix PlayCover installation verification
+# Version: 4.26.2 - Fix Homebrew path detection for Apple Silicon
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -34,6 +34,15 @@ readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
+
+# Detect Homebrew path (Apple Silicon vs Intel)
+if [[ -x "/opt/homebrew/bin/brew" ]]; then
+    readonly BREW_PATH="/opt/homebrew/bin/brew"
+elif [[ -x "/usr/local/bin/brew" ]]; then
+    readonly BREW_PATH="/usr/local/bin/brew"
+else
+    readonly BREW_PATH="brew"  # Fallback to PATH
+fi
 
 # Display width settings (optimized for 120x30 terminal)
 readonly DISPLAY_WIDTH=118
@@ -2037,7 +2046,7 @@ nuclear_cleanup() {
     # Check PlayCover app
     local playcover_app_exists=false
     local playcover_homebrew=false
-    if /usr/local/bin/brew list --cask playcover-community &>/dev/null 2>&1; then
+    if "$BREW_PATH" list --cask playcover-community &>/dev/null 2>&1; then
         playcover_app_exists=true
         playcover_homebrew=true
     elif [[ -d "/Applications/PlayCover.app" ]]; then
@@ -2254,7 +2263,7 @@ nuclear_cleanup() {
     if [[ "$playcover_app_exists" == true ]]; then
         if [[ "$playcover_homebrew" == true ]]; then
             echo "  アンインストール中: PlayCover (Homebrew Cask)"
-            if /usr/local/bin/brew uninstall --cask playcover-community >/dev/null 2>&1; then
+            if "$BREW_PATH" uninstall --cask playcover-community >/dev/null 2>&1; then
                 print_success "  ✓ Homebrewからアンインストール完了"
             else
                 print_warning "  ⚠ Homebrewアンインストール失敗"
@@ -4339,7 +4348,7 @@ check_homebrew() {
     print_header "Homebrew の確認"
     
     if command -v brew >/dev/null 2>&1; then
-        local brew_version=$(brew --version | head -n 1)
+        local brew_version=$("$BREW_PATH" --version | head -n 1)
         print_success "Homebrew が存在します"
         print_info "${brew_version}"
         NEED_HOMEBREW=false
@@ -4729,17 +4738,29 @@ install_xcode_tools() {
 install_homebrew() {
     print_info "Homebrew をインストール中..."
     NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" < /dev/null > /tmp/homebrew_install.log 2>&1
-    if [[ ! -f "${HOME}/.zprofile" ]] || ! grep -q "/opt/homebrew/bin/brew" "${HOME}/.zprofile"; then
-        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "${HOME}/.zprofile"
-        eval "$(/opt/homebrew/bin/brew shellenv)"
+    
+    # Detect Homebrew installation path and set up shell environment
+    local brew_prefix=""
+    if [[ -x "/opt/homebrew/bin/brew" ]]; then
+        brew_prefix="/opt/homebrew"
+    elif [[ -x "/usr/local/bin/brew" ]]; then
+        brew_prefix="/usr/local"
     fi
+    
+    if [[ -n "$brew_prefix" ]]; then
+        if [[ ! -f "${HOME}/.zprofile" ]] || ! grep -q "${brew_prefix}/bin/brew" "${HOME}/.zprofile"; then
+            echo "eval \"\$(${brew_prefix}/bin/brew shellenv)\"" >> "${HOME}/.zprofile"
+            eval "$(${brew_prefix}/bin/brew shellenv)"
+        fi
+    fi
+    
     print_success "Homebrew のインストールが完了しました"
 }
 
 install_playcover() {
     print_info "PlayCover をインストール中..."
     
-    if /usr/local/bin/brew install --cask playcover-community > /tmp/playcover_install.log 2>&1; then
+    if "$BREW_PATH" install --cask playcover-community > /tmp/playcover_install.log 2>&1; then
         print_success "PlayCover のインストールが完了しました"
     else
         print_error "PlayCover のインストールに失敗しました"
