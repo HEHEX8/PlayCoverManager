@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.19.3 - Improved locked volume display
+# Version: 4.19.4 - Fix syntax and improve display
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
