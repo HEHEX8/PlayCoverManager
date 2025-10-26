@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.15.4 - Simplify Drive Eject Display
+# Version: 4.15.5 - Fix Sudo Authentication Timing
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -604,8 +604,8 @@ get_container_size() {
         return
     fi
     
-    # Use du -sh for total size
-    local size=$(sudo /usr/bin/du -sh "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    # Use du -sh for total size (no sudo needed for user's own files)
+    local size=$(/usr/bin/du -sh "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
     
     if [[ -z "$size" ]]; then
         echo "0B"
@@ -2006,6 +2006,9 @@ switch_storage_location() {
         return
     fi
     
+    # Authenticate sudo early for container size calculation
+    authenticate_sudo
+    
     # Display volume list with storage type and mount status
     echo "データステータス:"
     echo ""
@@ -2084,8 +2087,6 @@ switch_storage_location() {
         switch_storage_location
         return
     fi
-    
-    authenticate_sudo
     
     # Convert 1-based user input to 0-based array index
     local array_index=$((choice - 1))
@@ -2831,7 +2832,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.4${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.5${NC}"
     echo ""
     
     show_quick_status
