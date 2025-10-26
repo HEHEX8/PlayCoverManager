@@ -1651,18 +1651,29 @@ individual_volume_control() {
             return
         fi
         
-        # Check for internal storage conflict
-        if [[ -d "$target_path" ]] && [[ ! -L "$target_path" ]]; then
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "内蔵ストレージにデータが存在します"
-            print_warning "先に内蔵データを削除またはバックアップしてください"
-            echo ""
-            echo -n "Enterキーで続行..."
-            read
-            individual_volume_control
-            return
+        # Check for internal storage conflict (same logic as mount_volume)
+        if [[ -e "$target_path" ]]; then
+            local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
+            
+            if [[ -z "$mount_check" ]]; then
+                # Directory exists but is NOT a mount point
+                # Check if it contains actual data (ignore macOS metadata)
+                local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+                
+                if [[ -n "$content_check" ]]; then
+                    # Directory has actual content = internal storage data exists
+                    clear
+                    print_header "${display_name} の操作"
+                    echo ""
+                    print_error "内蔵ストレージにデータが存在します"
+                    print_warning "先に内蔵データを削除またはバックアップしてください"
+                    echo ""
+                    echo -n "Enterキーで続行..."
+                    read
+                    individual_volume_control
+                    return
+                fi
+            fi
         fi
         
         # Ensure PlayCover volume is mounted first (dependency requirement)
