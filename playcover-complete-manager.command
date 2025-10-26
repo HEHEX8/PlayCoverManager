@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.12.0 - Auto-Mount LaunchAgent Setup
+# Version: 4.12.1 - Fix Auto-Mount Race Condition
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2897,7 +2897,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.12.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.12.1${NC}"
     echo ""
     
     show_quick_status
@@ -3112,11 +3112,17 @@ install_auto_mount() {
     print_success "自動マウント機能のインストールが完了しました！"
     echo ""
     echo "${CYAN}次のステップ:${NC}"
-    echo "  1. PlayCoverボリュームをアンマウント"
-    echo "  2. PlayCover.appを起動"
-    echo "  3. 自動的にボリュームがマウントされることを確認"
+    echo "  ${GREEN}推奨:${NC} システムを再起動またはログアウト→ログイン"
+    echo "  ${BLUE}理由:${NC} ログイン時にPlayCoverボリュームが自動マウントされます"
+    echo ""
+    echo "${CYAN}動作確認方法:${NC}"
+    echo "  1. ログイン後、ボリュームがマウントされていることを確認"
+    echo "  2. PlayCover.appを起動して正常動作を確認"
     echo ""
     echo "${YELLOW}ログファイル:${NC} ${HOME}/Library/Logs/playcover-auto-mount.log"
+    echo ""
+    echo "${MAGENTA}注意:${NC} WatchPaths方式は廃止し、ログイン時マウントに変更しました"
+    echo "       これにより、PlayCover起動前の確実なマウントを実現"
     echo ""
     echo -n "Enterキーで続行..."
     read
@@ -3290,7 +3296,16 @@ show_auto_mount_setup_guide() {
     echo ""
     
     echo "${CYAN}解決策:${NC}"
-    echo "PlayCover起動時に自動的にボリュームをマウントするLaunchAgentを設定"
+    echo "ログイン時に自動的にPlayCoverボリュームをマウントするLaunchAgentを設定"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}動作仕様:${NC}"
+    echo "• ログイン時に自動実行（RunAtLoad）"
+    echo "• 既にマウント済みの場合はスキップ"
+    echo "• 内部ストレージに大量データがある場合は警告表示"
+    echo "• 少量の初期データは自動クリア"
     echo ""
     print_separator
     echo ""
@@ -3302,9 +3317,9 @@ show_auto_mount_setup_guide() {
     echo "   自動的にインストールできます。"
     echo ""
     echo "${GREEN}2. 動作確認${NC}"
-    echo "   a) PlayCoverボリュームをアンマウント"
-    echo "   b) PlayCover.appを起動"
-    echo "   c) 自動的にボリュームがマウントされることを確認"
+    echo "   a) システムを再起動またはログアウト→ログイン"
+    echo "   b) ログイン後、自動的にボリュームがマウントされることを確認"
+    echo "   c) PlayCover.appを起動して正常動作を確認"
     echo ""
     echo "${GREEN}3. ログ確認${NC}"
     echo "   ${YELLOW}${HOME}/Library/Logs/playcover-auto-mount.log${NC}"

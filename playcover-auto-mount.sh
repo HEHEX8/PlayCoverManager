@@ -58,25 +58,46 @@ if [[ ! -d "$PLAYCOVER_CONTAINER" ]]; then
     /bin/mkdir -p "$PLAYCOVER_CONTAINER" 2>/dev/null || true
 fi
 
-# Check if internal storage has data (CRITICAL CHECK)
+# Check if internal storage has significant data
+# Note: PlayCover may create some initial files immediately on launch
+# We only block mounting if there's substantial existing data
 if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-    # Check for actual content (ignore macOS metadata)
-    CONTENT_CHECK=$(/bin/ls -A1 "$PLAYCOVER_CONTAINER" 2>/dev/null | \
-        /usr/bin/grep -v -x -F '.DS_Store' | \
-        /usr/bin/grep -v -x -F '.Spotlight-V100' | \
-        /usr/bin/grep -v -x -F '.Trashes' | \
-        /usr/bin/grep -v -x -F '.fseventsd' | \
-        /usr/bin/grep -v -x -F '.TemporaryItems' | \
-        /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
-    
-    if [[ -n "$CONTENT_CHECK" ]]; then
-        log "ERROR: Internal storage has data - cannot mount to prevent data loss"
-        log "SOLUTION: Use storage switch feature to migrate data first"
+    # Check if it's a mount point already (should not happen, but check anyway)
+    if /sbin/mount | /usr/bin/grep -q " on ${PLAYCOVER_CONTAINER} "; then
+        log "INFO: Container is already a mount point, skipping check"
+    else
+        # Check for significant data directories (Data, Documents, Library, etc.)
+        # These indicate actual app usage, not just initial creation
+        SIGNIFICANT_DATA=false
         
-        # Show notification to user
-        /usr/bin/osascript -e 'display notification "内蔵ストレージにデータが存在します。ストレージ切り替え機能を使用してください。" with title "PlayCover マウントエラー" sound name "Glass"' 2>/dev/null || true
+        if [[ -d "$PLAYCOVER_CONTAINER/Data" ]] || \
+           [[ -d "$PLAYCOVER_CONTAINER/Documents" ]] || \
+           [[ -d "$PLAYCOVER_CONTAINER/Library" ]]; then
+            # Check if these directories have actual content
+            local data_size=$(/usr/bin/du -sk "$PLAYCOVER_CONTAINER" 2>/dev/null | /usr/bin/awk '{print $1}')
+            
+            # If container size > 1MB (1024KB), consider it significant data
+            if [[ -n "$data_size" ]] && [[ $data_size -gt 1024 ]]; then
+                SIGNIFICANT_DATA=true
+                log "WARNING: Internal storage has significant data (${data_size}KB)"
+            fi
+        fi
         
-        exit 1
+        if [[ "$SIGNIFICANT_DATA" == true ]]; then
+            log "ERROR: Internal storage has substantial data - manual migration required"
+            log "SOLUTION: Use 'アプリ管理' menu to handle internal data cleanup"
+            
+            # Show notification to user
+            /usr/bin/osascript -e 'display notification "内蔵ストレージに既存データがあります。アプリ管理メニューから処理してください。" with title "PlayCover 内部データ検出" sound name "Glass"' 2>/dev/null || true
+            
+            exit 1
+        else
+            # Small amount of data or just metadata - safe to clear
+            if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+                log "INFO: Clearing minimal internal data before mount"
+                /bin/rm -rf "$PLAYCOVER_CONTAINER" 2>/dev/null || true
+            fi
+        fi
     fi
 fi
 

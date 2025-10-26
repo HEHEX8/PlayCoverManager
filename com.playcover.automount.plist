@@ -11,16 +11,14 @@
         <string>/Users/YOUR_USERNAME/playcover-auto-mount.sh</string>
     </array>
     
-    <key>WatchPaths</key>
-    <array>
-        <string>/Applications/PlayCover.app</string>
-    </array>
-    
     <key>RunAtLoad</key>
     <true/>
     
     <key>KeepAlive</key>
     <false/>
+    
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
     
     <key>StandardOutPath</key>
     <string>/tmp/playcover-automount.out</string>
