@@ -1528,7 +1528,8 @@ individual_volume_control() {
     echo "登録されているボリューム:"
     echo ""
     
-    # Display volumes with detailed status
+    # Prepare all volume data first
+    local -a volume_data=()
     local index=1
     for ((i=0; i<${#mappings_array[@]}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
@@ -1559,10 +1560,49 @@ individual_volume_control() {
             fi
         fi
         
-        echo "  ${index}. ${display_name}"
-        echo "      ${status_line}${extra_info}"
-        echo ""
+        volume_data+=("${index}|${display_name}|${status_line}${extra_info}")
         ((index++))
+    done
+    
+    # Display in 2 columns
+    local total=${#volume_data[@]}
+    local col_width=60  # Width for each column
+    
+    for ((i=0; i<total; i+=2)); do
+        # Left column (always exists)
+        IFS='|' read -r idx1 name1 status1 <<< "${volume_data[$i]}"
+        
+        # Calculate display width (ASCII=1, multibyte=2)
+        local display_len=0
+        for ((j=0; j<${#name1}; j++)); do
+            local char="${name1:$j:1}"
+            if [[ "$char" =~ [[:ascii:]] ]]; then
+                ((display_len++))
+            else
+                ((display_len+=2))
+            fi
+        done
+        
+        # Calculate padding needed (account for "  X. " prefix = 5 chars)
+        local padding=$((col_width - display_len - 5))
+        [[ $padding -lt 1 ]] && padding=1
+        
+        local spaces=""
+        for ((k=0; k<padding; k++)); do
+            spaces+=" "
+        done
+        
+        # Right column (if exists)
+        if [[ $((i+1)) -lt $total ]]; then
+            IFS='|' read -r idx2 name2 status2 <<< "${volume_data[$((i+1))]}"
+            echo "  ${idx1}. ${name1}${spaces}${idx2}. ${name2}"
+            echo "      ${status1}      ${status2}"
+        else
+            # Only left column
+            echo "  ${idx1}. ${name1}"
+            echo "      ${status1}"
+        fi
+        echo ""
     done
     
     print_separator
