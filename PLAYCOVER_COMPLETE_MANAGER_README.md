@@ -1,4 +1,4 @@
-# PlayCover Complete Manager v4.4.0
+# PlayCover Complete Manager v4.8.0
 
 ## 📋 概要
 

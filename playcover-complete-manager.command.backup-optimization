@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.9.0 - External App Installation System
+# Version: 4.7.0 - Enhanced Volume Management with App Termination
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -29,8 +29,6 @@ readonly NC='\033[0m' # No Color
 readonly PLAYCOVER_BUNDLE_ID="io.playcover.PlayCover"
 readonly PLAYCOVER_CONTAINER="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
 readonly PLAYCOVER_VOLUME_NAME="PlayCover"
-readonly PLAYCOVER_APP_NAME="PlayCover.app"
-readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
@@ -104,19 +102,6 @@ print_batch_progress() {
     echo "${MAGENTA}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
     print_separator "$SEPARATOR_CHAR" "$MAGENTA"
     echo ""
-}
-
-is_playcover_running() {
-    pgrep -x "PlayCover" >/dev/null 2>&1
-}
-
-get_playcover_external_path() {
-    # PlayCoverボリュームがマウントされている場合、その場所を返す
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        echo "${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-    else
-        echo ""
-    fi
 }
 
 exit_with_cleanup() {
@@ -355,35 +340,19 @@ update_mapping() {
 # Module 4: Volume Operations
 #######################################################
 
-# Optimized: Accept optional cached diskutil output
 volume_exists() {
     local volume_name=$1
-    local diskutil_cache="${2:-}"
-    
-    if [[ -n "$diskutil_cache" ]]; then
-        echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"
-    else
-        /usr/sbin/diskutil list | /usr/bin/grep -q "APFS Volume ${volume_name}"
-    fi
+    /usr/sbin/diskutil list | /usr/bin/grep -q "APFS Volume ${volume_name}"
 }
 
-# Optimized: Accept optional cached diskutil output
 get_volume_device() {
     local volume_name=$1
-    local diskutil_cache="${2:-}"
-    
-    if [[ -n "$diskutil_cache" ]]; then
-        echo "$diskutil_cache" | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
-    else
-        /usr/sbin/diskutil list | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
-    fi
+    /usr/sbin/diskutil list | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
 }
 
-# Optimized: Accept optional cached diskutil output  
 get_mount_point() {
     local volume_name=$1
-    local diskutil_cache="${2:-}"
-    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+    local device=$(get_volume_device "$volume_name")
     
     if [[ -z "$device" ]]; then
         echo ""
@@ -397,21 +366,15 @@ mount_volume() {
     local volume_name=$1
     local target_path=$2
     local force=${3:-false}
-    local diskutil_cache="${4:-}"  # Optional: pre-cached diskutil list output
     
-    # Cache diskutil list output if not provided (execute only once)
-    if [[ -z "$diskutil_cache" ]]; then
-        diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-    fi
-    
-    # Check if volume exists using cached output
-    if ! volume_exists "$volume_name" "$diskutil_cache"; then
+    # Check if volume exists
+    if ! volume_exists "$volume_name"; then
         print_error "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
-    # Get current mount point using cached output
-    local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
+    # Get current mount point
+    local current_mount=$(get_mount_point "$volume_name")
     
     # If already mounted at target, nothing to do
     if [[ "$current_mount" == "$target_path" ]]; then
@@ -424,7 +387,7 @@ mount_volume() {
         print_info "別の場所にマウントされています: $current_mount"
         print_info "アンマウント中..."
         
-        local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+        local device=$(get_volume_device "$volume_name")
         if ! sudo /usr/sbin/diskutil unmount "$device" 2>/dev/null; then
             print_error "アンマウントに失敗しました"
             return 1
@@ -468,7 +431,7 @@ mount_volume() {
     fi
     
     # Mount the volume with nobrowse option to hide from Finder/Desktop
-    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+    local device=$(get_volume_device "$volume_name")
     
     # Use mount command directly with nobrowse option
     # diskutil doesn't support nobrowse directly, so we use mount -o nobrowse
@@ -500,19 +463,13 @@ quit_app_for_bundle() {
 unmount_volume() {
     local volume_name=$1
     local bundle_id=$2  # Optional: if provided, quit the app first
-    local diskutil_cache="${3:-}"  # Optional: pre-cached diskutil list output
     
-    # Cache diskutil list output if not provided (execute only once)
-    if [[ -z "$diskutil_cache" ]]; then
-        diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-    fi
-    
-    if ! volume_exists "$volume_name" "$diskutil_cache"; then
+    if ! volume_exists "$volume_name"; then
         print_warning "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
-    local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
+    local current_mount=$(get_mount_point "$volume_name")
     
     if [[ -z "$current_mount" ]]; then
         print_info "既にアンマウント済みです"
@@ -524,7 +481,7 @@ unmount_volume() {
         quit_app_for_bundle "$bundle_id"
     fi
     
-    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+    local device=$(get_volume_device "$volume_name")
     
     if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
         print_success "アンマウント成功"
@@ -1204,8 +1161,326 @@ ensure_playcover_main_volume() {
     mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true"
 }
 
+mount_all_volumes() {
+    clear
+    print_header "全ボリュームのマウント"
+    
+    authenticate_sudo
+    
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "登録されているアプリボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    echo "ボリュームをマウント中..."
+    echo ""
+    
+    local success_count=0
+    local fail_count=0
+    local index=1
+    
+    # Process in file order (first to last)
+    # PlayCover should be listed first in playcover-map.txt
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        echo "  ${index}. ${CYAN}${display_name}${NC}"
+        
+        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+            # PlayCover volume
+            local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+            
+            if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                if sudo /usr/sbin/diskutil unmount "$(get_volume_device "$PLAYCOVER_VOLUME_NAME")" >/dev/null 2>&1; then
+                    if mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$pc_current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${GREEN}✅ 既にマウント済: ${PLAYCOVER_CONTAINER}${NC}"
+                ((success_count++))
+            elif mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1; then
+                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                ((success_count++))
+            else
+                echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                ((fail_count++))
+            fi
+        else
+            # App volume
+            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            local current_mount=$(get_mount_point "$volume_name")
+            
+            if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                if sudo /usr/sbin/diskutil unmount "$(get_volume_device "$volume_name")" >/dev/null 2>&1; then
+                    if mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$current_mount" == "$target_path" ]]; then
+                echo "     ${GREEN}✅ 既にマウント済: ${target_path}${NC}"
+                ((success_count++))
+            else
+                # Check if there's data in internal storage
+                if [[ -d "$target_path" ]]; then
+                    local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+                    
+                    if [[ -n "$content_check" ]]; then
+                        echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+                        ((fail_count++))
+                    elif mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                        ((fail_count++))
+                    fi
+                elif mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                    echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                    ((success_count++))
+                else
+                    echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                    ((fail_count++))
+                fi
+            fi
+        fi
+        
+        echo ""
+        ((index++))
+    done
+    
+    print_separator
+    echo ""
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ マウント失敗: 全てのボリュームがマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. 外部SSDが正しく接続されているか確認"
+        echo "  2. ボリュームが作成されているか確認（メニュー9）"
+        echo "  3. 既存のマウント状態を確認（メニュー5）"
+    else
+        echo "${YELLOW}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+    fi
+    echo ""
+    echo -n "Enterキーで続行..."
+    read
+}
 
+unmount_all_volumes() {
+    clear
+    print_header "全ボリュームのアンマウント"
+    
+    authenticate_sudo
+    
+    # Read mapping file directly into array
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Build array from file - simple and direct
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "登録されているアプリボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    echo "ボリュームをアンマウント中..."
+    echo ""
+    
+    local success_count=0
+    local fail_count=0
+    
+    # Process in reverse order (last to first)
+    # Calculate display index (will count down from total)
+    local total=${#mappings_array[@]}
+    
+    for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        local display_index=$((i + 1))
+        echo "  ${display_index}. ${CYAN}${display_name}${NC}"
+        
+        local current_mount=$(get_mount_point "$volume_name")
+        
+        if [[ -z "$current_mount" ]]; then
+            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
+            ((success_count++))
+        else
+            # Try to quit app first
+            if [[ -n "$bundle_id" ]]; then
+                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+                sleep 0.3
+            fi
+            
+            # Try to unmount
+            local device=$(get_volume_device "$volume_name")
+            if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                echo "     ${GREEN}✅ アンマウント成功${NC}"
+                ((success_count++))
+            else
+                # Check if it's because app is still running
+                if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                    echo "     ${RED}❌ アンマウント失敗: アプリが実行中です${NC}"
+                else
+                    echo "     ${RED}❌ アンマウント失敗: ファイルが使用中の可能性があります${NC}"
+                fi
+                ((fail_count++))
+            fi
+        fi
+        
+        echo ""
+    done
+    
+    print_separator
+    echo ""
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのアンマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ アンマウント失敗: 全てのボリュームがアンマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. PlayCoverとアプリを終了してから再試行"
+        echo "  2. Finderでファイルを開いている場合は閉じる"
+        echo "  3. 強制アンマウント: diskutil unmount force /dev/diskX"
+    else
+        echo "${YELLOW}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
+    fi
+    echo ""
+    echo -n "Enterキーで続行..."
+    read
+}
 
+show_status() {
+    clear
+    print_header "ボリューム状態確認"
+    
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "登録されているアプリボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Show status for each volume
+    local index=1
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        local storage_type=$(get_storage_type "$target_path")
+        local status_icon=""
+        local status_text=""
+        
+        case "$storage_type" in
+            "external")
+                status_icon="${GREEN}🔌${NC}"
+                status_text="外部ストレージ（マウント済み）"
+                ;;
+            "internal")
+                status_icon="${YELLOW}💾${NC}"
+                status_text="内蔵ストレージ"
+                ;;
+            "none")
+                status_icon="${BLUE}⚪${NC}"
+                status_text="データなし（未マウント）"
+                ;;
+            *)
+                status_icon="❓"
+                status_text="不明"
+                ;;
+        esac
+        
+        echo "  ${index}. ${status_icon} ${display_name}"
+        echo "      ${status_text}"
+        echo ""
+        ((index++))
+    done
+    
+    echo -n "Enterキーで続行..."
+    read
+}
 
 individual_volume_control() {
     clear
@@ -1345,20 +1620,6 @@ individual_volume_control() {
             print_header "${display_name} の操作"
             echo ""
             print_error "ボリュームが見つかりません"
-            echo ""
-            echo -n "Enterキーで続行..."
-            read
-            individual_volume_control
-            return
-        fi
-        
-        # Special check for PlayCover volume - ensure PlayCover is not running
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]] && is_playcover_running; then
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "PlayCoverが起動中です"
-            print_info "PlayCoverを終了してから再度実行してください"
             echo ""
             echo -n "Enterキーで続行..."
             read
@@ -1627,16 +1888,6 @@ batch_mount_all() {
 batch_unmount_all() {
     clear
     print_header "全ボリュームをアンマウント"
-    
-    # Check if PlayCover is running
-    if is_playcover_running; then
-        print_error "PlayCoverが起動中です"
-        print_info "PlayCoverを終了してから再度実行してください"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
     
     # Read mapping file directly
     if [[ ! -f "$MAPPING_FILE" ]]; then
@@ -2836,7 +3087,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.9.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.7.0${NC}"
     echo ""
     
     show_quick_status
@@ -2862,10 +3113,9 @@ show_menu() {
     fi
     
     echo "  ${RED}4.${NC} ${eject_label}"
-    echo "  ${MAGENTA}5.${NC} 自動マウント設定"
     echo "  ${BLUE}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-5):${NC} "
+    echo -n "${CYAN}選択 (0-4):${NC} "
 }
 
 show_mapping_info() {
@@ -2901,367 +3151,6 @@ show_mapping_info() {
         echo ""
         ((index++))
     done <<< "$mappings_content"
-    
-    echo -n "Enterキーで続行..."
-    read
-}
-
-show_auto_mount_menu() {
-    while true; do
-        clear
-        print_header "PlayCover 自動マウント設定"
-        
-        # Check LaunchAgent status
-        local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
-        local script_path="${HOME}/playcover-auto-mount.sh"
-        local is_installed=false
-        local is_loaded=false
-        
-        if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
-            is_installed=true
-            if launchctl list | grep -q "com.playcover.automount"; then
-                is_loaded=true
-            fi
-        fi
-        
-        # Display current status
-        echo "現在の状態:"
-        echo ""
-        if [[ "$is_installed" == true ]]; then
-            if [[ "$is_loaded" == true ]]; then
-                print_success "自動マウント機能: 有効 ✓"
-            else
-                print_warning "自動マウント機能: インストール済み（未読み込み）"
-            fi
-        else
-            print_error "自動マウント機能: 未インストール"
-        fi
-        echo ""
-        print_separator
-        echo ""
-        
-        echo "${BLUE}メニュー${NC}"
-        echo ""
-        echo "  ${GREEN}1.${NC} 自動マウント機能をインストール"
-        echo "  ${YELLOW}2.${NC} 自動マウント機能をアンインストール"
-        echo "  ${CYAN}3.${NC} 動作確認・ログ表示"
-        echo "  ${MAGENTA}4.${NC} インストール手順を表示"
-        echo "  ${BLUE}0.${NC} 戻る"
-        echo ""
-        echo -n "${CYAN}選択 (0-4):${NC} "
-        
-        read choice
-        
-        case "$choice" in
-            1)
-                install_auto_mount
-                ;;
-            2)
-                uninstall_auto_mount
-                ;;
-            3)
-                check_auto_mount_status
-                ;;
-            4)
-                show_auto_mount_setup_guide
-                ;;
-            0)
-                return
-                ;;
-            *)
-                print_error "無効な選択です"
-                sleep 1
-                ;;
-        esac
-    done
-}
-
-install_auto_mount() {
-    clear
-    print_header "自動マウント機能のインストール"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
-    local script_path="${HOME}/playcover-auto-mount.sh"
-    
-    # Check if already installed
-    if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
-        print_warning "自動マウント機能は既にインストールされています"
-        echo ""
-        echo -n "再インストールしますか？ (y/N): "
-        read confirm
-        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            return
-        fi
-        
-        # Unload existing LaunchAgent
-        if launchctl list | grep -q "com.playcover.automount"; then
-            print_info "既存のLaunchAgentをアンロード中..."
-            launchctl unload "$launch_agent_path" 2>/dev/null
-        fi
-    fi
-    
-    # Step 1: Copy script
-    print_info "スクリプトをコピー中..."
-    if [[ -f "${SCRIPT_DIR}/playcover-auto-mount.sh" ]]; then
-        cp "${SCRIPT_DIR}/playcover-auto-mount.sh" "$script_path"
-        chmod +x "$script_path"
-        print_success "スクリプトをコピーしました: $script_path"
-    else
-        print_error "スクリプトファイルが見つかりません: ${SCRIPT_DIR}/playcover-auto-mount.sh"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    # Step 2: Create LaunchAgents directory if not exists
-    local launch_agents_dir="${HOME}/Library/LaunchAgents"
-    if [[ ! -d "$launch_agents_dir" ]]; then
-        mkdir -p "$launch_agents_dir"
-    fi
-    
-    # Step 3: Copy and modify plist
-    print_info "LaunchAgent plistを設定中..."
-    if [[ -f "${SCRIPT_DIR}/com.playcover.automount.plist" ]]; then
-        cp "${SCRIPT_DIR}/com.playcover.automount.plist" "$launch_agent_path"
-        
-        # Replace YOUR_USERNAME with actual username
-        sed -i '' "s|/Users/YOUR_USERNAME/|${HOME}/|g" "$launch_agent_path"
-        
-        print_success "LaunchAgent plistを設定しました: $launch_agent_path"
-    else
-        print_error "plistファイルが見つかりません: ${SCRIPT_DIR}/com.playcover.automount.plist"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    # Step 4: Load LaunchAgent
-    print_info "LaunchAgentを読み込み中..."
-    if launchctl load "$launch_agent_path" 2>/dev/null; then
-        print_success "LaunchAgentを読み込みました"
-    else
-        print_warning "LaunchAgentの読み込みに失敗しました（既に読み込まれている可能性）"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    print_success "自動マウント機能のインストールが完了しました！"
-    echo ""
-    echo "${CYAN}次のステップ:${NC}"
-    echo "  1. PlayCoverボリュームをアンマウント"
-    echo "  2. PlayCover.appを起動"
-    echo "  3. 自動的にボリュームがマウントされることを確認"
-    echo ""
-    echo "${YELLOW}ログファイル:${NC} ${HOME}/Library/Logs/playcover-auto-mount.log"
-    echo ""
-    echo -n "Enterキーで続行..."
-    read
-}
-
-uninstall_auto_mount() {
-    clear
-    print_header "自動マウント機能のアンインストール"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
-    local script_path="${HOME}/playcover-auto-mount.sh"
-    
-    if [[ ! -f "$launch_agent_path" ]] && [[ ! -f "$script_path" ]]; then
-        print_warning "自動マウント機能はインストールされていません"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    echo -n "${RED}自動マウント機能をアンインストールしますか？ (y/N):${NC} "
-    read confirm
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        print_info "アンインストールをキャンセルしました"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    # Unload LaunchAgent
-    if [[ -f "$launch_agent_path" ]]; then
-        if launchctl list | grep -q "com.playcover.automount"; then
-            print_info "LaunchAgentをアンロード中..."
-            launchctl unload "$launch_agent_path" 2>/dev/null
-            print_success "LaunchAgentをアンロードしました"
-        fi
-        
-        print_info "plistファイルを削除中..."
-        rm "$launch_agent_path"
-        print_success "plistファイルを削除しました"
-    fi
-    
-    # Remove script
-    if [[ -f "$script_path" ]]; then
-        print_info "スクリプトを削除中..."
-        rm "$script_path"
-        print_success "スクリプトを削除しました"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    print_success "自動マウント機能のアンインストールが完了しました"
-    echo ""
-    echo "${CYAN}ログファイルは残されています:${NC}"
-    echo "  ${HOME}/Library/Logs/playcover-auto-mount.log"
-    echo ""
-    echo -n "Enterキーで続行..."
-    read
-}
-
-check_auto_mount_status() {
-    clear
-    print_header "自動マウント機能の動作確認"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
-    local script_path="${HOME}/playcover-auto-mount.sh"
-    local log_file="${HOME}/Library/Logs/playcover-auto-mount.log"
-    
-    # Check installation
-    echo "${CYAN}インストール状態:${NC}"
-    echo ""
-    
-    if [[ -f "$script_path" ]]; then
-        print_success "スクリプト: ${script_path}"
-    else
-        print_error "スクリプト: 未インストール"
-    fi
-    
-    if [[ -f "$launch_agent_path" ]]; then
-        print_success "LaunchAgent plist: ${launch_agent_path}"
-    else
-        print_error "LaunchAgent plist: 未インストール"
-    fi
-    
-    echo ""
-    
-    # Check LaunchAgent status
-    echo "${CYAN}LaunchAgent状態:${NC}"
-    echo ""
-    
-    if launchctl list | grep -q "com.playcover.automount"; then
-        print_success "LaunchAgent: 読み込み済み ✓"
-        
-        # Get PID if available
-        local agent_info=$(launchctl list | grep "com.playcover.automount")
-        echo "  詳細: $agent_info"
-    else
-        print_error "LaunchAgent: 未読み込み"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Show recent logs
-    echo "${CYAN}最近のログ（最新10行）:${NC}"
-    echo ""
-    
-    if [[ -f "$log_file" ]]; then
-        tail -10 "$log_file" | while IFS= read -r line; do
-            # Colorize log levels
-            if echo "$line" | grep -q "ERROR"; then
-                echo "${RED}${line}${NC}"
-            elif echo "$line" | grep -q "SUCCESS"; then
-                echo "${GREEN}${line}${NC}"
-            elif echo "$line" | grep -q "INFO"; then
-                echo "${BLUE}${line}${NC}"
-            else
-                echo "$line"
-            fi
-        done
-    else
-        print_warning "ログファイルが見つかりません: ${log_file}"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Test script manually
-    echo -n "${CYAN}スクリプトを手動実行してテストしますか？ (y/N):${NC} "
-    read test_confirm
-    
-    if [[ "$test_confirm" =~ ^[Yy]$ ]]; then
-        echo ""
-        print_info "スクリプトを実行中..."
-        echo ""
-        
-        if [[ -x "$script_path" ]]; then
-            "$script_path"
-            local exit_code=$?
-            
-            echo ""
-            if [[ $exit_code -eq 0 ]]; then
-                print_success "スクリプトが正常に実行されました（終了コード: 0）"
-            else
-                print_error "スクリプトがエラーで終了しました（終了コード: ${exit_code}）"
-            fi
-        else
-            print_error "スクリプトが実行可能ではありません"
-        fi
-    fi
-    
-    echo ""
-    echo -n "Enterキーで続行..."
-    read
-}
-
-show_auto_mount_setup_guide() {
-    clear
-    print_header "自動マウント機能 - インストール手順"
-    
-    echo "${CYAN}概要:${NC}"
-    echo "PlayCoverを未マウント状態で起動すると内蔵ストレージにデータが作成され、"
-    echo "その後ボリュームをマウントできなくなる問題を解決します。"
-    echo ""
-    print_separator
-    echo ""
-    
-    echo "${CYAN}解決策:${NC}"
-    echo "PlayCover起動時に自動的にボリュームをマウントするLaunchAgentを設定"
-    echo ""
-    print_separator
-    echo ""
-    
-    echo "${CYAN}インストール手順:${NC}"
-    echo ""
-    echo "${GREEN}1. ファイル配置${NC}"
-    echo "   このスクリプトの「${GREEN}1. 自動マウント機能をインストール${NC}」メニューから"
-    echo "   自動的にインストールできます。"
-    echo ""
-    echo "${GREEN}2. 動作確認${NC}"
-    echo "   a) PlayCoverボリュームをアンマウント"
-    echo "   b) PlayCover.appを起動"
-    echo "   c) 自動的にボリュームがマウントされることを確認"
-    echo ""
-    echo "${GREEN}3. ログ確認${NC}"
-    echo "   ${YELLOW}${HOME}/Library/Logs/playcover-auto-mount.log${NC}"
-    echo ""
-    print_separator
-    echo ""
-    
-    echo "${CYAN}安全性:${NC}"
-    echo "• 内蔵ストレージにデータが既に存在する場合はマウントしません"
-    echo "• データ消失リスクはありません"
-    echo "• エラー時は通知で警告を表示します"
-    echo ""
-    print_separator
-    echo ""
-    
-    echo "${CYAN}詳細情報:${NC}"
-    echo "セットアップガイド: ${SCRIPT_DIR}/PLAYCOVER_AUTO_MOUNT_SETUP.md"
-    echo ""
     
     echo -n "Enterキーで続行..."
     read
@@ -4274,46 +4163,6 @@ mount_playcover_main_volume() {
         print_success "ボリュームを正常にマウントしました"
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
         sudo chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
-        
-        # PlayCover.app のシンボリックリンクを検証・作成
-        local external_app_path="${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-        
-        if [[ -d "$external_app_path" ]]; then
-            # 外部ストレージにPlayCover.appが存在する場合
-            if [[ -L "$PLAYCOVER_APP_PATH" ]]; then
-                # シンボリックリンクが存在する場合、リンク先を確認
-                local current_link=$(readlink "$PLAYCOVER_APP_PATH")
-                if [[ "$current_link" != "$external_app_path" ]]; then
-                    print_warning "シンボリックリンクが正しくありません。再作成します..."
-                    sudo rm -f "$PLAYCOVER_APP_PATH"
-                    sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                    print_success "シンボリックリンクを再作成しました"
-                fi
-            elif [[ -e "$PLAYCOVER_APP_PATH" ]]; then
-                # 実体のアプリが存在する場合（誤って内部にインストールされた場合）
-                print_warning "/Applications に実体のPlayCover.appが存在します"
-                print_info "外部ストレージに移動してシンボリックリンクを作成します..."
-                sudo rm -rf "$PLAYCOVER_APP_PATH"
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "シンボリックリンクを作成しました"
-            else
-                # シンボリックリンクが存在しない場合
-                print_info "シンボリックリンクを作成しています..."
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "シンボリックリンクを作成しました"
-                print_info "→ ${external_app_path}"
-            fi
-        else
-            # 外部ストレージにPlayCover.appが存在しない場合
-            if [[ -d "$PLAYCOVER_APP_PATH" ]] && [[ ! -L "$PLAYCOVER_APP_PATH" ]]; then
-                # /Applicationsに実体が存在する場合、移動する
-                print_info "PlayCover.app を外部ストレージに移動しています..."
-                sudo mv "$PLAYCOVER_APP_PATH" "$external_app_path"
-                sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-                print_success "PlayCover.app を外部ストレージに移動しました"
-                print_info "→ ${external_app_path}"
-            fi
-        fi
     else
         print_error "ボリュームのマウントに失敗しました"
         echo ""
@@ -4350,34 +4199,6 @@ install_playcover() {
     print_info "PlayCover をインストール中..."
     brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
     print_success "PlayCover のインストールが完了しました"
-    
-    # PlayCoverボリュームがマウントされている場合は外部ストレージに移動
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        print_info "PlayCover.app を外部ストレージに移動しています..."
-        
-        local external_app_path="${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-        
-        # 既存の外部アプリを削除
-        if [[ -d "$external_app_path" ]]; then
-            sudo rm -rf "$external_app_path"
-        fi
-        
-        # /Applicationsから外部ストレージに移動
-        if [[ -d "$PLAYCOVER_APP_PATH" ]] && [[ ! -L "$PLAYCOVER_APP_PATH" ]]; then
-            sudo mv "$PLAYCOVER_APP_PATH" "$external_app_path"
-            print_success "PlayCover.app を外部ストレージに移動しました"
-            
-            # シンボリックリンクを作成
-            sudo ln -s "$external_app_path" "$PLAYCOVER_APP_PATH"
-            print_success "シンボリックリンクを作成しました: ${PLAYCOVER_APP_PATH}"
-            print_info "→ ${external_app_path}"
-        else
-            print_warning "PlayCover.app が /Applications に見つかりません"
-        fi
-    else
-        print_warning "PlayCoverボリュームがマウントされていません"
-        print_info "後でボリュームをマウントしてから、手動で移動してください"
-    fi
 }
 
 perform_software_installations() {
@@ -4590,9 +4411,6 @@ main() {
                 ;;
             4)
                 eject_disk
-                ;;
-            5)
-                show_auto_mount_menu
                 ;;
             0)
                 echo ""
