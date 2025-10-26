@@ -9,6 +9,9 @@
 # Note: set -e is NOT used here to allow graceful error handling
 # Volume operations require explicit error checking
 
+# Enable zsh options for bash-like behavior
+setopt KSH_ARRAYS  # Use 0-based array indexing like bash
+
 #######################################################
 # Module 1: Constants & Global Variables
 #######################################################
@@ -681,8 +684,8 @@ EOF
         BATCH_MODE=true
         print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
     else
-        # zsh arrays are 1-indexed
-        print_success "$(basename "${SELECTED_IPAS[1]}")"
+        # Using KSH_ARRAYS (0-based indexing)
+        print_success "$(basename "${SELECTED_IPAS[0]}")"
     fi
     
     echo ""
@@ -1175,9 +1178,27 @@ mount_all_volumes() {
     
     authenticate_sudo
     
-    local mappings_content=$(read_mappings)
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
     
-    if [[ -z "$mappings_content" ]]; then
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         echo ""
         echo -n "Enterキーで続行..."
@@ -1185,45 +1206,115 @@ mount_all_volumes() {
         return
     fi
     
+    echo "ボリュームをマウント中..."
+    echo ""
+    
     local success_count=0
     local fail_count=0
-    
-    # Count valid entries for display
-    local total_count=$(echo "$mappings_content" | grep -c -v '^[[:space:]]*$')
-    
-    print_info "playcover-map.txt の記載順でマウント中 (${total_count}個のボリューム)..."
-    echo ""
+    local index=1
     
     # Process in file order (first to last)
     # PlayCover should be listed first in playcover-map.txt
-    while IFS=$'\t' read -r volume_name bundle_id display_name || [[ -n "$volume_name" ]]; do
-        # Skip empty lines
-        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
-            continue
-        fi
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
-        echo ""
-        print_info "マウント中: ${display_name}"
+        echo "  ${index}. ${CYAN}${display_name}${NC}"
         
         if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
             # PlayCover volume
-            ensure_playcover_main_volume
-            print_success "PlayCoverボリュームのマウント完了"
+            local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+            
+            if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                if sudo /usr/sbin/diskutil unmount "$(get_volume_device "$PLAYCOVER_VOLUME_NAME")" >/dev/null 2>&1; then
+                    if mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$pc_current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                ((success_count++))
+            elif mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1; then
+                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                ((success_count++))
+            else
+                echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                ((fail_count++))
+            fi
         else
             # App volume
             local target_path="${HOME}/Library/Containers/${bundle_id}"
+            local current_mount=$(get_mount_point "$volume_name")
             
-            if mount_volume "$volume_name" "$target_path"; then
+            if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                if sudo /usr/sbin/diskutil unmount "$(get_volume_device "$volume_name")" >/dev/null 2>&1; then
+                    if mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$current_mount" == "$target_path" ]]; then
+                echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                 ((success_count++))
             else
-                ((fail_count++))
+                # Check if there's data in internal storage
+                if [[ -d "$target_path" ]]; then
+                    local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+                    
+                    if [[ -n "$content_check" ]]; then
+                        echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+                        ((fail_count++))
+                    elif mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                        ((fail_count++))
+                    fi
+                elif mount_volume "$volume_name" "$target_path" >/dev/null 2>&1; then
+                    echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                    ((success_count++))
+                else
+                    echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                    ((fail_count++))
+                fi
             fi
         fi
-    done < <(echo "$mappings_content")
+        
+        echo ""
+        ((index++))
+    done
     
+    print_separator
     echo ""
-    print_success "全ボリュームのマウント完了"
-    print_info "成功: ${success_count} / 失敗: ${fail_count}"
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ マウント失敗: 全てのボリュームがマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. 外部SSDが正しく接続されているか確認"
+        echo "  2. ボリュームが作成されているか確認（メニュー9）"
+        echo "  3. 既存のマウント状態を確認（メニュー5）"
+    else
+        echo "${YELLOW}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+    fi
     echo ""
     echo -n "Enterキーで続行..."
     read
@@ -1235,9 +1326,27 @@ unmount_all_volumes() {
     
     authenticate_sudo
     
-    local mappings_content=$(read_mappings)
+    # Read mapping file directly into array
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
     
-    if [[ -z "$mappings_content" ]]; then
+    # Build array from file - simple and direct
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         echo ""
         echo -n "Enterキーで続行..."
@@ -1245,74 +1354,69 @@ unmount_all_volumes() {
         return
     fi
     
+    echo "ボリュームをアンマウント中..."
+    echo ""
+    
     local success_count=0
     local fail_count=0
     
-    # Read mappings into array for reverse processing
-    declare -a mappings_array=()
-    local read_count=0
-    
-    # Debug: Show what we're reading
-    echo ""
-    print_info "デバッグ: ファイル内容の読み込み..."
-    local line_num=0
-    
-    # Use process substitution to avoid subshell issues
-    while IFS=$'\t' read -r volume_name bundle_id display_name || [[ -n "$volume_name" ]]; do
-        ((line_num++))
-        echo "  行$line_num: [$volume_name] [$bundle_id] [$display_name]"
-        
-        # Skip empty lines
-        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
-            echo "    → スキップ（空行）"
-            continue
-        fi
-        
-        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
-        echo "    → 配列[${#mappings_array[@]}-1]に追加"
-        ((read_count++))
-    done < <(echo "$mappings_content")
-    
-    echo ""
-    print_info "配列構築完了: ${#mappings_array[@]}個"
-    for ((idx=0; idx<${#mappings_array[@]}; idx++)); do
-        echo "  [$idx]: ${mappings_array[$idx]}"
-    done
-    
-    if [[ ${#mappings_array[@]} -eq 0 ]]; then
-        print_warning "処理するボリュームがありません"
-        echo ""
-        echo -n "Enterキーで続行..."
-        read
-        return
-    fi
-    
-    print_info "playcover-map.txt の逆順でアンマウント中 (${#mappings_array[@]}個のボリューム)..."
-    echo ""
-    
     # Process in reverse order (last to first)
+    # Calculate display index (will count down from total)
+    local total=${#mappings_array[@]}
+    
     for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
-        # Double-check for empty entries
-        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
-            print_warning "スキップ: 無効なエントリ (インデックス: $i)"
-            continue
+        local display_index=$((i + 1))
+        echo "  ${display_index}. ${CYAN}${display_name}${NC}"
+        
+        local current_mount=$(get_mount_point "$volume_name")
+        
+        if [[ -z "$current_mount" ]]; then
+            echo "     ${GREEN}✅ アンマウント成功${NC}"
+            ((success_count++))
+        else
+            # Try to quit app first
+            if [[ -n "$bundle_id" ]]; then
+                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+                sleep 0.3
+            fi
+            
+            # Try to unmount
+            local device=$(get_volume_device "$volume_name")
+            if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                echo "     ${GREEN}✅ アンマウント成功${NC}"
+                ((success_count++))
+            else
+                # Check if it's because app is still running
+                if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                    echo "     ${RED}❌ アンマウント失敗: アプリが実行中です${NC}"
+                else
+                    echo "     ${RED}❌ アンマウント失敗: ファイルが使用中の可能性があります${NC}"
+                fi
+                ((fail_count++))
+            fi
         fi
         
         echo ""
-        print_info "アンマウント中: ${display_name} (インデックス: $i)"
-        
-        if unmount_volume "$volume_name" "$bundle_id"; then
-            ((success_count++))
-        else
-            ((fail_count++))
-        fi
     done
     
+    print_separator
     echo ""
-    print_success "アンマウント完了"
-    print_info "成功: ${success_count} / 失敗: ${fail_count}"
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのアンマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ アンマウント失敗: 全てのボリュームがアンマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. PlayCoverとアプリを終了してから再試行"
+        echo "  2. Finderでファイルを開いている場合は閉じる"
+        echo "  3. 強制アンマウント: diskutil unmount force /dev/diskX"
+    else
+        echo "${YELLOW}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
+    fi
     echo ""
     echo -n "Enterキーで続行..."
     read
@@ -1322,9 +1426,27 @@ show_status() {
     clear
     print_header "ボリューム状態確認"
     
-    local mappings_content=$(read_mappings)
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
     
-    if [[ -z "$mappings_content" ]]; then
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         echo ""
         echo -n "Enterキーで続行..."
@@ -1332,8 +1454,11 @@ show_status() {
         return
     fi
     
+    # Show status for each volume
     local index=1
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local storage_type=$(get_storage_type "$target_path")
         local status_icon=""
@@ -1362,7 +1487,7 @@ show_status() {
         echo "      ${status_text}"
         echo ""
         ((index++))
-    done <<< "$mappings_content"
+    done
     
     echo -n "Enterキーで続行..."
     read
@@ -1372,9 +1497,27 @@ individual_volume_control() {
     clear
     print_header "個別ボリューム操作"
     
-    local mappings_content=$(read_mappings)
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
     
-    if [[ -z "$mappings_content" ]]; then
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         echo ""
         echo -n "Enterキーで続行..."
@@ -1385,46 +1528,49 @@ individual_volume_control() {
     echo "登録されているボリューム:"
     echo ""
     
-    declare -a mappings_array=()
+    # Display volumes with detailed status
     local index=1
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
-        local storage_type=$(get_storage_type "$target_path")
-        local status_icon=""
-        
-        case "$storage_type" in
-            "external") status_icon="${GREEN}✅${NC}" ;;
-            "internal") status_icon="${YELLOW}💾${NC}" ;;
-            "none") status_icon="${BLUE}⭕${NC}" ;;
-            *) status_icon="❓" ;;
-        esac
-        
         local current_mount=$(get_mount_point "$volume_name")
-        local status_text="アンマウント済み"
+        local status_line=""
+        local extra_info=""
         
-        if [[ -n "$current_mount" ]]; then
+        # Check if volume exists
+        if ! volume_exists "$volume_name"; then
+            status_line="❌ ボリュームが見つかりません"
+        elif [[ -n "$current_mount" ]]; then
+            # Volume is mounted
             if [[ "$current_mount" == "$target_path" ]]; then
-                status_text="正常にマウント済み"
+                status_line="🟢 マウント済"
             else
-                status_text="異なる場所にマウント済み"
+                status_line="⚠️  マウント位置異常"
+            fi
+        else
+            # Volume is unmounted
+            status_line="⚪️ アンマウント済"
+            
+            # Check if internal storage has data
+            if [[ -d "$target_path" ]] && [[ ! -L "$target_path" ]]; then
+                extra_info=" | 🏠 内蔵ストレージにデータ有"
             fi
         fi
         
-        echo "  ${index}. ${status_icon} ${display_name}"
-        echo "      (${status_text})"
+        echo "  ${index}. ${display_name}"
+        echo "      ${status_line}${extra_info}"
         echo ""
         ((index++))
-    done <<< "$mappings_content"
+    done
     
     print_separator
     echo ""
-    echo "${CYAN}操作を選択してください:${NC}"
-    echo "  ${GREEN}[番号]${NC} : 個別マウント/アンマウント"
-    echo "  ${YELLOW}[0]${NC}    : 戻る"
+    echo "操作を選択してください:"
+    echo "  [番号] : 個別マウント/アンマウント"
+    echo "  [0]    : 戻る"
     echo ""
-    echo -n "${CYAN}選択:${NC} "
+    echo -n "選択: "
     read choice
     
     if [[ "$choice" == "0" ]]; then
@@ -1438,7 +1584,9 @@ individual_volume_control() {
         return
     fi
     
-    local selected_mapping="${mappings_array[$choice]}"
+    # Convert 1-based user input to 0-based array index
+    local array_index=$((choice - 1))
+    local selected_mapping="${mappings_array[$array_index]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
     authenticate_sudo
@@ -1763,7 +1911,9 @@ switch_storage_location() {
     
     authenticate_sudo
     
-    local selected_mapping="${mappings_array[$choice]}"
+    # Convert 1-based user input to 0-based array index
+    local array_index=$((choice - 1))
+    local selected_mapping="${mappings_array[$array_index]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
     echo ""
@@ -2791,10 +2941,11 @@ uninstall_workflow() {
         return
     fi
     
-    # Get selected app info (zsh arrays are 1-indexed)
-    local selected_app="${apps_list[$app_choice]}"
-    local selected_volume="${volumes_list[$app_choice]}"
-    local selected_bundle="${bundles_list[$app_choice]}"
+    # Get selected app info (convert 1-based user input to 0-based array index)
+    local array_index=$((app_choice - 1))
+    local selected_app="${apps_list[$array_index]}"
+    local selected_volume="${volumes_list[$array_index]}"
+    local selected_bundle="${bundles_list[$array_index]}"
     
     # Check if trying to delete PlayCover volume with other apps remaining
     if [[ "$selected_volume" == "PlayCover" ]] && [[ $total_apps -gt 1 ]]; then
@@ -3028,12 +3179,12 @@ uninstall_all_apps() {
     local success_count=0
     local fail_count=0
     
-    # Loop through all apps (zsh arrays are 1-indexed by default)
-    for ((i=1; i<=${#apps_list[@]}; i++)); do
+    # Loop through all apps (using KSH_ARRAYS - 0-based indexing)
+    for ((i=0; i<${#apps_list[@]}; i++)); do
         local app_name="${apps_list[$i]}"
         local volume_name="${volumes_list[$i]}"
         local bundle_id="${bundles_list[$i]}"
-        local current=$i
+        local current=$((i + 1))  # Display 1-based counter to user
         
         # Step 1: Remove app from PlayCover
         local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
@@ -3272,8 +3423,10 @@ select_external_disk() {
     read selection
     
     if [[ "$selection" =~ ^[0-9]+$ ]] && [[ $selection -ge 1 ]] && [[ $selection -le ${#external_disks[@]} ]]; then
-        SELECTED_DISK="${external_disks[$selection]}"
-        print_success "選択されたディスク: ${disk_info[$selection]}"
+        # Convert 1-based user input to 0-based array index
+        local array_index=$((selection - 1))
+        SELECTED_DISK="${external_disks[$array_index]}"
+        print_success "選択されたディスク: ${disk_info[$array_index]}"
     else
         print_error "無効な選択です"
         echo ""
