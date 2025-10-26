@@ -265,7 +265,13 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.23.0 (最新) - Complete External Command Path Fix
+### v4.23.1 (最新) - Fix Zsh Reserved Variable
+- 🐛 **変数名競合修正**: zsh予約変数 `path` との競合を解決
+- ✅ `path` → `container_path`, `item_path`, `target_path` に変更
+- ✅ "inconsistent type for assignment" エラーを修正
+- ✅ 4箇所の変数名を修正
+
+### v4.23.0 - Complete External Command Path Fix
 - 🔧 **全外部コマンドパス修正**: 18種類のコマンドをフルパス指定
 - ✅ システムコマンド: `diskutil`, `mount`, `sudo`, `chown` 等
 - ✅ ファイル操作: `mkdir`, `rm`, `cp`, `mv`, `chmod` 等
@@ -363,4 +369,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.23.0）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.23.1）
