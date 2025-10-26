@@ -1569,12 +1569,29 @@ individual_volume_control() {
     echo ""
     echo "操作を選択してください:"
     echo "  [番号] : 個別マウント/アンマウント"
+    echo "  [m]    : 全ボリュームをマウント"
+    echo "  [u]    : 全ボリュームをアンマウント"
     echo "  [0]    : 戻る"
     echo ""
     echo -n "選択: "
     read choice
     
     if [[ "$choice" == "0" ]]; then
+        return
+    fi
+    
+    # Batch operations
+    if [[ "$choice" == "m" ]] || [[ "$choice" == "M" ]]; then
+        authenticate_sudo
+        batch_mount_all
+        individual_volume_control
+        return
+    fi
+    
+    if [[ "$choice" == "u" ]] || [[ "$choice" == "U" ]]; then
+        authenticate_sudo
+        batch_unmount_all
+        individual_volume_control
         return
     fi
     
@@ -1710,6 +1727,250 @@ individual_volume_control() {
             return
         fi
     fi
+}
+
+# Batch mount all volumes (for individual volume control menu)
+batch_mount_all() {
+    clear
+    print_header "全ボリュームをマウント"
+    
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "登録されているアプリボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    echo "ボリュームをマウント中..."
+    echo ""
+    
+    local success_count=0
+    local fail_count=0
+    local index=1
+    
+    for ((i=0; i<${#mappings_array[@]}; i++)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        echo "  ${index}. ${CYAN}${display_name}${NC}"
+        
+        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+            local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+            
+            if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+                if sudo /usr/sbin/diskutil unmount "$pc_device" >/dev/null 2>&1; then
+                    if sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$pc_current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
+                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                ((success_count++))
+            else
+                if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+                    echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                    ((fail_count++))
+                else
+                    local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+                    if sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: マウントコマンドが失敗${NC}"
+                        ((fail_count++))
+                    fi
+                fi
+            fi
+        else
+            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            local current_mount=$(get_mount_point "$volume_name")
+            
+            if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                local device=$(get_volume_device "$volume_name")
+                if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: 再マウントに失敗${NC}"
+                        ((fail_count++))
+                    fi
+                else
+                    echo "     ${RED}❌ マウント失敗: アンマウントに失敗${NC}"
+                    ((fail_count++))
+                fi
+            elif [[ "$current_mount" == "$target_path" ]]; then
+                echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                ((success_count++))
+            else
+                if ! volume_exists "$volume_name"; then
+                    echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
+                    ((fail_count++))
+                else
+                    if [[ -e "$target_path" ]]; then
+                        local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
+                        if [[ -z "$mount_check" ]]; then
+                            local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+                            if [[ -n "$content_check" ]]; then
+                                echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+                                ((fail_count++))
+                                echo ""
+                                ((index++))
+                                continue
+                            fi
+                        fi
+                    fi
+                    
+                    local device=$(get_volume_device "$volume_name")
+                    if sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                        echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                        ((success_count++))
+                    else
+                        echo "     ${RED}❌ マウント失敗: マウントコマンドが失敗${NC}"
+                        ((fail_count++))
+                    fi
+                fi
+            fi
+        fi
+        
+        echo ""
+        ((index++))
+    done
+    
+    print_separator
+    echo ""
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ マウント失敗: 全てのボリュームがマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. 外部SSDが正しく接続されているか確認"
+        echo "  2. ボリュームが作成されているか確認（メニュー9）"
+        echo "  3. 既存のマウント状態を確認（メニュー5）"
+    else
+        echo "${YELLOW}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+    fi
+    echo ""
+    echo -n "Enterキーで続行..."
+    read
+}
+
+# Batch unmount all volumes (for individual volume control menu)
+batch_unmount_all() {
+    clear
+    print_header "全ボリュームをアンマウント"
+    
+    # Read mapping file directly
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    # Build array from file
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "登録されているアプリボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
+    
+    echo "ボリュームをアンマウント中..."
+    echo ""
+    
+    local success_count=0
+    local fail_count=0
+    
+    for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
+        IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        local display_index=$((i + 1))
+        echo "  ${display_index}. ${CYAN}${display_name}${NC}"
+        
+        local current_mount=$(get_mount_point "$volume_name")
+        
+        if [[ -z "$current_mount" ]]; then
+            echo "     ${GREEN}✅ アンマウント成功${NC}"
+            ((success_count++))
+        else
+            if [[ -n "$bundle_id" ]]; then
+                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+                sleep 0.3
+            fi
+            
+            local device=$(get_volume_device "$volume_name")
+            if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                echo "     ${GREEN}✅ アンマウント成功${NC}"
+                ((success_count++))
+            else
+                if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                    echo "     ${RED}❌ アンマウント失敗: アプリが実行中です${NC}"
+                else
+                    echo "     ${RED}❌ アンマウント失敗: ファイルが使用中の可能性があります${NC}"
+                fi
+                ((fail_count++))
+            fi
+        fi
+        echo ""
+    done
+    
+    print_separator
+    echo ""
+    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    
+    if [[ $fail_count -eq 0 ]]; then
+        echo "${GREEN}✅ 全ボリュームのアンマウント完了${NC}"
+    elif [[ $success_count -eq 0 ]]; then
+        echo "${RED}❌ アンマウント失敗: 全てのボリュームがアンマウントできませんでした${NC}"
+        echo ""
+        echo "${YELLOW}対処法:${NC}"
+        echo "  1. PlayCoverとアプリを終了してから再試行"
+        echo "  2. Finderでファイルを開いている場合は閉じる"
+        echo "  3. 強制アンマウント: diskutil unmount force /dev/diskX"
+    else
+        echo "${YELLOW}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
+    fi
+    echo ""
+    echo -n "Enterキーで続行..."
+    read
 }
 
 # Get drive name for display (v4.7.0)
@@ -2800,9 +3061,8 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                       ${YELLOW}【ボリューム管理】${NC}                  ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール              3. 全ボリュームをマウント           6. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール          4. 全ボリュームをアンマウント       7. ストレージ状態確認"
-    echo "                                       5. 個別ボリューム操作"
+    echo "  1. アプリをインストール              3. ボリューム操作                   5. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール          4. ボリューム状態確認               6. ストレージ状態確認"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -2819,13 +3079,13 @@ show_menu() {
     fi
     
     echo "  ${RED}【システム】${NC}"
-    echo "  8. ${eject_label}"
-    echo "  9. マッピング情報を表示"
+    echo "  7. ${eject_label}"
+    echo "  8. マッピング情報を表示"
     echo "  0. 終了"
     echo ""
     print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
-    echo -n "${CYAN}選択 (0-9):${NC} "
+    echo -n "${CYAN}選択 (0-8):${NC} "
 }
 
 show_mapping_info() {
@@ -3978,24 +4238,21 @@ main() {
                 uninstall_workflow
                 ;;
             3)
-                mount_all_volumes
-                ;;
-            4)
-                unmount_all_volumes
-                ;;
-            5)
                 individual_volume_control
                 ;;
-            6)
-                switch_storage_location
-                ;;
-            7)
+            4)
                 show_status
                 ;;
-            8)
+            5)
+                switch_storage_location
+                ;;
+            6)
+                show_status
+                ;;
+            7)
                 eject_disk
                 ;;
-            9)
+            8)
                 show_mapping_info
                 ;;
             0)
