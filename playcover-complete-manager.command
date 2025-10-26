@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.24.1 - Fix environment check after initial setup
+# Version: 4.24.2 - Add debug output for environment check
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -4907,18 +4907,25 @@ create_initial_mapping() {
 #######################################################
 
 is_playcover_environment_ready() {
+    local debug_mode="${1:-false}"
+    
     # Check if PlayCover is installed
     if [[ ! -d "/Applications/PlayCover.app" ]]; then
+        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] PlayCover not found at /Applications/PlayCover.app" >&2
         return 1
     fi
     
     # Check if PlayCover volume exists (use volume_exists function)
     if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] Volume '${PLAYCOVER_VOLUME_NAME}' not found" >&2
+        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] diskutil list output:" >&2
+        [[ "$debug_mode" == "true" ]] && /usr/sbin/diskutil list | /usr/bin/grep -i playcover >&2
         return 1
     fi
     
     # Check if mapping file exists
     if [[ ! -f "$MAPPING_FILE" ]]; then
+        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] Mapping file not found: $MAPPING_FILE" >&2
         return 1
     fi
     
@@ -5000,9 +5007,12 @@ main() {
     if ! is_playcover_environment_ready; then
         run_initial_setup
         
-        # Re-check after setup
-        if ! is_playcover_environment_ready; then
+        # Re-check after setup with debug mode
+        if ! is_playcover_environment_ready "true"; then
+            echo ""
             print_error "初期セットアップが完了しましたが、環境が正しく構成されていません"
+            echo ""
+            echo "${YELLOW}デバッグ情報（上記を確認してください）${NC}"
             wait_for_enter
             exit 1
         fi
