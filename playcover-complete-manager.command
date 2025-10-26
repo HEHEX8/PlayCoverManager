@@ -1239,7 +1239,7 @@ mount_all_volumes() {
                     ((fail_count++))
                 fi
             elif [[ "$pc_current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
-                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                echo "     ${GREEN}✅ 既にマウント済: ${PLAYCOVER_CONTAINER}${NC}"
                 ((success_count++))
             elif mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1; then
                 echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
@@ -1268,7 +1268,7 @@ mount_all_volumes() {
                     ((fail_count++))
                 fi
             elif [[ "$current_mount" == "$target_path" ]]; then
-                echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                echo "     ${GREEN}✅ 既にマウント済: ${target_path}${NC}"
                 ((success_count++))
             else
                 # Check if there's data in internal storage
@@ -1373,7 +1373,7 @@ unmount_all_volumes() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ アンマウント成功${NC}"
+            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
             ((success_count++))
         else
             # Try to quit app first
@@ -1800,7 +1800,7 @@ batch_mount_all() {
                     ((fail_count++))
                 fi
             elif [[ "$pc_current_mount" == "$PLAYCOVER_CONTAINER" ]]; then
-                echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
+                echo "     ${GREEN}✅ 既にマウント済: ${PLAYCOVER_CONTAINER}${NC}"
                 ((success_count++))
             else
                 if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
@@ -1837,7 +1837,7 @@ batch_mount_all() {
                     ((fail_count++))
                 fi
             elif [[ "$current_mount" == "$target_path" ]]; then
-                echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                echo "     ${GREEN}✅ 既にマウント済: ${target_path}${NC}"
                 ((success_count++))
             else
                 if ! volume_exists "$volume_name"; then
@@ -1939,7 +1939,7 @@ batch_unmount_all() {
         local current_mount=$(get_mount_point "$volume_name")
         
         if [[ -z "$current_mount" ]]; then
-            echo "     ${GREEN}✅ アンマウント成功${NC}"
+            echo "     ${GREEN}✅ 既にアンマウント済${NC}"
             ((success_count++))
         else
             if [[ -n "$bundle_id" ]]; then
