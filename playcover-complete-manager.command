@@ -4314,88 +4314,33 @@ mount_playcover_main_volume() {
     if $has_internal_data && $has_external_data; then
         print_warning "内部ストレージと外部ストレージの両方にデータが存在します"
         echo ""
-        echo "1. 内部ストレージのデータを使用 (外部を上書き)"
-        echo "2. 外部ストレージのデータを使用 (内部を削除)"
+        print_info "内部データを外部ストレージに統合してクリーンアップします"
         echo ""
-        echo -n "選択してください (1/2): "
-        read data_choice
         
-        case "$data_choice" in
-            1)
-                print_info "内部ストレージのデータを使用します"
-                mkdir -p "$temp_mount"
-                sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
-                print_info "外部ストレージをクリア中..."
-                sudo rm -rf "$temp_mount"/* "$temp_mount"/.[!.]* 2>/dev/null || true
-                print_info "データをコピー中..."
-                sudo cp -R "$PLAYCOVER_CONTAINER"/* "$temp_mount"/ 2>/dev/null || true
-                sudo cp -R "$PLAYCOVER_CONTAINER"/.[!.]* "$temp_mount"/ 2>/dev/null || true
-                sudo umount "$temp_mount"
-                rmdir "$temp_mount"
-                print_info "内部ストレージをクリア中..."
-                sudo rm -rf "$PLAYCOVER_CONTAINER"
-                ;;
-            2)
-                print_info "外部ストレージのデータを使用します"
-                print_info "内部ストレージをクリア中..."
-                sudo rm -rf "$PLAYCOVER_CONTAINER"
-                ;;
-            *)
-                print_error "無効な選択です"
-                echo ""
-                echo -n "Enterキーで続行..."
-                read
-                exit 1
-                ;;
-        esac
+        mkdir -p "$temp_mount"
+        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        print_info "内部データを外部に統合中..."
+        sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+        sudo umount "$temp_mount"
+        rmdir "$temp_mount"
+        print_info "内部ストレージをクリア中..."
+        sudo rm -rf "$PLAYCOVER_CONTAINER"
+        print_success "内部データを外部に統合しました"
     elif $has_internal_data; then
         print_warning "⚠️  PlayCoverボリューム未マウント状態でPlayCoverが起動され、内部ストレージにデータが作成されています"
         echo ""
-        echo "${YELLOW}対処方法:${NC}"
-        echo "  1. 内部データを外部に移行してクリーンアップ（推奨）"
-        echo "  2. 内部データを削除してクリーンな状態でマウント"
+        print_info "内部データを外部に移行してクリーンアップします"
         echo ""
-        echo -n "選択してください (1/2): "
-        read cleanup_choice
         
-        case "$cleanup_choice" in
-            1)
-                print_info "内部ストレージのデータを外部に移行します"
-                mkdir -p "$temp_mount"
-                sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
-                print_info "データをコピー中..."
-                sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
-                sudo umount "$temp_mount"
-                rmdir "$temp_mount"
-                print_info "内部ストレージをクリア中..."
-                sudo rm -rf "$PLAYCOVER_CONTAINER"
-                print_success "内部データを外部に移行しました"
-                ;;
-            2)
-                print_warning "内部ストレージのデータを削除します"
-                echo ""
-                echo -n "${RED}本当に削除しますか？ (yes/no):${NC} "
-                read delete_confirm
-                if [[ "$delete_confirm" == "yes" ]]; then
-                    print_info "内部ストレージをクリア中..."
-                    sudo rm -rf "$PLAYCOVER_CONTAINER"
-                    print_success "内部データを削除しました"
-                else
-                    print_info "キャンセルしました。内部データはそのまま残ります"
-                    echo ""
-                    echo -n "Enterキーで続行..."
-                    read
-                    exit 1
-                fi
-                ;;
-            *)
-                print_error "無効な選択です"
-                echo ""
-                echo -n "Enterキーで続行..."
-                read
-                exit 1
-                ;;
-        esac
+        mkdir -p "$temp_mount"
+        sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
+        print_info "データをコピー中..."
+        sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+        sudo umount "$temp_mount"
+        rmdir "$temp_mount"
+        print_info "内部ストレージをクリア中..."
+        sudo rm -rf "$PLAYCOVER_CONTAINER"
+        print_success "内部データを外部に移行しました"
     else
         if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
             sudo rm -rf "$PLAYCOVER_CONTAINER"
