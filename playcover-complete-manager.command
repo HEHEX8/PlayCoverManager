@@ -390,7 +390,7 @@ get_mount_point() {
         return 1
     fi
     
-    /usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point:" | /usr/bin/sed 's/.*Mount Point: *//' | /usr/bin/sed 's/ *$//'
+    /usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point:" | /usr/bin/sed 's/.*Mount Point: *//;s/ *$//'
 }
 
 mount_volume() {
@@ -703,7 +703,7 @@ get_storage_type() {
     [[ "$debug" == "true" ]] && echo "[DEBUG] Device: $device, Disk ID: $disk_id" >&2
     
     # Check the disk location
-    local disk_location=$(diskutil info "/dev/$disk_id" 2>/dev/null | /usr/bin/grep "Device Location:" | /usr/bin/awk -F: '{print $2}' | /usr/bin/sed 's/^ *//')
+    local disk_location=$(diskutil info "/dev/$disk_id" 2>/dev/null | /usr/bin/awk -F: '/Device Location:/ {gsub(/^ */, "", $2); print $2}')
     
     [[ "$debug" == "true" ]] && echo "[DEBUG] Disk location: $disk_location" >&2
     
@@ -966,7 +966,7 @@ select_installation_disk() {
 
 create_app_volume() {
     local existing_volume=""
-    existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/grep "Device Node:" | /usr/bin/awk '{print $NF}' | /usr/bin/sed 's|/dev/||')
+    existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/awk '/Device Node:/ {gsub(/\/dev\//, "", $NF); print $NF}')
     
     if [[ -z "$existing_volume" ]]; then
         existing_volume=$(/usr/sbin/diskutil list 2>/dev/null | /usr/bin/grep -E "${APP_VOLUME_NAME}" | /usr/bin/grep "APFS" | head -n 1 | /usr/bin/awk '{print $NF}')
@@ -2219,15 +2219,15 @@ switch_storage_location() {
             return
         fi
         
-        # Check if Data directory exists at root level (use sudo for permission)
-        if sudo test -d "$source_path/Data" && sudo test -f "$source_path/.com.apple.containermanagerd.metadata.plist"; then
+        # Check if Data directory exists at root level
+        if [[ -d "$source_path/Data" ]] && [[ -f "$source_path/.com.apple.containermanagerd.metadata.plist" ]]; then
             # Normal container structure - use as-is
             print_info "内蔵ストレージからコピーします: $source_path"
         else
             # Check for nested backup structure and find actual Data directory
             print_info "コンテナ構造を検証中..."
             
-            local data_path=$(sudo /usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
+            local data_path=$(/usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
             if [[ -n "$data_path" ]]; then
                 # Found Data directory - extract parent container path
                 local container_path=$(dirname "$data_path")
@@ -2268,7 +2268,7 @@ switch_storage_location() {
         
         # Check disk space before migration
         print_info "転送前の容量チェック中..."
-        local source_size_bytes=$(sudo /usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+        local source_size_bytes=$(/usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
         if [[ -z "$source_size_bytes" ]]; then
             print_error "コピー元のサイズを取得できませんでした"
             echo ""
@@ -2409,8 +2409,8 @@ switch_storage_location() {
         
         # Debug: Show source path and content
         print_info "コピー元: ${source_path}"
-        local file_count=$(sudo /usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        local total_size=$(sudo /usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+        local file_count=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        local total_size=$(/usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
@@ -2438,8 +2438,8 @@ switch_storage_location() {
             echo ""
             print_success "データのコピーが完了しました"
             
-            local copied_count=$(sudo /usr/bin/find "$temp_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-            local copied_size=$(sudo /usr/bin/du -sh "$temp_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
+            local copied_count=$(/usr/bin/find "$temp_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+            local copied_size=$(/usr/bin/du -sh "$temp_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
             print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
         else
             echo ""
