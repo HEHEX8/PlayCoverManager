@@ -1,0 +1,4 @@
+PlayCover	io.playcover.PlayCover	PlayCover
+GenshinImpact	com.miHoYo.GenshinImpact	原神
+HonkaiStarRail	com.HoYoverse.hkrpgoversea	崩壊：スターレイル
+ZenlessZoneZero	com.HoYoverse.Nap	ゼンレスゾーンゼロ

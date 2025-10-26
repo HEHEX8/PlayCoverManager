@@ -1188,12 +1188,20 @@ mount_all_volumes() {
     local success_count=0
     local fail_count=0
     
-    print_info "playcover-map.txt の記載順でマウント中..."
+    # Count valid entries for display
+    local total_count=$(echo "$mappings_content" | grep -c -v '^[[:space:]]*$')
+    
+    print_info "playcover-map.txt の記載順でマウント中 (${total_count}個のボリューム)..."
     echo ""
     
     # Process in file order (first to last)
     # PlayCover should be listed first in playcover-map.txt
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
+            continue
+        fi
+        
         echo ""
         print_info "マウント中: ${display_name}"
         
@@ -1243,15 +1251,24 @@ unmount_all_volumes() {
     # Read mappings into array for reverse processing
     declare -a mappings_array=()
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
+            continue
+        fi
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
     done <<< "$mappings_content"
     
-    print_info "playcover-map.txt の逆順でアンマウント中..."
+    print_info "playcover-map.txt の逆順でアンマウント中 (${#mappings_array[@]}個のボリューム)..."
     echo ""
     
     # Process in reverse order (last to first)
     for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
+        
+        # Double-check for empty entries
+        if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
+            continue
+        fi
         
         echo ""
         print_info "アンマウント中: ${display_name}"
