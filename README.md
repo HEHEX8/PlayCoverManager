@@ -175,6 +175,28 @@ HonkaiStarRail	com.HoYoverse.hkrpgoversea	崩壊：スターレイル
 
 ## 🔧 技術的な詳細
 
+### PlayCover 外部アプリインストールシステム (v4.9.0~)
+
+#### 従来の問題
+PlayCoverボリュームが未マウント状態でPlayCoverを起動すると、内蔵ストレージ側のコンテナにデータが作成され、外部ボリュームのマウントができなくなる問題がありました。
+
+#### 解決方法
+PlayCover.app本体を外部ストレージに配置し、/Applicationsにはシンボリックリンクのみを配置：
+
+```bash
+# 実体の配置場所
+~/Library/Containers/io.playcover.PlayCover/PlayCover.app
+
+# シンボリックリンク
+/Applications/PlayCover.app -> ~/Library/Containers/io.playcover.PlayCover/PlayCover.app
+```
+
+#### メリット
+- ✅ 外部ドライブ未接続時、PlayCoverは自動的に起動不可
+- ✅ Spotlight、Launchpad での検索は正常に動作
+- ✅ 誤起動による内部ストレージデータ作成を完全に防止
+- ✅ マウント時に自動でシンボリックリンクを検証・再作成
+
 ### マウントオプション
 すべてのボリュームは `nobrowse` オプションでマウントされ、Finder のサイドバーやデスクトップに表示されません。
 
@@ -184,10 +206,11 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ### ボリューム配置
 - **PlayCover メインボリューム**: `~/Library/Containers/io.playcover.PlayCover`
+- **PlayCover アプリ本体**: `~/Library/Containers/io.playcover.PlayCover/PlayCover.app`
 - **アプリボリューム**: `~/Library/Containers/[各アプリのBundleID]`
 
 ### 自動修正機能
-ボリューム管理スクリプトは、誤った位置にマウントされているボリュームを検出し、自動的に正しい位置に再マウントします。
+ボリューム管理スクリプトは、誤った位置にマウントされているボリュームを検出し、自動的に正しい位置に再マウントします。また、シンボリックリンクの破損も自動検出・修復します。
 
 ---
 
@@ -203,12 +226,15 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 - PlayCover を使用する際は必ずボリュームをマウントしてください
 - Mac シャットダウン前には必ずボリュームをアンマウントしてください
 - 外部ストレージを物理的に取り外す前に「ディスク全体を取り外し」を実行してください
+- **外部ドライブ未接続時**: PlayCover.app はシンボリックリンクのため起動できません（正常動作）
 
 ### トラブルシューティング
 - **ボリュームが見つからない**: `2_playcover-volume-manager.command` で状態確認
 - **マウントエラー**: ボリューム管理スクリプトで再マウントを試行
 - **デスクトップに表示される**: 既存のマウントをアンマウントして再マウント
 - **アプリが起動しない**: ボリュームが正しくマウントされているか確認
+- **PlayCoverが起動できない**: 外部ストレージが接続されているか確認
+- **内蔵ストレージにデータ有**: PlayCoverボリュームをアンマウントして、内部データを削除
 
 ---
 
@@ -224,7 +250,21 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v1.2.1 (最新)
+### v4.9.0 (最新) - External App Installation System
+- ✅ PlayCover.app の外部ストレージインストール
+- ✅ /Applications にシンボリックリンク作成
+- ✅ 外部ドライブ未接続時の起動防止
+- ✅ マウント時のシンボリックリンク自動検証・再作成
+- ✅ アンマウント前の PlayCover 起動チェック
+- ✅ 誤起動による内部ストレージデータ作成の防止
+
+### v4.8.0 - Auto-Mount Prevention System
+- ✅ 統合管理ツールの完成
+- ✅ アプリ管理メニューの統合
+- ✅ ステータス表示の最適化
+- ✅ パフォーマンス改善（diskutil キャッシング）
+
+### v1.2.1
 - ✅ 日本語アプリ名の抽出と表示
 - ✅ ボリューム作成前の確認プロンプト
 - ✅ 既存アプリ検出とアップデート確認
