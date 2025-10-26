@@ -2238,8 +2238,9 @@ switch_storage_location() {
             fi
         fi
         
-        echo "  ${index}. ${display_name}"
-        echo "      ${storage_icon}  ${mount_status}"
+        # Format with fixed spacing (12 chars for storage_icon column)
+        printf "  %s. %s\n" "$index" "$display_name"
+        printf "      %-12s %s\n" "$storage_icon" "$mount_status"
         echo ""
         ((index++))
     done <<< "$mappings_content"
