@@ -1250,13 +1250,23 @@ unmount_all_volumes() {
     
     # Read mappings into array for reverse processing
     declare -a mappings_array=()
+    local read_count=0
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
         # Skip empty lines
         if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
             continue
         fi
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+        ((read_count++))
     done <<< "$mappings_content"
+    
+    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+        print_warning "処理するボリュームがありません"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
+        return
+    fi
     
     print_info "playcover-map.txt の逆順でアンマウント中 (${#mappings_array[@]}個のボリューム)..."
     echo ""
@@ -1267,11 +1277,12 @@ unmount_all_volumes() {
         
         # Double-check for empty entries
         if [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]]; then
+            print_warning "スキップ: 無効なエントリ (インデックス: $i)"
             continue
         fi
         
         echo ""
-        print_info "アンマウント中: ${display_name}"
+        print_info "アンマウント中: ${display_name} (インデックス: $i)"
         
         if unmount_volume "$volume_name" "$bundle_id"; then
             ((success_count++))
