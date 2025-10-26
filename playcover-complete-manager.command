@@ -1543,11 +1543,11 @@ individual_volume_control() {
         if ! volume_exists "$volume_name"; then
             status_line="❌ ボリュームが見つかりません"
         elif [[ -n "$current_mount" ]]; then
-            # Volume is mounted
+            # Volume is mounted - show mount path
             if [[ "$current_mount" == "$target_path" ]]; then
-                status_line="🟢 マウント済"
+                status_line="🟢 マウント済: ${current_mount}"
             else
-                status_line="⚠️  マウント位置異常"
+                status_line="⚠️  マウント位置異常: ${current_mount}"
             fi
         else
             # Volume is unmounted - check storage type
@@ -3061,8 +3061,8 @@ show_menu() {
     echo "${BLUE}▼ メインメニュー${NC}"
     echo ""
     echo "  ${GREEN}【アプリ管理】${NC}                       ${YELLOW}【ボリューム管理】${NC}                  ${CYAN}【ストレージ管理】${NC}"
-    echo "  1. アプリをインストール              3. ボリューム操作                   5. ストレージ切り替え（内蔵⇄外部）"
-    echo "  2. アプリをアンインストール          4. ボリューム状態確認               6. ストレージ状態確認"
+    echo "  1. アプリをインストール              3. ボリューム操作                   4. ストレージ切り替え（内蔵⇄外部）"
+    echo "  2. アプリをアンインストール"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -3079,13 +3079,13 @@ show_menu() {
     fi
     
     echo "  ${RED}【システム】${NC}"
-    echo "  7. ${eject_label}"
-    echo "  8. マッピング情報を表示"
+    echo "  5. ${eject_label}"
+    echo "  6. マッピング情報を表示"
     echo "  0. 終了"
     echo ""
     print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
-    echo -n "${CYAN}選択 (0-8):${NC} "
+    echo -n "${CYAN}選択 (0-6):${NC} "
 }
 
 show_mapping_info() {
@@ -4241,18 +4241,12 @@ main() {
                 individual_volume_control
                 ;;
             4)
-                show_status
-                ;;
-            5)
                 switch_storage_location
                 ;;
-            6)
-                show_status
-                ;;
-            7)
+            5)
                 eject_disk
                 ;;
-            8)
+            6)
                 show_mapping_info
                 ;;
             0)
