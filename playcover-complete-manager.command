@@ -1566,19 +1566,31 @@ individual_volume_control() {
     
     # Display in 2 columns with fixed spacing
     local total=${#volume_data[@]}
+    local left_width=55  # Fixed width for left column
     
     for ((i=0; i<total; i+=2)); do
         # Left column (always exists)
         IFS='|' read -r idx1 name1 status1 <<< "${volume_data[$i]}"
         
+        # Build left column string
+        local left_line1="  ${idx1}. ${name1}"
+        local left_line2="      ${status1}"
+        
+        # Pad left column to fixed width
+        while [[ ${#left_line1} -lt $left_width ]]; do
+            left_line1+=" "
+        done
+        while [[ ${#left_line2} -lt $left_width ]]; do
+            left_line2+=" "
+        done
+        
         # Right column (if exists)
         if [[ $((i+1)) -lt $total ]]; then
             IFS='|' read -r idx2 name2 status2 <<< "${volume_data[$((i+1))]}"
-            # Use printf for consistent spacing (%-50s = left-aligned 50 char field)
-            printf "  %s. %-50s%s. %s\n" "$idx1" "$name1" "$idx2" "$name2"
-            printf "      %-50s    %s\n" "$status1" "$status2"
+            echo "${left_line1}${idx2}. ${name2}"
+            echo "${left_line2}${status2}"
         else
-            # Only left column
+            # Only left column (trim padding)
             echo "  ${idx1}. ${name1}"
             echo "      ${status1}"
         fi
