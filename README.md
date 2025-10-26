@@ -265,7 +265,14 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.21.0 (最新) - Nuclear Cleanup Feature
+### v4.21.1 (最新) - Critical Safety Fix
+- 🔒 **重大なセキュリティ修正**: システムボリューム削除を防止
+- ✅ Macintosh HD、Data、Time Machine等のシステムボリュームを明示的にスキップ
+- ✅ マッピングファイル優先の安全なボリューム削除
+- ✅ 二段階アプローチ（マッピングファイル → パターンマッチング）
+- ✅ 削除失敗時のエラーメッセージ改善
+
+### v4.21.0 - Nuclear Cleanup Feature
 - 🔥 超強力クリーンアップ（完全リセット）機能追加
 - ✅ すべてのボリューム・コンテナの完全削除
 - ✅ PlayTools.frameworkの削除
@@ -329,4 +336,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.21.1）

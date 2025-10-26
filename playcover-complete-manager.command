@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.21.0 - Add nuclear cleanup feature
+# Version: 4.21.1 - Critical safety fix for nuclear cleanup
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2068,6 +2068,13 @@ nuclear_cleanup() {
         while IFS= read -r device; do
             if [[ -n "$device" ]]; then
                 local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                
+                # ⚠️ SAFETY CHECK: Skip system volumes (Macintosh HD, Data, Preboot, VM, etc.)
+                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
+                    echo "  ${YELLOW}⚠️  スキップ: システムボリューム ${vol_name}${NC}"
+                    continue
+                fi
+                
                 echo "  アンマウント中: ${vol_name} (${device})"
                 sudo diskutil unmount "$device" >/dev/null 2>&1 && ((unmount_count++)) || true
             fi
@@ -2174,12 +2181,53 @@ nuclear_cleanup() {
     echo ""
     
     local volume_count=0
+    
+    # 🔒 SAFE APPROACH 1: Use mapping file (most reliable)
+    if [[ -f "$MAPPING_FILE" ]]; then
+        echo "  ${CYAN}方法1: マッピングファイルから削除対象を特定${NC}"
+        echo ""
+        
+        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+            [[ -z "$volume_name" ]] && continue
+            
+            if volume_exists "$volume_name"; then
+                local device=$(get_volume_device "$volume_name")
+                if [[ -n "$device" ]]; then
+                    echo "  削除中: ${display_name:-$volume_name} (${device})"
+                    
+                    if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
+                        print_success "  ✓ 削除完了"
+                        ((volume_count++))
+                    else
+                        print_warning "  ⚠ 削除失敗（マウント済み?）"
+                    fi
+                fi
+            fi
+        done < "$MAPPING_FILE"
+    else
+        echo "  ${YELLOW}方法2: パターンマッチングで削除対象を検出（慎重モード）${NC}"
+        echo ""
+    fi
+    
+    # 🔍 SAFE APPROACH 2: Pattern matching with strict safety checks
     local playcover_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
     
     if [[ -n "$playcover_volumes" ]]; then
         while IFS= read -r device; do
             if [[ -n "$device" ]]; then
                 local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                
+                # 🔒 CRITICAL SAFETY CHECK: NEVER delete system volumes!
+                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
+                    echo "  ${RED}🛑 スキップ: システムボリューム ${vol_name}（削除不可）${NC}"
+                    continue
+                fi
+                
+                # Skip if already deleted in approach 1
+                if ! volume_exists "$vol_name"; then
+                    continue
+                fi
+                
                 echo "  削除中: ${vol_name} (${device})"
                 
                 # Try to delete the volume
@@ -2187,11 +2235,11 @@ nuclear_cleanup() {
                     print_success "  ✓ 削除完了"
                     ((volume_count++))
                 else
-                    print_warning "  ⚠ 削除失敗（マウント済み?）"
+                    print_warning "  ⚠ 削除失敗（システムボリュームまたはマウント済み）"
                 fi
             fi
         done <<< "$playcover_volumes"
-    else
+    elif [[ $volume_count -eq 0 ]]; then
         print_info "  削除対象のボリュームが見つかりません"
     fi
     
