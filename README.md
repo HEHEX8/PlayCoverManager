@@ -270,7 +270,13 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.26.2 (最新) - Fix Homebrew Path Detection for Apple Silicon
+### v4.26.3 (最新) - Fix rsync Compatibility for macOS
+- 🐛 **rsync互換性修正**: macOS標準rsyncに対応
+- ✅ `--info=progress2` → `--progress` に変更
+- ✅ macOS標準rsync (古いバージョン) をサポート
+- ✅ コンテナコピー処理の安定化
+
+### v4.26.2 - Fix Homebrew Path Detection for Apple Silicon
 - 🐛 **Homebrewパス検出修正**: Apple Silicon/Intel両対応に
 - ✅ Apple Silicon: `/opt/homebrew/bin/brew`
 - ✅ Intel: `/usr/local/bin/brew`
@@ -382,4 +388,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.2）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.3）

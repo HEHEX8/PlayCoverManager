@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.26.2 - Fix Homebrew path detection for Apple Silicon
+# Version: 4.26.3 - Fix rsync compatibility for macOS
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -4647,9 +4647,9 @@ mount_playcover_main_volume() {
         print_info "PlayCoverコンテナを外部ストレージにコピー中..."
         if $has_external_data; then
             print_warning "外部ボリュームに既存データがあります - 統合します"
-            /usr/bin/sudo /usr/bin/rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/"
+            /usr/bin/sudo /usr/bin/rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/"
         else
-            /usr/bin/sudo /usr/bin/rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/"
+            /usr/bin/sudo /usr/bin/rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/"
         fi
         
         local rsync_status=$?
