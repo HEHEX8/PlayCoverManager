@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.14.4 - Use PlayCover Volume for External Drive Free Space
+# Version: 4.15.0 - Show Volume Names in Drive Eject Process
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -1907,19 +1907,33 @@ eject_disk() {
     echo ""
     print_info "全ボリュームをアンマウント中..."
     
-    # Get all volumes on this disk
-    local all_volumes=$(/usr/sbin/diskutil list "$disk_id" | /usr/bin/grep "APFS Volume" | /usr/bin/awk '{print $NF}')
+    # Get all volumes on this disk with their device identifiers
+    # Parse diskutil list output to get both device ID and volume name
+    local volume_list=$(/usr/sbin/diskutil list "$disk_id" | /usr/bin/grep "APFS Volume")
     local mappings_content=$(read_mappings)
     
-    if [[ -n "$all_volumes" ]]; then
+    if [[ -n "$volume_list" ]]; then
         # Separate volumes into three groups
         declare -a app_volumes=()
         declare -a playcover_volumes=()
         declare -a other_volumes=()
         
-        while IFS= read -r vol_name; do
-            if [[ -z "$vol_name" ]]; then
+        while IFS= read -r vol_line; do
+            if [[ -z "$vol_line" ]]; then
                 continue
+            fi
+            
+            # Extract volume name (last field) and device ID
+            # Example line: "   1:                APFS Volume disk5s1                 181.0 GB   disk5s1"
+            local vol_name=$(echo "$vol_line" | /usr/bin/awk '{print $NF}')
+            local device_id=$(echo "$vol_line" | /usr/bin/awk '{print $(NF-2)}')
+            
+            # Get actual volume name from diskutil info
+            local actual_vol_name=$(/usr/sbin/diskutil info "$device_id" 2>/dev/null | /usr/bin/grep "Volume Name:" | /usr/bin/sed 's/.*Volume Name: *//' | /usr/bin/xargs)
+            
+            # If volume name is empty or "Not applicable", use device ID
+            if [[ -z "$actual_vol_name" ]] || [[ "$actual_vol_name" == "Not applicable" ]]; then
+                actual_vol_name="$device_id"
             fi
             
             # Check if this is an app volume or PlayCover volume
@@ -1929,7 +1943,7 @@ eject_disk() {
             
             if [[ -n "$mappings_content" ]]; then
                 while IFS=$'\t' read -r mapped_vol mapped_bundle mapped_display; do
-                    if [[ "$mapped_vol" == "$vol_name" ]]; then
+                    if [[ "$mapped_vol" == "$actual_vol_name" ]]; then
                         bundle_id="$mapped_bundle"
                         if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
                             is_playcover_volume=true
@@ -1941,14 +1955,15 @@ eject_disk() {
                 done <<< "$mappings_content"
             fi
             
+            # Store as "volume_name|device_id|bundle_id"
             if [[ "$is_app_volume" == true ]]; then
-                app_volumes+=("${vol_name}|${bundle_id}")
+                app_volumes+=("${actual_vol_name}|${device_id}|${bundle_id}")
             elif [[ "$is_playcover_volume" == true ]]; then
-                playcover_volumes+=("${vol_name}|${bundle_id}")
+                playcover_volumes+=("${actual_vol_name}|${device_id}|${bundle_id}")
             else
-                other_volumes+=("${vol_name}|")
+                other_volumes+=("${actual_vol_name}|${device_id}|")
             fi
-        done <<< "$all_volumes"
+        done <<< "$volume_list"
         
         local volume_count=0
         
@@ -1957,17 +1972,18 @@ eject_disk() {
             print_info "Phase 1: PlayCover配下のアプリボリュームをアンマウント中..."
             for vol_info in "${app_volumes[@]}"; do
                 local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
-                local bundle_id=$(echo "$vol_info" | cut -d'|' -f2)
+                local device_id=$(echo "$vol_info" | cut -d'|' -f2)
+                local bundle_id=$(echo "$vol_info" | cut -d'|' -f3)
                 
                 echo ""
-                print_info "  アンマウント中: ${vol_name}"
+                print_info "  アンマウント中: ${vol_name} (${device_id})"
                 
                 if [[ -n "$bundle_id" ]]; then
                     quit_app_for_bundle "$bundle_id"
                 fi
                 
-                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
-                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                sudo /usr/sbin/diskutil unmount "$device_id" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "$device_id" >/dev/null 2>&1 || true
                 ((volume_count++))
             done
         fi
@@ -1978,17 +1994,18 @@ eject_disk() {
             print_info "Phase 2: PlayCoverボリュームをアンマウント中..."
             for vol_info in "${playcover_volumes[@]}"; do
                 local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
-                local bundle_id=$(echo "$vol_info" | cut -d'|' -f2)
+                local device_id=$(echo "$vol_info" | cut -d'|' -f2)
+                local bundle_id=$(echo "$vol_info" | cut -d'|' -f3)
                 
                 echo ""
-                print_info "  アンマウント中: ${vol_name}"
+                print_info "  アンマウント中: ${vol_name} (${device_id})"
                 
                 if [[ -n "$bundle_id" ]]; then
                     quit_app_for_bundle "$bundle_id"
                 fi
                 
-                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
-                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                sudo /usr/sbin/diskutil unmount "$device_id" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "$device_id" >/dev/null 2>&1 || true
                 ((volume_count++))
             done
         fi
@@ -1999,12 +2016,13 @@ eject_disk() {
             print_info "Phase 3: その他のボリュームをアンマウント中..."
             for vol_info in "${other_volumes[@]}"; do
                 local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+                local device_id=$(echo "$vol_info" | cut -d'|' -f2)
                 
                 echo ""
-                print_info "  アンマウント中: ${vol_name}"
+                print_info "  アンマウント中: ${vol_name} (${device_id})"
                 
-                sudo /usr/sbin/diskutil unmount "/Volumes/$vol_name" >/dev/null 2>&1 || \
-                sudo /usr/sbin/diskutil unmount force "/Volumes/$vol_name" >/dev/null 2>&1 || true
+                sudo /usr/sbin/diskutil unmount "$device_id" >/dev/null 2>&1 || \
+                sudo /usr/sbin/diskutil unmount force "$device_id" >/dev/null 2>&1 || true
                 ((volume_count++))
             done
         fi
@@ -2014,10 +2032,10 @@ eject_disk() {
     fi
     
     echo ""
-    print_info "ディスク ${disk_id} を取り外し中..."
+    print_info "ディスク ${drive_name} (${disk_id}) を取り外し中..."
     
     if sudo /usr/sbin/diskutil eject "$disk_id"; then
-        print_success "ディスクを安全に取り外しました"
+        print_success "ディスク ${drive_name} を安全に取り外しました"
     else
         print_error "ディスクの取り外しに失敗しました"
     fi
@@ -2870,7 +2888,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.4${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.15.0${NC}"
     echo ""
     
     show_quick_status
