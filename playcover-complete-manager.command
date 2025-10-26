@@ -1564,35 +1564,19 @@ individual_volume_control() {
         ((index++))
     done
     
-    # Display in 2 columns
+    # Display in 2 columns with fixed spacing
     local total=${#volume_data[@]}
-    local col_width=60  # Width for each column
     
     for ((i=0; i<total; i+=2)); do
         # Left column (always exists)
         IFS='|' read -r idx1 name1 status1 <<< "${volume_data[$i]}"
         
-        # Calculate display width (ASCII=1, multibyte=2)
-        # Use byte length vs character length to detect multibyte chars
-        local byte_len=${#name1}
-        local char_count=$(echo -n "$name1" | wc -m | tr -d ' ')
-        local multibyte_count=$((byte_len - char_count))
-        local display_len=$((char_count + multibyte_count))
-        
-        # Calculate padding needed (account for "  X. " prefix = 5 chars)
-        local padding=$((col_width - display_len - 5))
-        [[ $padding -lt 1 ]] && padding=1
-        
-        local spaces=""
-        for ((k=0; k<padding; k++)); do
-            spaces+=" "
-        done
-        
         # Right column (if exists)
         if [[ $((i+1)) -lt $total ]]; then
             IFS='|' read -r idx2 name2 status2 <<< "${volume_data[$((i+1))]}"
-            echo "  ${idx1}. ${name1}${spaces}${idx2}. ${name2}"
-            echo "      ${status1}      ${status2}"
+            # Use printf for consistent spacing (%-50s = left-aligned 50 char field)
+            printf "  %s. %-50s%s. %s\n" "$idx1" "$name1" "$idx2" "$name2"
+            printf "      %-50s    %s\n" "$status1" "$status2"
         else
             # Only left column
             echo "  ${idx1}. ${name1}"
