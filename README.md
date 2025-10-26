@@ -270,7 +270,14 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.26.0 (最新) - Simplify Nuclear Cleanup with Mapping-Based Approach
+### v4.26.1 (最新) - Fix PlayCover Installation Verification
+- 🐛 **インストール検証修正**: PlayCoverインストール後の確認処理を追加
+- ✅ `brew install` 成功確認
+- ✅ `/Applications/PlayCover.app` 存在確認（最大10秒待機）
+- ✅ インストール失敗時の詳細エラーメッセージ
+- ✅ ログファイル表示による問題診断支援
+
+### v4.26.0 - Simplify Nuclear Cleanup with Mapping-Based Approach
 - 🧹 **超強力クリーンアップの簡素化**: マッピングファイルベースの処理に変更
 - ✅ 削除対象: 7項目 → 4項目に整理
 - ✅ 処理手順の最適化:
@@ -367,4 +374,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.0）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.1）

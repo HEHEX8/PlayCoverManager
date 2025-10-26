@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.26.0 - Simplify nuclear cleanup with mapping-based approach
+# Version: 4.26.1 - Fix PlayCover installation verification
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -4738,8 +4738,38 @@ install_homebrew() {
 
 install_playcover() {
     print_info "PlayCover をインストール中..."
-    /usr/local/bin/brew install --cask playcover-community > /tmp/playcover_install.log 2>&1
-    print_success "PlayCover のインストールが完了しました"
+    
+    if /usr/local/bin/brew install --cask playcover-community > /tmp/playcover_install.log 2>&1; then
+        print_success "PlayCover のインストールが完了しました"
+    else
+        print_error "PlayCover のインストールに失敗しました"
+        print_info "ログを確認してください: /tmp/playcover_install.log"
+        /bin/cat /tmp/playcover_install.log
+        wait_for_enter
+        exit 1
+    fi
+    
+    # Verify installation
+    echo ""
+    print_info "インストールを検証中..."
+    local max_wait=10
+    local waited=0
+    while [[ ! -d "/Applications/PlayCover.app" ]] && [[ $waited -lt $max_wait ]]; do
+        /bin/sleep 1
+        ((waited++))
+        echo -n "."
+    done
+    echo ""
+    
+    if [[ ! -d "/Applications/PlayCover.app" ]]; then
+        print_error "PlayCover.app が見つかりません"
+        print_info "Homebrewのインストールは成功しましたが、アプリが配置されていません"
+        print_info "ログ: /tmp/playcover_install.log"
+        wait_for_enter
+        exit 1
+    fi
+    
+    print_success "✓ PlayCover.app が正常にインストールされました"
     echo ""
     
     # Critical: Launch PlayCover once to create proper container structure
