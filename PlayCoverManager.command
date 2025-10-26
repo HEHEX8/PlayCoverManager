@@ -1490,12 +1490,7 @@ individual_volume_control() {
         
         local device=$(get_volume_device "$volume_name")
         if sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
-            # Success - show result
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_success "アンマウントしました"
-            wait_for_enter
+            # Success - silently return to menu
             individual_volume_control
             return
         else
@@ -1565,12 +1560,7 @@ individual_volume_control() {
         # Try to mount
         local device=$(get_volume_device "$volume_name")
         if sudo /usr/sbin/diskutil mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
-            # Success - show result
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_success "マウントしました"
-            wait_for_enter
+            # Success - silently return to menu
             individual_volume_control
             return
         else
@@ -1995,18 +1985,18 @@ switch_storage_location() {
             wait_for_enter
             return
         fi
-    
-    # Display volume list with storage type and mount status
-    echo "データステータス:"
-    echo ""
-    
-    # Cache diskutil and mount output for performance
-    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-    local mount_cache=$(/sbin/mount 2>/dev/null)
-    
-    declare -a mappings_array=()
-    local index=1
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        
+        # Display volume list with storage type and mount status
+        echo "データステータス:"
+        echo ""
+        
+        # Cache diskutil and mount output for performance
+        local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+        local mount_cache=$(/sbin/mount 2>/dev/null)
+        
+        declare -a mappings_array=()
+        local index=1
+        while IFS=$'\t' read -r volume_name bundle_id display_name; do
         if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
             continue
         fi
@@ -2053,508 +2043,321 @@ switch_storage_location() {
         printf "      使用容量: %s\n" "$container_size"
         echo ""
         ((index++))
-    done <<< "$mappings_content"
-    
-    print_separator
-    echo ""
-    echo "切り替えるアプリを選択してください:"
-    echo "  [番号] : ストレージ切り替え"
-    echo "  [0]    : 戻る"
-    echo ""
-    echo -n "選択: "
-    read choice
-    
-    if [[ "$choice" == "0" ]]; then
-        return
-    fi
-    
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
-        print_error "無効な選択です"
-        sleep 2
-        continue
-    fi
-    
-    # Convert 1-based user input to 0-based array index
-    local array_index=$((choice - 1))
-    local selected_mapping="${mappings_array[$array_index]}"
-    IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
-    
-    echo ""
-    print_header "${display_name} のストレージ切り替え"
-    
-    local target_path="${HOME}/Library/Containers/${bundle_id}"
-    local backup_path="${HOME}/Library/.playcover_backup_${bundle_id}"
-    
-    # Check current storage type
-    local current_storage="unknown"
-    if [[ -d "$target_path" ]]; then
-        current_storage=$(get_storage_type "$target_path")
-    fi
-    
-    # Get current size
-    local current_size=$(get_container_size "$target_path")
-    
-    echo "${CYAN}現在の状態:${NC}"
-    case "$current_storage" in
-        "internal")
-            echo "  💾 内蔵ストレージ"
-            echo "     使用容量: ${current_size}"
-            ;;
-        "external")
-            echo "  🔌 外部ストレージ"
-            echo "     使用容量: ${current_size}"
-            ;;
-        *)
-            echo "  ❓ 不明 / データなし"
-            ;;
-    esac
-    echo ""
-    
-    # Determine target action and show appropriate free space
-    local action=""
-    local storage_free=""
-    local storage_location=""
-    
-    case "$current_storage" in
-        "internal")
-            action="external"
-            # Moving to external - show external drive free space
-            storage_free=$(get_external_drive_free_space "$volume_name")
-            storage_location="外部ドライブ"
-            echo "${CYAN}実行する操作:${NC} 内蔵 → 外部ストレージへ移動"
-            echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
-            ;;
-        "external")
-            action="internal"
-            # Moving to internal - show internal drive free space
-            storage_free=$(get_storage_free_space "$HOME")
-            storage_location="内蔵ドライブ"
-            echo "${CYAN}実行する操作:${NC} 外部 → 内蔵ストレージへ移動"
-            echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
-            ;;
-        "none")
-            print_error "ストレージ切り替えを実行できません"
-            echo ""
-            echo "理由: データが存在しません（未マウント）"
-            echo ""
-            echo "推奨される操作:"
-            echo "  ${CYAN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
-            echo "  ${CYAN}2.${NC} その後、このストレージ切り替え機能を使用"
-            wait_for_enter
-            continue
-            return
-            ;;
-        *)
-            print_error "現在のストレージ状態を判定できません"
-            echo ""
-            echo "考えられる原因:"
-            echo "  - アプリがまだインストールされていない"
-            echo "  - データディレクトリが存在しない"
-            wait_for_enter
-            continue
-            return
-            ;;
-    esac
-    
-    echo ""
-    print_warning "この操作には時間がかかる場合があります"
-    echo ""
-    echo -n "${YELLOW}続行しますか？ (Y/n):${NC} "
-    read confirm
-    
-    # Default to Yes if empty
-    confirm=${confirm:-Y}
-    
-    if [[ ! "$confirm" =~ ^[Yy] ]]; then
-        print_info "キャンセルしました"
-        wait_for_enter
-        continue
-        return
-    fi
-    
-    # Authenticate sudo only when actually needed (before mount/copy operations)
-    authenticate_sudo
-    
-    echo ""
-    
-    if [[ "$action" == "external" ]]; then
-        # Internal -> External: Copy data to volume and mount
-        print_info "内蔵から外部ストレージへデータを移行中..."
+        done <<< "$mappings_content"
         
-        # Check if volume exists
-        if ! volume_exists "$volume_name"; then
-            print_error "外部ボリュームが見つかりません: ${volume_name}"
-            wait_for_enter
-            continue
+        print_separator
+        echo ""
+        echo "切り替えるアプリを選択してください:"
+        echo "  [番号] : ストレージ切り替え"
+        echo "  [0]    : 戻る"
+        echo ""
+        echo -n "選択: "
+        read choice
+        
+        if [[ "$choice" == "0" ]]; then
             return
         fi
         
-        # For internal -> external, determine correct source path
-        local source_path="$target_path"
-        
-        # Validate source path exists
-        if [[ ! -d "$source_path" ]]; then
-            print_error "コピー元が存在しません: $source_path"
-            wait_for_enter
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
+            print_error "無効な選択です"
+            sleep 2
             continue
-            return
         fi
         
-        # Check if Data directory exists at root level
-        if [[ -d "$source_path/Data" ]] && [[ -f "$source_path/.com.apple.containermanagerd.metadata.plist" ]]; then
-            # Normal container structure - use as-is
-            print_info "内蔵ストレージからコピーします: $source_path"
-        else
-            # Check for nested backup structure and find actual Data directory
-            print_info "コンテナ構造を検証中..."
-            
-            local data_path=$(/usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
-            if [[ -n "$data_path" ]]; then
-                # Found Data directory - extract parent container path
-                local container_path=$(dirname "$data_path")
-                if [[ -f "$container_path/.com.apple.containermanagerd.metadata.plist" ]]; then
-                    print_warning "ネストされた構造を検出しました"
-                    print_info "実際のデータパス: $container_path"
-                    source_path="$container_path"
-                else
-                    print_error "正しいコンテナ構造が見つかりません"
-                    echo ""
-                    print_info "デバッグ情報:"
-                    echo "  検索開始: $source_path"
-                    echo "  Data発見: $data_path"
-                    echo "  親ディレクトリ: $container_path"
-                    echo ""
-                    echo -n "Enterキーで続行..."
-                    read
+        # Convert 1-based user input to 0-based array index
+        local array_index=$((choice - 1))
+        local selected_mapping="${mappings_array[$array_index]}"
+        IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
+        
+        echo ""
+        print_header "${display_name} のストレージ切り替え"
+        
+        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        local backup_path="${HOME}/Library/.playcover_backup_${bundle_id}"
+        
+        # Check current storage type
+        local current_storage="unknown"
+        if [[ -d "$target_path" ]]; then
+            current_storage=$(get_storage_type "$target_path")
+        fi
+        
+        # Get current size
+        local current_size=$(get_container_size "$target_path")
+        
+        echo "${CYAN}現在の状態:${NC}"
+        case "$current_storage" in
+            "internal")
+                echo "  💾 内蔵ストレージ"
+                echo "     使用容量: ${current_size}"
+                ;;
+            "external")
+                echo "  🔌 外部ストレージ"
+                echo "     使用容量: ${current_size}"
+                ;;
+            *)
+                echo "  ❓ 不明 / データなし"
+                ;;
+        esac
+        echo ""
+        
+        # Determine target action and show appropriate free space
+        local action=""
+        local storage_free=""
+        local storage_location=""
+        
+        case "$current_storage" in
+            "internal")
+                action="external"
+                # Moving to external - show external drive free space
+                storage_free=$(get_external_drive_free_space "$volume_name")
+                storage_location="外部ドライブ"
+                echo "${CYAN}実行する操作:${NC} 内蔵 → 外部ストレージへ移動"
+                echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
+                ;;
+            "external")
+                action="internal"
+                # Moving to internal - show internal drive free space
+                storage_free=$(get_storage_free_space "$HOME")
+                storage_location="内蔵ドライブ"
+                echo "${CYAN}実行する操作:${NC} 外部 → 内蔵ストレージへ移動"
+                echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
+                ;;
+            "none")
+                print_error "ストレージ切り替えを実行できません"
+                echo ""
+                echo "理由: データが存在しません（未マウント）"
+                echo ""
+                echo "推奨される操作:"
+                echo "  ${CYAN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
+                echo "  ${CYAN}2.${NC} その後、このストレージ切り替え機能を使用"
+                wait_for_enter
                 continue
+                return
+                ;;
+            *)
+                print_error "現在のストレージ状態を判定できません"
+                echo ""
+                echo "考えられる原因:"
+                echo "  - アプリがまだインストールされていない"
+                echo "  - データディレクトリが存在しない"
+                wait_for_enter
+                continue
+                return
+                ;;
+        esac
+        
+        echo ""
+        print_warning "この操作には時間がかかる場合があります"
+        echo ""
+        echo -n "${YELLOW}続行しますか？ (Y/n):${NC} "
+        read confirm
+        
+        # Default to Yes if empty
+        confirm=${confirm:-Y}
+        
+        if [[ ! "$confirm" =~ ^[Yy] ]]; then
+            print_info "キャンセルしました"
+            wait_for_enter
+            continue
+            return
+        fi
+        
+        # Authenticate sudo only when actually needed (before mount/copy operations)
+        authenticate_sudo
+        
+        echo ""
+        
+        if [[ "$action" == "external" ]]; then
+            # Internal -> External: Copy data to volume and mount
+            print_info "内蔵から外部ストレージへデータを移行中..."
+            
+            # Check if volume exists
+            if ! volume_exists "$volume_name"; then
+                print_error "外部ボリュームが見つかりません: ${volume_name}"
+                wait_for_enter
+                continue
+                return
+            fi
+            
+            # For internal -> external, determine correct source path
+            local source_path="$target_path"
+            
+            # Validate source path exists
+            if [[ ! -d "$source_path" ]]; then
+                print_error "コピー元が存在しません: $source_path"
+                wait_for_enter
+                continue
+                return
+            fi
+            
+            # Check if Data directory exists at root level
+            if [[ -d "$source_path/Data" ]] && [[ -f "$source_path/.com.apple.containermanagerd.metadata.plist" ]]; then
+                # Normal container structure - use as-is
+                print_info "内蔵ストレージからコピーします: $source_path"
+            else
+                # Check for nested backup structure and find actual Data directory
+                print_info "コンテナ構造を検証中..."
+                
+                local data_path=$(/usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
+                if [[ -n "$data_path" ]]; then
+                    # Found Data directory - extract parent container path
+                    local container_path=$(dirname "$data_path")
+                    if [[ -f "$container_path/.com.apple.containermanagerd.metadata.plist" ]]; then
+                        print_warning "ネストされた構造を検出しました"
+                        print_info "実際のデータパス: $container_path"
+                        source_path="$container_path"
+                    else
+                        print_error "正しいコンテナ構造が見つかりません"
+                        echo ""
+                        print_info "デバッグ情報:"
+                        echo "  検索開始: $source_path"
+                        echo "  Data発見: $data_path"
+                        echo "  親ディレクトリ: $container_path"
+                        echo ""
+                        echo -n "Enterキーで続行..."
+                        read
+                    continue
+                        return
+                    fi
+                else
+                    print_error "内蔵ストレージにデータがありません"
+                    echo ""
+                    print_info "現在の状態:"
+                    echo "  パス: $source_path"
+                    echo ""
+                    print_info "考えられる原因:"
+                    echo "  - 外部ボリュームがまだマウントされている"
+                    echo "  - 内蔵ストレージへの移行が完了していない"
+                    echo "  - コンテナディレクトリが破損している"
+                    wait_for_enter
+                    continue
                     return
                 fi
-            else
-                print_error "内蔵ストレージにデータがありません"
-                echo ""
-                print_info "現在の状態:"
-                echo "  パス: $source_path"
-                echo ""
-                print_info "考えられる原因:"
-                echo "  - 外部ボリュームがまだマウントされている"
-                echo "  - 内蔵ストレージへの移行が完了していない"
-                echo "  - コンテナディレクトリが破損している"
+            fi
+            
+            # Check disk space before migration
+            print_info "転送前の容量チェック中..."
+            local source_size_bytes=$(/usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+            if [[ -z "$source_size_bytes" ]]; then
+                print_error "コピー元のサイズを取得できませんでした"
                 wait_for_enter
                 continue
                 return
             fi
-        fi
-        
-        # Check disk space before migration
-        print_info "転送前の容量チェック中..."
-        local source_size_bytes=$(/usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
-        if [[ -z "$source_size_bytes" ]]; then
-            print_error "コピー元のサイズを取得できませんでした"
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        # Get available space on external volume (mount temporarily to check)
-        local volume_device=$(get_volume_device "$volume_name")
-        
-        if [[ -z "$volume_device" ]]; then
-            print_error "外部ボリュームのデバイス情報が取得できませんでした"
-            echo ""
-            print_info "デバッグ情報:"
-            echo "  ボリューム名: $volume_name"
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        print_info "外部ボリューム: $volume_device"
-        
-        local temp_check_mount="/tmp/playcover_check_$$"
-        sudo /bin/mkdir -p "$temp_check_mount"
-        
-        # Check if volume is already mounted
-        local existing_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point" | sed 's/.*: *//')
-        local available_bytes=0
-        local mount_cleanup_needed=false
-        
-        if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
-            # Volume already mounted - need to unmount it first for fresh mount later
-            print_info "外部ボリュームは既にマウントされています: $existing_mount"
-            available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
-            mount_cleanup_needed=true
-        else
-            # Volume not mounted - mount it temporarily for capacity check
-            print_info "外部ボリュームをマウント中..."
-            if sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
-                print_success "マウント成功"
-                available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
-                existing_mount="$temp_check_mount"
-                mount_cleanup_needed=true
-            else
-                print_error "外部ボリュームのマウントに失敗しました"
+            
+            # Get available space on external volume (mount temporarily to check)
+            local volume_device=$(get_volume_device "$volume_name")
+            
+            if [[ -z "$volume_device" ]]; then
+                print_error "外部ボリュームのデバイス情報が取得できませんでした"
                 echo ""
                 print_info "デバッグ情報:"
-                echo "  デバイス: $volume_device"
-                echo "  マウントポイント: $temp_check_mount"
-                echo ""
-                print_info "考えられる原因:"
-                echo "  - ボリュームが破損している"
-                echo "  - ディスクが接続されていない"
-                echo "  - 権限の問題"
-                sudo /bin/rm -rf "$temp_check_mount"
-                wait_for_enter
-                continue
-                return
-            fi
-        fi
-        
-        # Cleanup: Unmount after capacity check for clean state
-        if [[ "$mount_cleanup_needed" == true ]]; then
-            print_info "容量チェック完了、一時マウントをクリーンアップ中..."
-            sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
-            sleep 1
-        fi
-        sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
-        
-        # Convert to human readable
-        local source_size_mb=$((source_size_bytes / 1024))
-        local available_mb=$((available_bytes / 1024))
-        local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
-        
-        echo ""
-        print_info "容量チェック結果:"
-        echo "  コピー元サイズ: ${source_size_mb} MB"
-        echo "  転送先空き容量: ${available_mb} MB"
-        echo "  必要容量（余裕込み）: ${required_mb} MB"
-        echo ""
-        
-        if [[ $available_mb -lt $required_mb ]]; then
-            print_error "容量不足: 転送先の空き容量が不足しています"
-            echo ""
-            echo "不足分: $((required_mb - available_mb)) MB"
-            echo ""
-            print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
-            echo ""
-            echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
-            read force_continue
-            
-            if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-                print_info "キャンセルしました"
+                echo "  ボリューム名: $volume_name"
                 wait_for_enter
                 continue
                 return
             fi
             
-            print_warning "容量不足を承知で続行します..."
-            echo ""
-        else
-            print_success "容量チェック: OK（十分な空き容量があります）"
-            echo ""
-        fi
-        
-        # Unmount if already mounted
-        local current_mount=$(get_mount_point "$volume_name")
-        if [[ -n "$current_mount" ]]; then
-            print_info "既存のマウントをアンマウント中..."
-            unmount_volume "$volume_name" "$bundle_id" || true
-            sleep 1
-        fi
-        
-        # Create temporary mount point
-        local temp_mount="/tmp/playcover_temp_$$"
-        sudo /bin/mkdir -p "$temp_mount"
-        
-        # Mount volume temporarily (with nobrowse to hide from Finder)
-        local volume_device=$(get_volume_device "$volume_name")
-        print_info "ボリュームを一時マウント中..."
-        if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
-            print_error "ボリュームのマウントに失敗しました"
-            sudo /bin/rm -rf "$temp_mount"
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        # Debug: Show source path and content
-        print_info "コピー元: ${source_path}"
-        local file_count=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        local total_size=$(/usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
-        print_info "  ファイル数: ${file_count}"
-        print_info "  データサイズ: ${total_size}"
-        
-        # Copy data from internal to external (incremental sync)
-        print_info "データを差分転送中... (進捗が表示されます)"
-        echo ""
-        print_info "💡 差分コピーモード: 既存ファイルはスキップされます"
-        echo ""
-        
-        # Use rsync with --update flag for incremental sync (skip existing files)
-        # This is much faster when re-running after interruption
-        # Exclude system metadata files and backup directories
-        # Note: macOS rsync doesn't support --info=progress2, use --progress instead
-        sudo /usr/bin/rsync -avH --update --progress \
-            --exclude='.Spotlight-V100' \
-            --exclude='.fseventsd' \
-            --exclude='.Trashes' \
-            --exclude='.TemporaryItems' \
-            --exclude='.DS_Store' \
-            --exclude='.playcover_backup_*' \
-            "$source_path/" "$temp_mount/"
-        local rsync_exit=$?
-        
-        if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
-            echo ""
-            print_success "データのコピーが完了しました"
+            print_info "外部ボリューム: $volume_device"
             
-            local copied_count=$(/usr/bin/find "$temp_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-            local copied_size=$(/usr/bin/du -sh "$temp_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
-            print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
-        else
-            echo ""
-            print_error "データのコピーに失敗しました"
-            print_info "一時マウントをクリーンアップ中..."
-            sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
-                sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
-            }
-            sleep 1  # Wait for unmount to complete
-            sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        # Unmount temporary mount
-        print_info "一時マウントをアンマウント中..."
-        sudo /usr/sbin/diskutil unmount "$temp_mount" || {
-            print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
-            sudo /usr/sbin/diskutil unmount force "$temp_mount"
-        }
-        sleep 1  # Wait for unmount to complete
-        sudo /bin/rm -rf "$temp_mount"
-        
-        # Delete internal data (no backup needed)
-        print_info "内蔵データを削除中..."
-        sudo /bin/rm -rf "$target_path"
-        
-        # Mount volume to proper location
-        print_info "ボリュームを正式にマウント中..."
-        if mount_volume "$volume_name" "$target_path"; then
-            echo ""
-            print_success "外部ストレージへの切り替えが完了しました"
-            print_info "保存場所: ${target_path}"
-        else
-            print_error "ボリュームのマウントに失敗しました"
-        fi
-        
-    else
-        # External -> Internal: Copy data from volume to internal and unmount
-        print_info "外部から内蔵ストレージへデータを移行中..."
-        
-        # Check if volume exists
-        if ! volume_exists "$volume_name"; then
-            print_error "外部ボリュームが見つかりません: ${volume_name}"
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        # Check disk space before migration
-        print_info "転送前の容量チェック中..."
-        
-        # Mount volume temporarily to check size (if not already mounted)
-        local current_mount=$(get_mount_point "$volume_name")
-        local temp_check_mount=""
-        local check_mount_point=""
-        
-        if [[ -n "$current_mount" ]]; then
-            check_mount_point="$current_mount"
-        else
-            temp_check_mount="/tmp/playcover_check_$$"
+            local temp_check_mount="/tmp/playcover_check_$$"
             sudo /bin/mkdir -p "$temp_check_mount"
-            local volume_device=$(get_volume_device "$volume_name")
             
-            if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
-                print_error "外部ボリュームの容量チェックに失敗しました"
-                sudo /bin/rm -rf "$temp_check_mount"
-                wait_for_enter
-                continue
-                return
-            fi
-            check_mount_point="$temp_check_mount"
-        fi
-        
-        local source_size_bytes=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
-        
-        # Unmount temporary check mount if created
-        if [[ -n "$temp_check_mount" ]]; then
-            sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
-            sudo /bin/rm -rf "$temp_check_mount"
-        fi
-        
-        if [[ -z "$source_size_bytes" ]]; then
-            print_error "コピー元のサイズを取得できませんでした"
-            wait_for_enter
-            continue
-            return
-        fi
-        
-        # Get available space on internal disk (where target_path will be created)
-        local internal_disk_path=$(dirname "$target_path")
-        # If parent doesn't exist, check its parent
-        while [[ ! -d "$internal_disk_path" ]] && [[ "$internal_disk_path" != "/" ]]; do
-            internal_disk_path=$(dirname "$internal_disk_path")
-        done
-        
-        local available_bytes=$(df -k "$internal_disk_path" | tail -1 | /usr/bin/awk '{print $4}')
-        
-        # Convert to human readable
-        local source_size_mb=$((source_size_bytes / 1024))
-        local available_mb=$((available_bytes / 1024))
-        local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
-        
-        echo ""
-        print_info "容量チェック結果:"
-        echo "  コピー元サイズ: ${source_size_mb} MB"
-        echo "  転送先空き容量: ${available_mb} MB"
-        echo "  必要容量（余裕込み）: ${required_mb} MB"
-        echo ""
-        
-        if [[ $available_mb -lt $required_mb ]]; then
-            print_error "容量不足: 転送先の空き容量が不足しています"
-            echo ""
-            echo "不足分: $((required_mb - available_mb)) MB"
-            echo ""
-            print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
-            echo ""
-            echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
-            read force_continue
+            # Check if volume is already mounted
+            local existing_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point" | sed 's/.*: *//')
+            local available_bytes=0
+            local mount_cleanup_needed=false
             
-            if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-                print_info "キャンセルしました"
-                wait_for_enter
-                continue
-                return
+            if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
+                # Volume already mounted - need to unmount it first for fresh mount later
+                print_info "外部ボリュームは既にマウントされています: $existing_mount"
+                available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
+                mount_cleanup_needed=true
+            else
+                # Volume not mounted - mount it temporarily for capacity check
+                print_info "外部ボリュームをマウント中..."
+                if sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+                    print_success "マウント成功"
+                    available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
+                    existing_mount="$temp_check_mount"
+                    mount_cleanup_needed=true
+                else
+                    print_error "外部ボリュームのマウントに失敗しました"
+                    echo ""
+                    print_info "デバッグ情報:"
+                    echo "  デバイス: $volume_device"
+                    echo "  マウントポイント: $temp_check_mount"
+                    echo ""
+                    print_info "考えられる原因:"
+                    echo "  - ボリュームが破損している"
+                    echo "  - ディスクが接続されていない"
+                    echo "  - 権限の問題"
+                    sudo /bin/rm -rf "$temp_check_mount"
+                    wait_for_enter
+                    continue
+                    return
+                fi
             fi
             
-            print_warning "容量不足を承知で続行します..."
+            # Cleanup: Unmount after capacity check for clean state
+            if [[ "$mount_cleanup_needed" == true ]]; then
+                print_info "容量チェック完了、一時マウントをクリーンアップ中..."
+                sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
+                sleep 1
+            fi
+            sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
+            
+            # Convert to human readable
+            local source_size_mb=$((source_size_bytes / 1024))
+            local available_mb=$((available_bytes / 1024))
+            local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+            
             echo ""
-        else
-            print_success "容量チェック: OK（十分な空き容量があります）"
+            print_info "容量チェック結果:"
+            echo "  コピー元サイズ: ${source_size_mb} MB"
+            echo "  転送先空き容量: ${available_mb} MB"
+            echo "  必要容量（余裕込み）: ${required_mb} MB"
             echo ""
-        fi
-        
-        # Determine current mount point
-        local current_mount=$(get_mount_point "$volume_name")
-        local temp_mount_created=false
-        local source_mount=""
-        
-        if [[ -z "$current_mount" ]]; then
-            # Volume not mounted - mount to temporary location
-            print_info "ボリュームを一時マウント中..."
+            
+            if [[ $available_mb -lt $required_mb ]]; then
+                print_error "容量不足: 転送先の空き容量が不足しています"
+                echo ""
+                echo "不足分: $((required_mb - available_mb)) MB"
+                echo ""
+                print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
+                echo ""
+                echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+                read force_continue
+                
+                if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+                    print_info "キャンセルしました"
+                    wait_for_enter
+                    continue
+                    return
+                fi
+                
+                print_warning "容量不足を承知で続行します..."
+                echo ""
+            else
+                print_success "容量チェック: OK（十分な空き容量があります）"
+                echo ""
+            fi
+            
+            # Unmount if already mounted
+            local current_mount=$(get_mount_point "$volume_name")
+            if [[ -n "$current_mount" ]]; then
+                print_info "既存のマウントをアンマウント中..."
+                unmount_volume "$volume_name" "$bundle_id" || true
+                sleep 1
+            fi
+            
+            # Create temporary mount point
             local temp_mount="/tmp/playcover_temp_$$"
             sudo /bin/mkdir -p "$temp_mount"
+            
+            # Mount volume temporarily (with nobrowse to hide from Finder)
             local volume_device=$(get_volume_device "$volume_name")
+            print_info "ボリュームを一時マウント中..."
             if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                 print_error "ボリュームのマウントに失敗しました"
                 sudo /bin/rm -rf "$temp_mount"
@@ -2562,152 +2365,339 @@ switch_storage_location() {
                 continue
                 return
             fi
-            source_mount="$temp_mount"
-            temp_mount_created=true
-        elif [[ "$current_mount" == "$target_path" ]]; then
-            # Volume is mounted at target path - need to remount to temporary location
-            print_info "外部ボリュームは ${target_path} にマウントされています"
-            print_info "一時マウントポイントへ移動中..."
             
-            local volume_device=$(get_volume_device "$volume_name")
+            # Debug: Show source path and content
+            print_info "コピー元: ${source_path}"
+            local file_count=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+            local total_size=$(/usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+            print_info "  ファイル数: ${file_count}"
+            print_info "  データサイズ: ${total_size}"
             
-            # Try normal unmount first
-            local umount_output=$(sudo /usr/sbin/diskutil unmount "$target_path" 2>&1)
-            local umount_exit=$?
+            # Copy data from internal to external (incremental sync)
+            print_info "データを差分転送中... (進捗が表示されます)"
+            echo ""
+            print_info "💡 差分コピーモード: 既存ファイルはスキップされます"
+            echo ""
             
-            if [[ $umount_exit -ne 0 ]]; then
-                print_warning "通常のアンマウントに失敗しました"
-                echo "理由: $umount_output"
+            # Use rsync with --update flag for incremental sync (skip existing files)
+            # This is much faster when re-running after interruption
+            # Exclude system metadata files and backup directories
+            # Note: macOS rsync doesn't support --info=progress2, use --progress instead
+            sudo /usr/bin/rsync -avH --update --progress \
+                --exclude='.Spotlight-V100' \
+                --exclude='.fseventsd' \
+                --exclude='.Trashes' \
+                --exclude='.TemporaryItems' \
+                --exclude='.DS_Store' \
+                --exclude='.playcover_backup_*' \
+                "$source_path/" "$temp_mount/"
+            local rsync_exit=$?
+            
+            if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
                 echo ""
-                print_info "強制アンマウントを試みます..."
+                print_success "データのコピーが完了しました"
                 
-                # Try force unmount
-                umount_output=$(sudo /usr/sbin/diskutil unmount force "$target_path" 2>&1)
-                umount_exit=$?
-                
-                if [[ $umount_exit -ne 0 ]]; then
-                    print_error "強制アンマウントも失敗しました"
-                    echo "理由: $umount_output"
-                    echo ""
-                    print_warning "このアプリが使用中の可能性があります"
-                    print_info "推奨される対応:"
-                    echo "  1. アプリが起動していないか確認"
-                    echo "  2. Finderでこのディレクトリを開いていないか確認"
-                    echo "  3. 上記を確認後、再度実行"
-                    echo ""
-                    echo -n "Enterキーで続行..."
-                    read </dev/tty
-                continue
-                    return
-                else
-                    print_success "強制アンマウントに成功しました"
-                fi
-            fi
-            
-            sleep 1
-            
-            local temp_mount="/tmp/playcover_temp_$$"
-            sudo /bin/mkdir -p "$temp_mount"
-            if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
-                print_error "一時マウントに失敗しました"
-                sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
-                sudo /bin/rm -rf "$temp_mount"
+                local copied_count=$(/usr/bin/find "$temp_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+                local copied_size=$(/usr/bin/du -sh "$temp_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
+                print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+            else
+                echo ""
+                print_error "データのコピーに失敗しました"
+                print_info "一時マウントをクリーンアップ中..."
+                sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
+                    sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
+                }
+                sleep 1  # Wait for unmount to complete
+                sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
                 wait_for_enter
                 continue
                 return
             fi
-            source_mount="$temp_mount"
-            temp_mount_created=true
+            
+            # Unmount temporary mount
+            print_info "一時マウントをアンマウント中..."
+            sudo /usr/sbin/diskutil unmount "$temp_mount" || {
+                print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+                sudo /usr/sbin/diskutil unmount force "$temp_mount"
+            }
+            sleep 1  # Wait for unmount to complete
+            sudo /bin/rm -rf "$temp_mount"
+            
+            # Delete internal data (no backup needed)
+            print_info "内蔵データを削除中..."
+            sudo /bin/rm -rf "$target_path"
+            
+            # Mount volume to proper location
+            print_info "ボリュームを正式にマウント中..."
+            if mount_volume "$volume_name" "$target_path"; then
+                echo ""
+                print_success "外部ストレージへの切り替えが完了しました"
+                print_info "保存場所: ${target_path}"
+            else
+                print_error "ボリュームのマウントに失敗しました"
+            fi
+            
         else
-            # Volume is mounted elsewhere
-            print_info "外部ボリュームは ${current_mount} にマウントされています"
-            source_mount="$current_mount"
-        fi
-        
-        # Debug: Show source path and content
-        print_info "コピー元: ${source_mount}"
-        local file_count=$(sudo /usr/bin/find "$source_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        local total_size=$(sudo /usr/bin/du -sh "$source_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
-        print_info "  ファイル数: ${file_count}"
-        print_info "  データサイズ: ${total_size}"
-        
-        # Remove existing internal data/mount point if it exists
-        if [[ -e "$target_path" ]]; then
-            print_info "既存データをクリーンアップ中..."
-            sudo /bin/rm -rf "$target_path" 2>/dev/null || true
-        fi
-        
-        # Create new internal directory
-        sudo /bin/mkdir -p "$target_path"
-        
-        # Copy data from external to internal
-        print_info "データをコピー中... (進捗が表示されます)"
-        echo ""
-        
-        # Use rsync with progress for real-time progress (macOS compatible)
-        # Exclude system metadata files and backup directories
-        sudo /usr/bin/rsync -avH --ignore-errors --progress \
-            --exclude='.Spotlight-V100' \
-            --exclude='.fseventsd' \
-            --exclude='.Trashes' \
-            --exclude='.TemporaryItems' \
-            --exclude='.DS_Store' \
-            --exclude='.playcover_backup_*' \
-            "$source_mount/" "$target_path/"
-        local rsync_exit=$?
-        
-        if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+            # External -> Internal: Copy data from volume to internal and unmount
+            print_info "外部から内蔵ストレージへデータを移行中..."
+            
+            # Check if volume exists
+            if ! volume_exists "$volume_name"; then
+                print_error "外部ボリュームが見つかりません: ${volume_name}"
+                wait_for_enter
+                continue
+                return
+            fi
+            
+            # Check disk space before migration
+            print_info "転送前の容量チェック中..."
+            
+            # Mount volume temporarily to check size (if not already mounted)
+            local current_mount=$(get_mount_point "$volume_name")
+            local temp_check_mount=""
+            local check_mount_point=""
+            
+            if [[ -n "$current_mount" ]]; then
+                check_mount_point="$current_mount"
+            else
+                temp_check_mount="/tmp/playcover_check_$$"
+                sudo /bin/mkdir -p "$temp_check_mount"
+                local volume_device=$(get_volume_device "$volume_name")
+                
+                if ! sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
+                    print_error "外部ボリュームの容量チェックに失敗しました"
+                    sudo /bin/rm -rf "$temp_check_mount"
+                    wait_for_enter
+                    continue
+                    return
+                fi
+                check_mount_point="$temp_check_mount"
+            fi
+            
+            local source_size_bytes=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
+            
+            # Unmount temporary check mount if created
+            if [[ -n "$temp_check_mount" ]]; then
+                sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
+                sudo /bin/rm -rf "$temp_check_mount"
+            fi
+            
+            if [[ -z "$source_size_bytes" ]]; then
+                print_error "コピー元のサイズを取得できませんでした"
+                wait_for_enter
+                continue
+                return
+            fi
+            
+            # Get available space on internal disk (where target_path will be created)
+            local internal_disk_path=$(dirname "$target_path")
+            # If parent doesn't exist, check its parent
+            while [[ ! -d "$internal_disk_path" ]] && [[ "$internal_disk_path" != "/" ]]; do
+                internal_disk_path=$(dirname "$internal_disk_path")
+            done
+            
+            local available_bytes=$(df -k "$internal_disk_path" | tail -1 | /usr/bin/awk '{print $4}')
+            
+            # Convert to human readable
+            local source_size_mb=$((source_size_bytes / 1024))
+            local available_mb=$((available_bytes / 1024))
+            local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+            
             echo ""
-            print_success "データのコピーが完了しました"
-            
-            # Change ownership first, then check without sudo
-            sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
-            
-            local copied_count=$(/usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-            local copied_size=$(/usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
-            print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
-        else
+            print_info "容量チェック結果:"
+            echo "  コピー元サイズ: ${source_size_mb} MB"
+            echo "  転送先空き容量: ${available_mb} MB"
+            echo "  必要容量（余裕込み）: ${required_mb} MB"
             echo ""
-            print_error "データのコピーに失敗しました"
             
-            # Cleanup: Unmount first, then clean up directories
+            if [[ $available_mb -lt $required_mb ]]; then
+                print_error "容量不足: 転送先の空き容量が不足しています"
+                echo ""
+                echo "不足分: $((required_mb - available_mb)) MB"
+                echo ""
+                print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
+                echo ""
+                echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+                read force_continue
+                
+                if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+                    print_info "キャンセルしました"
+                    wait_for_enter
+                    continue
+                    return
+                fi
+                
+                print_warning "容量不足を承知で続行します..."
+                echo ""
+            else
+                print_success "容量チェック: OK（十分な空き容量があります）"
+                echo ""
+            fi
+            
+            # Determine current mount point
+            local current_mount=$(get_mount_point "$volume_name")
+            local temp_mount_created=false
+            local source_mount=""
+            
+            if [[ -z "$current_mount" ]]; then
+                # Volume not mounted - mount to temporary location
+                print_info "ボリュームを一時マウント中..."
+                local temp_mount="/tmp/playcover_temp_$$"
+                sudo /bin/mkdir -p "$temp_mount"
+                local volume_device=$(get_volume_device "$volume_name")
+                if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+                    print_error "ボリュームのマウントに失敗しました"
+                    sudo /bin/rm -rf "$temp_mount"
+                    wait_for_enter
+                    continue
+                    return
+                fi
+                source_mount="$temp_mount"
+                temp_mount_created=true
+            elif [[ "$current_mount" == "$target_path" ]]; then
+                # Volume is mounted at target path - need to remount to temporary location
+                print_info "外部ボリュームは ${target_path} にマウントされています"
+                print_info "一時マウントポイントへ移動中..."
+                
+                local volume_device=$(get_volume_device "$volume_name")
+                
+                # Try normal unmount first
+                local umount_output=$(sudo /usr/sbin/diskutil unmount "$target_path" 2>&1)
+                local umount_exit=$?
+                
+                if [[ $umount_exit -ne 0 ]]; then
+                    print_warning "通常のアンマウントに失敗しました"
+                    echo "理由: $umount_output"
+                    echo ""
+                    print_info "強制アンマウントを試みます..."
+                    
+                    # Try force unmount
+                    umount_output=$(sudo /usr/sbin/diskutil unmount force "$target_path" 2>&1)
+                    umount_exit=$?
+                    
+                    if [[ $umount_exit -ne 0 ]]; then
+                        print_error "強制アンマウントも失敗しました"
+                        echo "理由: $umount_output"
+                        echo ""
+                        print_warning "このアプリが使用中の可能性があります"
+                        print_info "推奨される対応:"
+                        echo "  1. アプリが起動していないか確認"
+                        echo "  2. Finderでこのディレクトリを開いていないか確認"
+                        echo "  3. 上記を確認後、再度実行"
+                        echo ""
+                        echo -n "Enterキーで続行..."
+                        read </dev/tty
+                    continue
+                        return
+                    else
+                        print_success "強制アンマウントに成功しました"
+                    fi
+                fi
+                
+                sleep 1
+                
+                local temp_mount="/tmp/playcover_temp_$$"
+                sudo /bin/mkdir -p "$temp_mount"
+                if ! sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+                    print_error "一時マウントに失敗しました"
+                    sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
+                    sudo /bin/rm -rf "$temp_mount"
+                    wait_for_enter
+                    continue
+                    return
+                fi
+                source_mount="$temp_mount"
+                temp_mount_created=true
+            else
+                # Volume is mounted elsewhere
+                print_info "外部ボリュームは ${current_mount} にマウントされています"
+                source_mount="$current_mount"
+            fi
+            
+            # Debug: Show source path and content
+            print_info "コピー元: ${source_mount}"
+            local file_count=$(sudo /usr/bin/find "$source_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+            local total_size=$(sudo /usr/bin/du -sh "$source_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
+            print_info "  ファイル数: ${file_count}"
+            print_info "  データサイズ: ${total_size}"
+            
+            # Remove existing internal data/mount point if it exists
+            if [[ -e "$target_path" ]]; then
+                print_info "既存データをクリーンアップ中..."
+                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+            fi
+            
+            # Create new internal directory
+            sudo /bin/mkdir -p "$target_path"
+            
+            # Copy data from external to internal
+            print_info "データをコピー中... (進捗が表示されます)"
+            echo ""
+            
+            # Use rsync with progress for real-time progress (macOS compatible)
+            # Exclude system metadata files and backup directories
+            sudo /usr/bin/rsync -avH --ignore-errors --progress \
+                --exclude='.Spotlight-V100' \
+                --exclude='.fseventsd' \
+                --exclude='.Trashes' \
+                --exclude='.TemporaryItems' \
+                --exclude='.DS_Store' \
+                --exclude='.playcover_backup_*' \
+                "$source_mount/" "$target_path/"
+            local rsync_exit=$?
+            
+            if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+                echo ""
+                print_success "データのコピーが完了しました"
+                
+                # Change ownership first, then check without sudo
+                sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
+                
+                local copied_count=$(/usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+                local copied_size=$(/usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+                print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+            else
+                echo ""
+                print_error "データのコピーに失敗しました"
+                
+                # Cleanup: Unmount first, then clean up directories
+                if [[ "$temp_mount_created" == true ]]; then
+                    print_info "一時マウントをクリーンアップ中..."
+                    sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
+                        sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
+                    }
+                    sleep 1  # Wait for unmount to complete
+                    sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
+                fi
+                
+                # Remove failed copy
+                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+                
+                wait_for_enter
+                continue
+                return
+            fi
+            
+            # Unmount volume
             if [[ "$temp_mount_created" == true ]]; then
                 print_info "一時マウントをクリーンアップ中..."
                 sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
                     sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
                 }
                 sleep 1  # Wait for unmount to complete
-                sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
+                sudo /bin/rm -rf "$source_mount"
+            else
+                print_info "外部ボリュームをアンマウント中..."
+                unmount_volume "$volume_name" "$bundle_id" || true
             fi
             
-            # Remove failed copy
-            sudo /bin/rm -rf "$target_path" 2>/dev/null || true
-            
-            wait_for_enter
-            continue
-            return
+            echo ""
+            print_success "内蔵ストレージへの切り替えが完了しました"
+            print_info "保存場所: ${target_path}"
         fi
         
-        # Unmount volume
-        if [[ "$temp_mount_created" == true ]]; then
-            print_info "一時マウントをクリーンアップ中..."
-            sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
-                sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
-            }
-            sleep 1  # Wait for unmount to complete
-            sudo /bin/rm -rf "$source_mount"
-        else
-            print_info "外部ボリュームをアンマウント中..."
-            unmount_volume "$volume_name" "$bundle_id" || true
-        fi
-        
-        echo ""
-        print_success "内蔵ストレージへの切り替えが完了しました"
-        print_info "保存場所: ${target_path}"
-    fi
-    
-    wait_for_enter
-    done  # End of while true loop
+        wait_for_enter
+        done  # End of while true loop
 }
 
 #######################################################
