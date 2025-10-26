@@ -1573,15 +1573,11 @@ individual_volume_control() {
         IFS='|' read -r idx1 name1 status1 <<< "${volume_data[$i]}"
         
         # Calculate display width (ASCII=1, multibyte=2)
-        local display_len=0
-        for ((j=0; j<${#name1}; j++)); do
-            local char="${name1:$j:1}"
-            if [[ "$char" =~ [[:ascii:]] ]]; then
-                ((display_len++))
-            else
-                ((display_len+=2))
-            fi
-        done
+        # Use byte length vs character length to detect multibyte chars
+        local byte_len=${#name1}
+        local char_count=$(echo -n "$name1" | wc -m | tr -d ' ')
+        local multibyte_count=$((byte_len - char_count))
+        local display_len=$((char_count + multibyte_count))
         
         # Calculate padding needed (account for "  X. " prefix = 5 chars)
         local padding=$((col_width - display_len - 5))
