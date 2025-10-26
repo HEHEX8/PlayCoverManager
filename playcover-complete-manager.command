@@ -2793,7 +2793,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.20.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.20.2${NC}"
     echo ""
     
     show_quick_status
@@ -3253,11 +3253,21 @@ show_installed_apps() {
     fi
     
     # Check if PlayCover Applications directory exists
+    # Create it if PlayCover container is mounted but directory doesn't exist
     if [[ ! -d "$playcover_apps" ]]; then
-        if [[ "$display_only" == "true" ]]; then
-            echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+        local playcover_container="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
+        if [[ -d "$playcover_container" ]]; then
+            # Container exists (mounted), create Applications directory
+            mkdir -p "$playcover_apps" 2>/dev/null || true
         fi
-        return
+        
+        # Check again after creation attempt
+        if [[ ! -d "$playcover_apps" ]]; then
+            if [[ "$display_only" == "true" ]]; then
+                echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+            fi
+            return
+        fi
     fi
     
     if [[ "$display_only" == "true" ]]; then
@@ -4368,17 +4378,17 @@ create_initial_mapping() {
     
     local mapping_exists=false
     if [[ -f "$MAPPING_FILE" ]]; then
-        if grep -q "^${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}$" "$MAPPING_FILE" 2>/dev/null; then
+        if grep -q "^${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}" "$MAPPING_FILE" 2>/dev/null; then
             print_warning "マッピングデータが既に存在します"
             mapping_exists=true
         fi
     fi
     
     if ! $mapping_exists; then
-        echo "${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}" >> "$MAPPING_FILE"
+        echo "${PLAYCOVER_VOLUME_NAME}	${PLAYCOVER_BUNDLE_ID}	PlayCover" >> "$MAPPING_FILE"
         print_success "マッピングデータを作成しました"
         print_info "ファイル: ${MAPPING_FILE}"
-        print_info "データ: ${PLAYCOVER_VOLUME_NAME} → ${PLAYCOVER_BUNDLE_ID}"
+        print_info "データ: ${PLAYCOVER_VOLUME_NAME} → ${PLAYCOVER_BUNDLE_ID} (PlayCover)"
     fi
     
     release_mapping_lock
@@ -4519,6 +4529,22 @@ main() {
                 print_info "終了します"
                 sleep 1
                 osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+                ;;
+            *)
+                echo ""
+                print_error "無効な選択です"
+                sleep 2
+                ;;
+        esac
+    done
+}
+
+# Trap Ctrl+C
+trap 'echo ""; print_info "終了します"; sleep 1; osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
+
+# Execute main
+main
+inal" to close (every window whose name contains "playcover")' & exit 0
                 ;;
             *)
                 echo ""
