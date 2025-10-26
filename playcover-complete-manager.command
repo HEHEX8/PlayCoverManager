@@ -2423,59 +2423,18 @@ switch_storage_location() {
         sleep 1  # Wait for unmount to complete
         sudo /bin/rm -rf "$temp_mount"
         
-        # Backup internal data
-        print_info "内蔵データをバックアップ中..."
-        sudo /bin/mv "$target_path" "$backup_path"
+        # Delete internal data (no backup needed)
+        print_info "内蔵データを削除中..."
+        sudo /bin/rm -rf "$target_path"
         
         # Mount volume to proper location
         print_info "ボリュームを正式にマウント中..."
         if mount_volume "$volume_name" "$target_path"; then
+            echo ""
             print_success "外部ストレージへの切り替えが完了しました"
-            echo ""
-            print_info "内蔵データは以下にバックアップされています:"
-            echo "  ${backup_path}"
-            echo ""
-            
-            # Ask user to verify operation
-            print_warning "【重要】動作確認をしてください"
-            echo ""
-            echo "アプリを起動して正常に動作するか確認してください:"
-            echo "  アプリ名: ${display_name}"
-            echo "  保存場所: ${target_path}"
-            echo ""
-            echo -n "正常に動作しましたか？ (y/N): "
-            read verification_result </dev/tty
-            
-            if [[ "$verification_result" =~ ^[Yy]$ ]]; then
-                echo ""
-                print_success "動作確認が完了しました"
-                print_info "バックアップを削除しています..."
-                
-                if sudo /bin/rm -rf "$backup_path" 2>/dev/null; then
-                    print_success "バックアップを削除しました"
-                else
-                    print_warning "バックアップの削除に失敗しました"
-                    print_info "手動で削除してください: sudo rm -rf \"${backup_path}\""
-                fi
-            else
-                echo ""
-                print_error "動作に問題があったため、元に戻します"
-                print_info "外部ボリュームをアンマウント中..."
-                unmount_volume "$volume_name" "$bundle_id" || true
-                
-                print_info "内蔵データを復元中..."
-                if sudo /bin/mv "$backup_path" "$target_path" 2>/dev/null; then
-                    print_success "元の状態に復元しました"
-                else
-                    print_error "復元に失敗しました"
-                    print_warning "バックアップは残っています: ${backup_path}"
-                    print_info "手動で復元してください: sudo mv \"${backup_path}\" \"${target_path}\""
-                fi
-            fi
+            print_info "保存場所: ${target_path}"
         else
             print_error "ボリュームのマウントに失敗しました"
-            print_info "内蔵データを復元中..."
-            sudo /bin/mv "$backup_path" "$target_path"
         fi
         
     else
@@ -2674,20 +2633,10 @@ switch_storage_location() {
         print_info "  ファイル数: ${file_count}"
         print_info "  データサイズ: ${total_size}"
         
-        # Backup existing internal data if it exists and has actual content
+        # Remove existing internal data/mount point if it exists
         if [[ -e "$target_path" ]]; then
-            local existing_type=$(get_storage_type "$target_path")
-            if [[ "$existing_type" == "internal" ]]; then
-                # Has actual internal data - backup for safety
-                print_info "既存の内蔵データをバックアップ中..."
-                sudo /bin/mv "$target_path" "$backup_path" 2>/dev/null || {
-                    print_warning "バックアップに失敗しましたが続行します"
-                }
-            else
-                # Empty mount point or no data - just remove
-                print_info "空のマウントポイントをクリーンアップ中..."
-                sudo /bin/rm -rf "$target_path" 2>/dev/null || true
-            fi
+            print_info "既存データをクリーンアップ中..."
+            sudo /bin/rm -rf "$target_path" 2>/dev/null || true
         fi
         
         # Create new internal directory
@@ -2732,12 +2681,8 @@ switch_storage_location() {
                 sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
             fi
             
-            # Restore backup
+            # Remove failed copy
             sudo /bin/rm -rf "$target_path" 2>/dev/null || true
-            if [[ -d "$backup_path" ]]; then
-                print_info "バックアップを復元中..."
-                sudo /bin/mv "$backup_path" "$target_path"
-            fi
             
             echo ""
             echo -n "Enterキーで続行..."
@@ -2759,61 +2704,9 @@ switch_storage_location() {
             unmount_volume "$volume_name" "$bundle_id" || true
         fi
         
+        echo ""
         print_success "内蔵ストレージへの切り替えが完了しました"
-        
-        if [[ -d "$backup_path" ]]; then
-            echo ""
-            print_info "元の外部マウントポイントは以下にバックアップされています:"
-            echo "  ${backup_path}"
-            echo ""
-            
-            # Ask user to verify operation
-            print_warning "【重要】動作確認をしてください"
-            echo ""
-            echo "アプリを起動して正常に動作するか確認してください:"
-            echo "  アプリ名: ${display_name}"
-            echo "  保存場所: ${target_path}"
-            echo ""
-            echo -n "正常に動作しましたか？ (y/N): "
-            read verification_result </dev/tty
-            
-            if [[ "$verification_result" =~ ^[Yy]$ ]]; then
-                # User confirmed OK - delete backup and unmount volume
-                print_success "動作確認が完了しました"
-                print_info "バックアップを削除しています..."
-                
-                if sudo /bin/rm -rf "$backup_path" 2>/dev/null; then
-                    print_success "バックアップを削除しました"
-                else
-                    print_warning "バックアップの削除に失敗しました"
-                    print_info "手動で削除してください: sudo rm -rf \"${backup_path}\""
-                fi
-            else
-                # User reported issues - rollback
-                print_error "動作に問題があったため、元に戻します"
-                
-                # Remove internal data
-                print_info "内蔵データを削除中..."
-                sudo /bin/rm -rf "$target_path"
-                
-                # Restore from backup and remount
-                print_info "外部ボリュームを復元中..."
-                if sudo /bin/mv "$backup_path" "$target_path" 2>/dev/null; then
-                    print_success "ディレクトリを復元しました"
-                fi
-                
-                print_info "外部ボリュームを再マウント中..."
-                if mount_volume "$volume_name" "$target_path"; then
-                    print_success "元の状態に復元しました"
-                else
-                    print_error "再マウントに失敗しました"
-                    print_warning "バックアップは残っています: ${backup_path}"
-                    print_info "手動で復元してください:"
-                    echo "  1. sudo mv \"${backup_path}\" \"${target_path}\""
-                    echo "  2. sudo /sbin/mount -t apfs -o nobrowse \"/dev/disk*s*\" \"${target_path}\""
-                fi
-            fi
-        fi
+        print_info "保存場所: ${target_path}"
     fi
     
     echo ""
