@@ -450,72 +450,35 @@ mount_volume() {
                     echo "  - $line"
                 done
                 echo ""
-                echo "${YELLOW}対処方法:${NC}"
-                echo "  1. 内部データを外部に移行してマウント（推奨）"
-                echo "  2. 内部データを削除してクリーンな状態でマウント"
-                echo "  3. キャンセルして手動で対処"
+                print_info "内部データを外部ボリュームに統合します..."
                 echo ""
-                echo -n "選択してください (1/2/3): "
-                read internal_data_choice
                 
-                case "$internal_data_choice" in
-                    1)
-                        # Migrate internal data to external volume
-                        print_info "内部データを外部ボリュームに移行します..."
-                        
-                        # Create temporary mount point
-                        local temp_migrate="/tmp/playcover_migrate_$$"
-                        sudo /bin/mkdir -p "$temp_migrate"
-                        
-                        # Mount volume temporarily
-                        if sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
-                            print_info "データをコピー中..."
-                            sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
-                            local rsync_exit=$?
-                            sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
-                            sudo /bin/rm -rf "$temp_migrate"
-                            
-                            if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
-                                print_success "データの移行が完了しました"
-                                print_info "内部ストレージをクリア中..."
-                                sudo rm -rf "$target_path"
-                                # Continue to mount below
-                            else
-                                print_error "データの移行に失敗しました (rsync exit: $rsync_exit)"
-                                return 1
-                            fi
-                        else
-                            print_error "一時マウントに失敗しました"
-                            sudo /bin/rm -rf "$temp_migrate"
-                            return 1
-                        fi
-                        ;;
-                    2)
-                        # Delete internal data
-                        print_warning "内部ストレージのデータを削除します"
-                        echo ""
-                        echo -n "${RED}本当に削除しますか？ (yes/no):${NC} "
-                        read delete_confirm
-                        if [[ "$delete_confirm" == "yes" ]]; then
-                            print_info "内部ストレージをクリア中..."
-                            sudo rm -rf "$target_path"
-                            print_success "内部データを削除しました"
-                            # Continue to mount below
-                        else
-                            print_info "キャンセルしました"
-                            return 1
-                        fi
-                        ;;
-                    3)
-                        # Cancel
-                        print_info "キャンセルしました"
+                # Create temporary mount point
+                local temp_migrate="/tmp/playcover_migrate_$$"
+                sudo /bin/mkdir -p "$temp_migrate"
+                
+                # Mount volume temporarily
+                if sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
+                    print_info "データをコピー中..."
+                    sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
+                    local rsync_exit=$?
+                    sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
+                    sudo /bin/rm -rf "$temp_migrate"
+                    
+                    if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+                        print_success "データの移行が完了しました"
+                        print_info "内部ストレージをクリア中..."
+                        sudo rm -rf "$target_path"
+                        # Continue to mount below
+                    else
+                        print_error "データの移行に失敗しました (rsync exit: $rsync_exit)"
                         return 1
-                        ;;
-                    *)
-                        print_error "無効な選択です"
-                        return 1
-                        ;;
-                esac
+                    fi
+                else
+                    print_error "一時マウントに失敗しました"
+                    sudo /bin/rm -rf "$temp_migrate"
+                    return 1
+                fi
             fi
         fi
     else
@@ -1026,8 +989,11 @@ install_ipa_to_playcover() {
         # Check if existing app was found and ask for confirmation OUTSIDE the loop
         if [[ -n "$existing_app_path" ]]; then
             print_warning "${APP_NAME} (${existing_version}) は既にインストール済みです"
-            echo -n "上書きしますか？ (y/N): "
+            echo -n "上書きしますか？ (Y/n): "
             read overwrite_choice </dev/tty
+            
+            # Default to Yes if empty
+            overwrite_choice=${overwrite_choice:-Y}
             
             if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
                 print_info "スキップしました"
@@ -1893,8 +1859,11 @@ eject_disk() {
     echo ""
     print_info "注意: PlayCover関連ボリューム以外も含まれる可能性があります"
     echo ""
-    echo -n "続行しますか？ (y/N): "
+    echo -n "続行しますか？ (Y/n): "
     read confirm
+    
+    # Default to Yes if empty
+    confirm=${confirm:-Y}
     
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         print_info "キャンセルしました"
@@ -2175,8 +2144,11 @@ switch_storage_location() {
     echo ""
     print_warning "この操作には時間がかかる場合があります"
     echo ""
-    echo -n "${YELLOW}続行しますか？ (y/N):${NC} "
+    echo -n "${YELLOW}続行しますか？ (Y/n):${NC} "
     read confirm
+    
+    # Default to Yes if empty
+    confirm=${confirm:-Y}
     
     if [[ ! "$confirm" =~ ^[Yy] ]]; then
         print_info "キャンセルしました"
@@ -2984,8 +2956,12 @@ install_auto_mount() {
     if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
         print_warning "自動マウント機能は既にインストールされています"
         echo ""
-        echo -n "再インストールしますか？ (y/N): "
+        echo -n "再インストールしますか？ (Y/n): "
         read confirm
+        
+        # Default to Yes if empty
+        confirm=${confirm:-Y}
+        
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             return
         fi
@@ -3079,8 +3055,11 @@ uninstall_auto_mount() {
         return
     fi
     
-    echo -n "${RED}自動マウント機能をアンインストールしますか？ (y/N):${NC} "
+    echo -n "${RED}自動マウント機能をアンインストールしますか？ (Y/n):${NC} "
     read confirm
+    
+    # Default to Yes if empty
+    confirm=${confirm:-Y}
     
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         print_info "アンインストールをキャンセルしました"
