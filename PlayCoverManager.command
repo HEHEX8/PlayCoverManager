@@ -1366,18 +1366,6 @@ individual_volume_control() {
             fi
         fi
         
-        # If locked, show without number
-        if $is_locked; then
-            echo "      ${display_name}"
-            echo "      🔒 ロック中（アプリ起動中）"
-            echo ""
-            continue
-        fi
-        
-        # Add to selectable array
-        selectable_array+=("${mappings_array[$i]}")
-        selectable_indices+=("$i")
-        
         # Check if volume exists (using cached diskutil output)
         if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
             status_line="❌ ボリュームが見つかりません"
@@ -1407,10 +1395,21 @@ individual_volume_control() {
             fi
         fi
         
-        echo "  ${display_index}. ${display_name}"
-        echo "      ${status_line}${extra_info}"
-        echo ""
-        ((display_index++))
+        # Display with lock status or number
+        if $is_locked; then
+            # Locked: show with lock icon, no number
+            echo "  🔒 ${display_name}（アプリ起動中）"
+            echo "      ${status_line}${extra_info}"
+            echo ""
+        else
+            # Not locked: add to selectable array and show with number
+            selectable_array+=("${mappings_array[$i]}")
+            selectable_indices+=("$i")
+            
+            echo "  ${display_index}. ${display_name}"
+            echo "      ${status_line}${extra_info}"
+            echo ""
+            ((display_index++))
     done
     
     print_separator
