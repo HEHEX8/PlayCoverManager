@@ -87,11 +87,23 @@ PlayCover のボリュームを管理するインタラクティブメニュー�
 - 安全な取り外し確認
 - 物理デバイスの取り外し準備
 
+#### 6. 🔥 超強力クリーンアップ（完全リセット）
+- すべてのボリュームをアンマウント
+- すべてのコンテナを完全削除
+- PlayTools.frameworkを削除
+- キャッシュ・設定・ログを削除
+- APFSボリュームを削除（内蔵・外部両方）
+- マッピングファイルを削除
+- 二重確認システム（yes + DELETE ALL）
+
+**⚠️ 注意**: この操作は取り消せません！すべてのPlayCoverデータが削除されます。
+
 **使用タイミング:** 
 - Mac 起動時（ボリュームのマウント）
 - Mac シャットダウン前（ボリュームのアンマウント）
 - 外部ストレージを取り外す前
 - ボリュームの状態確認時
+- **すべてのアプリがクラッシュする場合（超強力クリーンアップ）**
 
 ---
 
@@ -235,6 +247,8 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 - **アプリが起動しない**: ボリュームが正しくマウントされているか確認
 - **PlayCoverが起動できない**: 外部ストレージが接続されているか確認
 - **内蔵ストレージにデータ有**: PlayCoverボリュームをアンマウントして、内部データを削除
+- **🔥 すべてのアプリがクラッシュする**: メインメニューのオプション5「超強力クリーンアップ」を実行（詳細は `NUCLEAR_CLEANUP_GUIDE.md` を参照）
+- **外部ボリューム再マウント後にクラッシュ**: 超強力クリーンアップで外部ボリュームの古いデータを完全削除
 
 ---
 
@@ -243,6 +257,7 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 - `playcover-map.txt` - ボリュームマッピングデータ
 - `playcover-map.txt.bak` - マッピングファイルのバックアップ
 - `UI-DESIGN.md` - UIデザイン仕様書
+- `NUCLEAR_CLEANUP_GUIDE.md` - 🔥 超強力クリーンアップ機能ガイド
 - `/tmp/apfs_create.log` - ボリューム作成ログ
 - `/tmp/mount_error.log` - マウントエラーログ
 
@@ -250,7 +265,19 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.9.0 (最新) - External App Installation System
+### v4.21.0 (最新) - Nuclear Cleanup Feature
+- 🔥 超強力クリーンアップ（完全リセット）機能追加
+- ✅ すべてのボリューム・コンテナの完全削除
+- ✅ PlayTools.frameworkの削除
+- ✅ キャッシュ・設定・ログの完全クリア
+- ✅ APFSボリュームの削除（内蔵・外部両方）
+- ✅ 二重確認システム（yes + DELETE ALL）
+- ✅ 外部ボリューム再マウント時のクラッシュ問題を完全解決
+- ✅ メインメニューにオプション5を追加
+
+詳細は `NUCLEAR_CLEANUP_GUIDE.md` を参照
+
+### v4.9.0 - External App Installation System
 - ✅ PlayCover.app の外部ストレージインストール
 - ✅ /Applications にシンボリックリンク作成
 - ✅ 外部ドライブ未接続時の起動防止
@@ -302,4 +329,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2024年（macOS Sequoia 15.1 対応）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応）
