@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.24.2 - Add debug output for environment check
+# Version: 4.24.2 - Fix volume detection pattern matching
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -379,10 +379,11 @@ volume_exists() {
     local volume_name=$1
     local diskutil_cache="${2:-}"
     
+    # Use flexible pattern to match volume name (handles special characters and formatting)
     if [[ -n "$diskutil_cache" ]]; then
-        echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"
+        echo "$diskutil_cache" | /usr/bin/grep -i "APFS Volume" | /usr/bin/grep -q "${volume_name}"
     else
-        /usr/sbin/diskutil list | /usr/bin/grep -q "APFS Volume ${volume_name}"
+        /usr/sbin/diskutil list | /usr/bin/grep -i "APFS Volume" | /usr/bin/grep -q "${volume_name}"
     fi
 }
 
@@ -391,10 +392,11 @@ get_volume_device() {
     local volume_name=$1
     local diskutil_cache="${2:-}"
     
+    # Use flexible pattern to match volume name and extract device
     if [[ -n "$diskutil_cache" ]]; then
-        echo "$diskutil_cache" | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
+        echo "$diskutil_cache" | /usr/bin/grep -i "APFS Volume" | /usr/bin/grep "${volume_name}" | /usr/bin/awk '{print $NF}'
     else
-        /usr/sbin/diskutil list | /usr/bin/grep "APFS Volume ${volume_name}" | /usr/bin/awk '{print $NF}'
+        /usr/sbin/diskutil list | /usr/bin/grep -i "APFS Volume" | /usr/bin/grep "${volume_name}" | /usr/bin/awk '{print $NF}'
     fi
 }
 
