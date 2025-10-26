@@ -3173,6 +3173,11 @@ show_installed_apps() {
     local missing_count=0
     
     while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip PlayCover itself (it's not an iOS app)
+        if [[ "$volume_name" == "PlayCover" ]]; then
+            continue
+        fi
+        
         # Search for app in PlayCover Applications
         local app_found=false
         local app_version=""
