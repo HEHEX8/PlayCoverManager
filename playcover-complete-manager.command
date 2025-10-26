@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.19.4 - Fix syntax and improve display
+# Version: 4.19.5 - Fix storage switching and improve UX
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
