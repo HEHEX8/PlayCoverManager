@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.23.1 - Fix zsh reserved variable conflict (path)
+# Version: 4.24.0 - Exit after nuclear cleanup (requires re-setup)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2465,20 +2465,32 @@ nuclear_cleanup() {
     print_separator "=" "$GREEN"
     echo ""
     
+    echo "${YELLOW}⚠️  重要: 再セットアップが必要です${NC}"
+    echo ""
     echo "${CYAN}次のステップ:${NC}"
     echo ""
-    echo "  ${GREEN}1.${NC} PlayCoverアプリを起動"
-    echo "  ${GREEN}2.${NC} IPAファイルを再インストール"
+    echo "  ${GREEN}1.${NC} 初期セットアップスクリプトを実行"
+    echo "      ${BLUE}→ 0_playcover-initial-setup.command${NC}"
+    echo ""
+    echo "  ${GREEN}2.${NC} IPAインストールスクリプトを実行"
+    echo "      ${BLUE}→ 1_playcover-ipa-install.command${NC}"
+    echo ""
     echo "  ${GREEN}3.${NC} アプリを起動して動作確認"
     echo ""
-    echo "${YELLOW}⚠️  注意:${NC}"
-    echo "  • 初回インストール時にPlayCoverがクラッシュする場合があります"
-    echo "  • その場合は、PlayCoverを再起動して再度IPAをインストールしてください"
-    echo "  • ${RED}外部ボリュームの古いデータは完全に削除されました${NC}"
-    echo "  • ${RED}外部ボリュームを再マウントしても問題ありません${NC}"
+    echo "${YELLOW}📝 注意事項:${NC}"
+    echo ""
+    echo "  • ${RED}すべてのPlayCoverデータが削除されました${NC}"
+    echo "  • ${RED}外部ボリュームも削除されました${NC}"
+    echo "  • ${GREEN}ゲームデータはアカウントに紐付いているため復元できます${NC}"
+    echo "  • 再インストール後、アカウントでログインしてください"
+    echo ""
+    print_separator "─" "$BLUE"
+    echo ""
+    echo "${CYAN}3秒後にターミナルを閉じます...${NC}"
     echo ""
     
-    wait_for_enter
+    /bin/sleep 3
+    exit_with_cleanup 0 "クリーンアップ完了"
 }
 
 #######################################################

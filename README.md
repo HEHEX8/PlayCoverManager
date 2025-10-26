@@ -265,7 +265,13 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.23.1 (最新) - Fix Zsh Reserved Variable
+### v4.24.0 (最新) - Exit After Nuclear Cleanup
+- 🚻 **終了動作変更**: クリーンアップ完了後にターミナルを閉じる
+- ✅ メインメニューに戻らず、再セットアップを促す
+- ✅ 3秒後に自動的にターミナルを閉じる
+- ✅ 次のステップを明確に表示（初期セットアップが必要）
+
+### v4.23.1 - Fix Zsh Reserved Variable
 - 🐛 **変数名競合修正**: zsh予約変数 `path` との競合を解決
 - ✅ `path` → `container_path`, `item_path`, `target_path` に変更
 - ✅ "inconsistent type for assignment" エラーを修正
@@ -369,4 +375,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.23.1）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.24.0）
