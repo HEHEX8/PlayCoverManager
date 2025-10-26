@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.12.1 - Fix Auto-Mount Race Condition
+# Version: 4.13.0 - Simplified Manual Mount Focus
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2897,7 +2897,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.12.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.13.0${NC}"
     echo ""
     
     show_quick_status
@@ -2923,10 +2923,9 @@ show_menu() {
     fi
     
     echo "  ${RED}4.${NC} ${eject_label}"
-    echo "  ${MAGENTA}5.${NC} 自動マウント設定"
     echo "  ${BLUE}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-5):${NC} "
+    echo -n "${CYAN}選択 (0-4):${NC} "
 }
 
 show_mapping_info() {
@@ -4695,9 +4694,6 @@ main() {
                 ;;
             4)
                 eject_disk
-                ;;
-            5)
-                show_auto_mount_menu
                 ;;
             0)
                 echo ""
