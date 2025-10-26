@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.14.2 - Show Correct Target Drive Free Space
+# Version: 4.14.3 - Fix External Drive Container Free Space Detection
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -641,17 +641,48 @@ get_external_drive_free_space() {
         return
     fi
     
-    # Get mount point
+    # Get APFS container free space (more accurate for APFS volumes)
+    # This shows the actual free space in the APFS container, not the volume
+    local container_free=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Container Free Space" | /usr/bin/awk '{print $4, $5}' | /usr/bin/sed 's/[()]//g')
+    
+    if [[ -n "$container_free" ]]; then
+        # Convert to decimal units (10^n) if needed
+        # diskutil shows binary units (GiB, TiB), convert to GB, TB
+        local size_value=$(echo "$container_free" | /usr/bin/awk '{print $1}')
+        local size_unit=$(echo "$container_free" | /usr/bin/awk '{print $2}')
+        
+        case "$size_unit" in
+            "GB"|"GiB")
+                # Convert GiB to GB: multiply by 1.073741824
+                size_value=$(echo "$size_value * 1.073741824" | /usr/bin/bc 2>/dev/null || echo "$size_value")
+                echo "${size_value}GB" | /usr/bin/sed 's/\.[0-9]*GB/GB/'
+                ;;
+            "TB"|"TiB")
+                # Convert TiB to TB: multiply by 1.099511627776
+                size_value=$(echo "$size_value * 1.099511627776" | /usr/bin/bc 2>/dev/null || echo "$size_value")
+                echo "${size_value}TB" | /usr/bin/sed 's/\.[0-9][0-9][0-9]*TB/TB/' | /usr/bin/sed 's/\([0-9]\)\.\([0-9][0-9]\)TB/\1.\2TB/'
+                ;;
+            "MB"|"MiB")
+                size_value=$(echo "$size_value * 1.048576" | /usr/bin/bc 2>/dev/null || echo "$size_value")
+                echo "${size_value}MB" | /usr/bin/sed 's/\.[0-9]*MB/MB/'
+                ;;
+            *)
+                echo "$container_free"
+                ;;
+        esac
+        return
+    fi
+    
+    # Fallback: try to get free space from mount point
     local mount_point=$(/usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
     
     if [[ -z "$mount_point" ]]; then
-        # If not mounted, check if volume exists and get space from its APFS container
-        # For unmounted volumes, use home directory space (same APFS container)
+        # If not mounted, use home directory space (same APFS container)
         get_storage_free_space "$HOME"
         return
     fi
     
-    # Get free space from mounted volume
+    # Get free space from mounted volume using df
     get_storage_free_space "$mount_point"
 }
 
@@ -2872,7 +2903,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.2${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.14.3${NC}"
     echo ""
     
     show_quick_status
