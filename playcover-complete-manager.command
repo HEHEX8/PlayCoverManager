@@ -3058,7 +3058,33 @@ show_quick_status() {
     
     if [[ $total_count -gt 0 ]]; then
         echo "${CYAN}コンテナ情報${NC}"
-        echo "${BLUE}🔌 外部マウント: ${external_count}件${NC}　　${YELLOW}🏠 内部マウント: ${internal_count}件${NC}  ${RED}❌ データ無し: ${unmounted_count}件${NC}"
+        
+        # Build status line dynamically (only show non-zero items)
+        local status_parts=()
+        
+        if [[ $external_count -gt 0 ]]; then
+            status_parts+=("${BLUE}🔌 外部マウント: ${external_count}件${NC}")
+        fi
+        
+        if [[ $internal_count -gt 0 ]]; then
+            status_parts+=("${YELLOW}🏠 内部マウント: ${internal_count}件${NC}")
+        fi
+        
+        if [[ $unmounted_count -gt 0 ]]; then
+            status_parts+=("${RED}❌ データ無し: ${unmounted_count}件${NC}")
+        fi
+        
+        # Join status parts with separator
+        local first=true
+        for part in "${status_parts[@]}"; do
+            if [[ "$first" == true ]]; then
+                echo -n "$part"
+                first=false
+            else
+                echo -n "　　$part"
+            fi
+        done
+        echo ""
         
         if [[ $unmounted_count -gt 0 ]]; then
             echo "${RED}⚠️ データが入っていないコンテナがあります。マウントを行ってください。${NC}"
