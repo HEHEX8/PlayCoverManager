@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.23.0 - Fix all external command paths
+# Version: 4.23.1 - Fix zsh reserved variable conflict (path)
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -599,10 +599,10 @@ get_container_size() {
 # Get storage free space (APFS volumes share space in same container)
 # Uses df -H for decimal units (MB, GB, TB) instead of binary (MiB, GiB, TiB)
 get_storage_free_space() {
-    local path="${1:-$HOME}"  # Default to home directory if no path provided
+    local target_path="${1:-$HOME}"  # Default to home directory if no path provided
     
     # Get free space using df -H (decimal units: 10^n)
-    local free_space=$(/bin/df -H "$path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    local free_space=$(/bin/df -H "$target_path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
     
     if [[ -z "$free_space" ]]; then
         echo "不明"
@@ -2161,9 +2161,9 @@ nuclear_cleanup() {
         echo "${CYAN}【2】削除されるコンテナ: ${#containers_to_delete[@]}個${NC}"
         for container_info in "${containers_to_delete[@]}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
-            local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
+            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             echo "  ${RED}🗑${NC}  ${display}"
-            echo "      ${path}"
+            echo "      ${container_path}"
             ((total_items++))
         done
         echo ""
@@ -2327,10 +2327,10 @@ nuclear_cleanup() {
     if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
         for container_info in "${containers_to_delete[@]}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
-            local path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
+            local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${display}"
-            if /usr/bin/sudo /bin/rm -rf "$path" 2>/dev/null; then
+            if /usr/bin/sudo /bin/rm -rf "$container_path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
                 ((container_count++))
             else
@@ -2377,10 +2377,10 @@ nuclear_cleanup() {
     if [[ ${#cleanup_items[@]} -gt 0 ]]; then
         for item_info in "${cleanup_items[@]}"; do
             local item_name=$(echo "$item_info" | /usr/bin/cut -d'|' -f1)
-            local path=$(echo "$item_info" | /usr/bin/cut -d'|' -f2)
+            local item_path=$(echo "$item_info" | /usr/bin/cut -d'|' -f2)
             
             echo "  削除中: ${item_name}"
-            if /bin/rm -rf "$path" 2>/dev/null; then
+            if /bin/rm -rf "$item_path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
             else
                 print_warning "  ⚠ 削除失敗"
