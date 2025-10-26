@@ -265,7 +265,14 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ## 🔄 更新履歴
 
-### v4.21.1 (最新) - Critical Safety Fix
+### v4.22.0 (最新) - Deletion Preview
+- 📋 **削除プレビュー機能**: 実行前に削除対象を完全表示
+- ✅ 2フェーズアプローチ（スキャン → 確認 → 実行）
+- ✅ 削除対象の詳細情報を6カテゴリに分けて表示
+- ✅ 各項目の数量と具体的なパスを事前確認可能
+- ✅ より安全で透明性の高いクリーンアップ
+
+### v4.21.1 - Critical Safety Fix
 - 🔒 **重大なセキュリティ修正**: システムボリューム削除を防止
 - ✅ Macintosh HD、Data、Time Machine等のシステムボリュームを明示的にスキップ
 - ✅ マッピングファイル優先の安全なボリューム削除
@@ -336,4 +343,4 @@ sudo mount -t apfs -o nobrowse /dev/diskXsY ~/Library/Containers/[BundleID]
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.21.1）
+**最終更新:** 2025年10月27日（macOS Tahoe 26.0.1 対応、v4.22.0）

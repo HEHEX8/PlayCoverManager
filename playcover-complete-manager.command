@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.21.1 - Critical safety fix for nuclear cleanup
+# Version: 4.22.0 - Add deletion preview for nuclear cleanup
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -2001,20 +2001,251 @@ nuclear_cleanup() {
     print_separator "=" "$RED"
     echo ""
     
-    echo "${YELLOW}⚠️  警告: この操作は以下を完全に削除します：${NC}"
+    #######################################################
+    # Phase 1: Scan and display what will be deleted
+    #######################################################
+    
+    echo "${CYAN}【フェーズ 1/2】削除対象をスキャンしています...${NC}"
     echo ""
-    echo "  ${RED}•${NC} すべてのPlayCoverアプリとコンテナ"
-    echo "  ${RED}•${NC} すべてのAPFSボリューム（内蔵・外部両方）"
-    echo "  ${RED}•${NC} PlayCoverの設定・キャッシュ・ログ"
-    echo "  ${RED}•${NC} マッピングファイル（playcover-map.txt）"
+    
+    # Collect volumes to unmount
+    local volumes_to_unmount=()
+    local all_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
+    
+    if [[ -n "$all_volumes" ]]; then
+        while IFS= read -r device; do
+            if [[ -n "$device" ]]; then
+                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                
+                # Skip system volumes
+                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
+                    continue
+                fi
+                
+                volumes_to_unmount+=("${vol_name}|${device}")
+            fi
+        done <<< "$all_volumes"
+    fi
+    
+    # Collect containers to delete
+    local containers_to_delete=()
+    
+    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+        containers_to_delete+=("PlayCover|${PLAYCOVER_CONTAINER}")
+    fi
+    
+    local app_containers=(
+        "com.miHoYo.GenshinImpact"
+        "com.HoYoverse.hkrpgoversea"
+        "com.HoYoverse.Nap"
+    )
+    
+    for container in "${app_containers[@]}"; do
+        local container_path="${HOME}/Library/Containers/${container}"
+        if [[ -d "$container_path" ]]; then
+            # Get display name from mapping if available
+            local display_name="$container"
+            if [[ -f "$MAPPING_FILE" ]]; then
+                local map_name=$(grep "$container" "$MAPPING_FILE" 2>/dev/null | awk -F'\t' '{print $3}')
+                [[ -n "$map_name" ]] && display_name="$map_name"
+            fi
+            containers_to_delete+=("${display_name}|${container_path}")
+        fi
+    done
+    
+    # Collect PlayTools.framework
+    local playtools_exists=false
+    local playtools_path="${HOME}/Library/Frameworks/PlayTools.framework"
+    if [[ -d "$playtools_path" ]]; then
+        playtools_exists=true
+    fi
+    
+    # Collect caches and preferences
+    local cleanup_items=()
+    local cleanup_paths=(
+        "${HOME}/Library/Caches/io.playcover.PlayCover"
+        "${HOME}/Library/Saved Application State/io.playcover.PlayCover.savedState"
+        "${HOME}/Library/Preferences/io.playcover.PlayCover.plist"
+        "${HOME}/Library/Logs/PlayCover"
+    )
+    
+    for path in "${cleanup_paths[@]}"; do
+        if [[ -e "$path" ]]; then
+            cleanup_items+=("$(basename "$path")|${path}")
+        fi
+    done
+    
+    # Collect volumes to delete
+    local volumes_to_delete=()
+    
+    if [[ -f "$MAPPING_FILE" ]]; then
+        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+            [[ -z "$volume_name" ]] && continue
+            
+            if volume_exists "$volume_name"; then
+                local device=$(get_volume_device "$volume_name")
+                if [[ -n "$device" ]]; then
+                    volumes_to_delete+=("${display_name:-$volume_name}|${volume_name}|${device}")
+                fi
+            fi
+        done < "$MAPPING_FILE"
+    fi
+    
+    # Pattern matching for additional volumes
+    local playcover_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
+    
+    if [[ -n "$playcover_volumes" ]]; then
+        while IFS= read -r device; do
+            if [[ -n "$device" ]]; then
+                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
+                
+                # Skip system volumes
+                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
+                    continue
+                fi
+                
+                # Check if already in list
+                local already_listed=false
+                for vol_info in "${volumes_to_delete[@]}"; do
+                    local existing_vol=$(echo "$vol_info" | cut -d'|' -f2)
+                    if [[ "$existing_vol" == "$vol_name" ]]; then
+                        already_listed=true
+                        break
+                    fi
+                done
+                
+                if [[ "$already_listed" == false ]]; then
+                    volumes_to_delete+=("${vol_name}|${vol_name}|${device}")
+                fi
+            fi
+        done <<< "$playcover_volumes"
+    fi
+    
+    # Check mapping file
+    local mapping_exists=false
+    if [[ -f "$MAPPING_FILE" ]]; then
+        mapping_exists=true
+    fi
+    
+    #######################################################
+    # Display deletion preview
+    #######################################################
+    
+    clear
+    print_separator "=" "$RED"
     echo ""
-    echo "${YELLOW}⚠️  この操作は取り消せません！${NC}"
+    echo "${RED}🔥 削除対象の確認 🔥${NC}"
+    echo ""
+    print_separator "=" "$RED"
+    echo ""
+    
+    local total_items=0
+    
+    # 1. Volumes to unmount
+    if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
+        echo "${CYAN}【1】アンマウントされるボリューム: ${#volumes_to_unmount[@]}個${NC}"
+        for vol_info in "${volumes_to_unmount[@]}"; do
+            local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+            local device=$(echo "$vol_info" | cut -d'|' -f2)
+            echo "  ${YELLOW}⏏${NC}  ${vol_name} (${device})"
+            ((total_items++))
+        done
+        echo ""
+    else
+        echo "${CYAN}【1】アンマウントされるボリューム: なし${NC}"
+        echo ""
+    fi
+    
+    # 2. Containers to delete
+    if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
+        echo "${CYAN}【2】削除されるコンテナ: ${#containers_to_delete[@]}個${NC}"
+        for container_info in "${containers_to_delete[@]}"; do
+            local display=$(echo "$container_info" | cut -d'|' -f1)
+            local path=$(echo "$container_info" | cut -d'|' -f2)
+            echo "  ${RED}🗑${NC}  ${display}"
+            echo "      ${path}"
+            ((total_items++))
+        done
+        echo ""
+    else
+        echo "${CYAN}【2】削除されるコンテナ: なし${NC}"
+        echo ""
+    fi
+    
+    # 3. PlayTools.framework
+    echo "${CYAN}【3】PlayTools.framework${NC}"
+    if [[ "$playtools_exists" == true ]]; then
+        echo "  ${RED}🗑${NC}  ${playtools_path}"
+        ((total_items++))
+    else
+        echo "  ${GREEN}✓${NC}  存在しません（削除不要）"
+    fi
+    echo ""
+    
+    # 4. Caches and preferences
+    if [[ ${#cleanup_items[@]} -gt 0 ]]; then
+        echo "${CYAN}【4】キャッシュと設定: ${#cleanup_items[@]}個${NC}"
+        for item_info in "${cleanup_items[@]}"; do
+            local item_name=$(echo "$item_info" | cut -d'|' -f1)
+            echo "  ${RED}🗑${NC}  ${item_name}"
+            ((total_items++))
+        done
+        echo ""
+    else
+        echo "${CYAN}【4】キャッシュと設定: なし${NC}"
+        echo ""
+    fi
+    
+    # 5. Volumes to delete
+    if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
+        echo "${CYAN}【5】削除されるAPFSボリューム: ${#volumes_to_delete[@]}個${NC}"
+        for vol_info in "${volumes_to_delete[@]}"; do
+            local display=$(echo "$vol_info" | cut -d'|' -f1)
+            local vol_name=$(echo "$vol_info" | cut -d'|' -f2)
+            local device=$(echo "$vol_info" | cut -d'|' -f3)
+            echo "  ${RED}💥${NC}  ${display} (${device})"
+            ((total_items++))
+        done
+        echo ""
+    else
+        echo "${CYAN}【5】削除されるAPFSボリューム: なし${NC}"
+        echo ""
+    fi
+    
+    # 6. Mapping file
+    echo "${CYAN}【6】マッピングファイル${NC}"
+    if [[ "$mapping_exists" == true ]]; then
+        echo "  ${RED}🗑${NC}  playcover-map.txt"
+        ((total_items++))
+    else
+        echo "  ${GREEN}✓${NC}  存在しません（削除不要）"
+    fi
+    echo ""
+    
+    print_separator "─" "$YELLOW"
+    echo ""
+    echo "${YELLOW}合計削除項目: ${total_items}個${NC}"
+    echo ""
+    echo "${RED}⚠️  この操作は取り消せません！${NC}"
     echo ""
     echo "${CYAN}ℹ️  ゲームデータはアカウントに紐付いているため、再インストール後に復元できます${NC}"
     echo ""
+    print_separator "─" "$YELLOW"
+    echo ""
+    
+    # If nothing to delete
+    if [[ $total_items -eq 0 ]]; then
+        print_info "削除対象が見つかりません"
+        wait_for_enter
+        return
+    fi
+    
+    #######################################################
+    # Phase 2: Confirmation
+    #######################################################
     
     # First confirmation
-    echo -n "${RED}本当に実行しますか？ (yes/no):${NC} "
+    echo -n "${RED}上記の項目をすべて削除しますか？ (yes/no):${NC} "
     read first_confirm
     
     if [[ "$first_confirm" != "yes" ]]; then
@@ -2036,7 +2267,7 @@ nuclear_cleanup() {
     echo ""
     print_separator "─" "$YELLOW"
     echo ""
-    print_info "クリーンアップを開始します..."
+    echo "${CYAN}【フェーズ 2/2】クリーンアップを実行します...${NC}"
     echo ""
     
     # Authenticate sudo
@@ -2060,25 +2291,23 @@ nuclear_cleanup() {
         done <<< "$mappings_content"
     fi
     
-    # Unmount all PlayCover-related volumes
+    # Unmount volumes using collected list
     local unmount_count=0
-    local all_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
-    
-    if [[ -n "$all_volumes" ]]; then
-        while IFS= read -r device; do
-            if [[ -n "$device" ]]; then
-                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
-                
-                # ⚠️ SAFETY CHECK: Skip system volumes (Macintosh HD, Data, Preboot, VM, etc.)
-                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
-                    echo "  ${YELLOW}⚠️  スキップ: システムボリューム ${vol_name}${NC}"
-                    continue
-                fi
-                
-                echo "  アンマウント中: ${vol_name} (${device})"
-                sudo diskutil unmount "$device" >/dev/null 2>&1 && ((unmount_count++)) || true
+    if [[ ${#volumes_to_unmount[@]} -gt 0 ]]; then
+        for vol_info in "${volumes_to_unmount[@]}"; do
+            local vol_name=$(echo "$vol_info" | cut -d'|' -f1)
+            local device=$(echo "$vol_info" | cut -d'|' -f2)
+            
+            echo "  アンマウント中: ${vol_name} (${device})"
+            if sudo diskutil unmount "$device" >/dev/null 2>&1; then
+                ((unmount_count++))
+                print_success "  ✓ 完了"
+            else
+                print_warning "  ⚠ 失敗"
             fi
-        done <<< "$all_volumes"
+        done
+    else
+        print_info "  アンマウント対象なし"
     fi
     
     print_success "ボリュームアンマウント完了: ${unmount_count}個"
@@ -2094,32 +2323,23 @@ nuclear_cleanup() {
     
     local container_count=0
     
-    # Delete PlayCover container
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        echo "  削除中: PlayCoverコンテナ"
-        sudo rm -rf "$PLAYCOVER_CONTAINER" 2>/dev/null && {
-            print_success "  ✓ 削除完了"
-            ((container_count++))
-        } || print_warning "  ⚠ 削除失敗（既に削除済み?）"
-    fi
-    
-    # Delete all app containers
-    local app_containers=(
-        "com.miHoYo.GenshinImpact"
-        "com.HoYoverse.hkrpgoversea"
-        "com.HoYoverse.Nap"
-    )
-    
-    for container in "${app_containers[@]}"; do
-        local container_path="${HOME}/Library/Containers/${container}"
-        if [[ -d "$container_path" ]]; then
-            echo "  削除中: ${container}"
-            sudo rm -rf "$container_path" 2>/dev/null && {
+    # Delete containers using collected list
+    if [[ ${#containers_to_delete[@]} -gt 0 ]]; then
+        for container_info in "${containers_to_delete[@]}"; do
+            local display=$(echo "$container_info" | cut -d'|' -f1)
+            local path=$(echo "$container_info" | cut -d'|' -f2)
+            
+            echo "  削除中: ${display}"
+            if sudo rm -rf "$path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
                 ((container_count++))
-            } || print_warning "  ⚠ 削除失敗"
-        fi
-    done
+            else
+                print_warning "  ⚠ 削除失敗"
+            fi
+        done
+    else
+        print_info "  削除対象なし"
+    fi
     
     print_success "コンテナ削除完了: ${container_count}個"
     echo ""
@@ -2132,14 +2352,15 @@ nuclear_cleanup() {
     echo "${BLUE}【ステップ 3/6】PlayTools.frameworkを削除${NC}"
     echo ""
     
-    local playtools_path="${HOME}/Library/Frameworks/PlayTools.framework"
-    if [[ -d "$playtools_path" ]]; then
+    if [[ "$playtools_exists" == true ]]; then
         echo "  削除中: ${playtools_path}"
-        rm -rf "$playtools_path" 2>/dev/null && {
+        if rm -rf "$playtools_path" 2>/dev/null; then
             print_success "  ✓ 削除完了"
-        } || print_warning "  ⚠ 削除失敗"
+        else
+            print_warning "  ⚠ 削除失敗"
+        fi
     else
-        print_info "  PlayTools.frameworkは存在しません"
+        print_info "  削除対象なし"
     fi
     
     echo ""
@@ -2152,22 +2373,22 @@ nuclear_cleanup() {
     echo "${BLUE}【ステップ 4/6】キャッシュと設定を削除${NC}"
     echo ""
     
-    local cleanup_paths=(
-        "${HOME}/Library/Caches/io.playcover.PlayCover"
-        "${HOME}/Library/Saved Application State/io.playcover.PlayCover.savedState"
-        "${HOME}/Library/Preferences/io.playcover.PlayCover.plist"
-        "${HOME}/Library/Logs/PlayCover"
-    )
-    
-    for path in "${cleanup_paths[@]}"; do
-        if [[ -e "$path" ]]; then
-            local item_name=$(basename "$path")
+    # Delete items using collected list
+    if [[ ${#cleanup_items[@]} -gt 0 ]]; then
+        for item_info in "${cleanup_items[@]}"; do
+            local item_name=$(echo "$item_info" | cut -d'|' -f1)
+            local path=$(echo "$item_info" | cut -d'|' -f2)
+            
             echo "  削除中: ${item_name}"
-            rm -rf "$path" 2>/dev/null && {
+            if rm -rf "$path" 2>/dev/null; then
                 print_success "  ✓ 削除完了"
-            } || print_warning "  ⚠ 削除失敗"
-        fi
-    done
+            else
+                print_warning "  ⚠ 削除失敗"
+            fi
+        done
+    else
+        print_info "  削除対象なし"
+    fi
     
     print_success "キャッシュと設定削除完了"
     echo ""
@@ -2182,65 +2403,24 @@ nuclear_cleanup() {
     
     local volume_count=0
     
-    # 🔒 SAFE APPROACH 1: Use mapping file (most reliable)
-    if [[ -f "$MAPPING_FILE" ]]; then
-        echo "  ${CYAN}方法1: マッピングファイルから削除対象を特定${NC}"
-        echo ""
-        
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
-            [[ -z "$volume_name" ]] && continue
+    # Delete volumes using collected list
+    if [[ ${#volumes_to_delete[@]} -gt 0 ]]; then
+        for vol_info in "${volumes_to_delete[@]}"; do
+            local display=$(echo "$vol_info" | cut -d'|' -f1)
+            local vol_name=$(echo "$vol_info" | cut -d'|' -f2)
+            local device=$(echo "$vol_info" | cut -d'|' -f3)
             
-            if volume_exists "$volume_name"; then
-                local device=$(get_volume_device "$volume_name")
-                if [[ -n "$device" ]]; then
-                    echo "  削除中: ${display_name:-$volume_name} (${device})"
-                    
-                    if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
-                        print_success "  ✓ 削除完了"
-                        ((volume_count++))
-                    else
-                        print_warning "  ⚠ 削除失敗（マウント済み?）"
-                    fi
-                fi
+            echo "  削除中: ${display} (${device})"
+            
+            if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
+                print_success "  ✓ 削除完了"
+                ((volume_count++))
+            else
+                print_warning "  ⚠ 削除失敗（マウント済みまたは保護されています）"
             fi
-        done < "$MAPPING_FILE"
+        done
     else
-        echo "  ${YELLOW}方法2: パターンマッチングで削除対象を検出（慎重モード）${NC}"
-        echo ""
-    fi
-    
-    # 🔍 SAFE APPROACH 2: Pattern matching with strict safety checks
-    local playcover_volumes=$(diskutil list | grep -i "playcover\|genshin\|hkrpg\|nap\|zenless" | awk '{print $NF}' 2>/dev/null || true)
-    
-    if [[ -n "$playcover_volumes" ]]; then
-        while IFS= read -r device; do
-            if [[ -n "$device" ]]; then
-                local vol_name=$(diskutil info "$device" 2>/dev/null | grep "Volume Name:" | sed 's/.*: *//' || echo "Unknown")
-                
-                # 🔒 CRITICAL SAFETY CHECK: NEVER delete system volumes!
-                if [[ "$vol_name" =~ ^(Macintosh\ HD|Data|Preboot|Recovery|VM|Update|Snapshots|Time\ Machine) ]]; then
-                    echo "  ${RED}🛑 スキップ: システムボリューム ${vol_name}（削除不可）${NC}"
-                    continue
-                fi
-                
-                # Skip if already deleted in approach 1
-                if ! volume_exists "$vol_name"; then
-                    continue
-                fi
-                
-                echo "  削除中: ${vol_name} (${device})"
-                
-                # Try to delete the volume
-                if sudo diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
-                    print_success "  ✓ 削除完了"
-                    ((volume_count++))
-                else
-                    print_warning "  ⚠ 削除失敗（システムボリュームまたはマウント済み）"
-                fi
-            fi
-        done <<< "$playcover_volumes"
-    elif [[ $volume_count -eq 0 ]]; then
-        print_info "  削除対象のボリュームが見つかりません"
+        print_info "  削除対象なし"
     fi
     
     print_success "APFSボリューム削除完了: ${volume_count}個"
@@ -2254,18 +2434,20 @@ nuclear_cleanup() {
     echo "${BLUE}【ステップ 6/6】マッピングファイルを削除${NC}"
     echo ""
     
-    if [[ -f "$MAPPING_FILE" ]]; then
+    if [[ "$mapping_exists" == true ]]; then
         echo "  削除中: playcover-map.txt"
-        rm -f "$MAPPING_FILE" 2>/dev/null && {
+        if rm -f "$MAPPING_FILE" 2>/dev/null; then
             print_success "  ✓ 削除完了"
-        } || print_warning "  ⚠ 削除失敗"
+        else
+            print_warning "  ⚠ 削除失敗"
+        fi
+        
+        # Delete lock file if exists
+        if [[ -f "$MAPPING_LOCK_FILE" ]]; then
+            rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
+        fi
     else
-        print_info "  マッピングファイルは存在しません"
-    fi
-    
-    # Delete lock file if exists
-    if [[ -f "$MAPPING_LOCK_FILE" ]]; then
-        rm -f "$MAPPING_LOCK_FILE" 2>/dev/null || true
+        print_info "  削除対象なし"
     fi
     
     echo ""
