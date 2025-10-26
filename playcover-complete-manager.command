@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.11.0 - Internal Data Cleanup & Incremental Sync
+# Version: 4.11.1 - Fix rsync and Auto-Mount
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
@@ -470,7 +470,7 @@ mount_volume() {
                         # Mount volume temporarily
                         if sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
                             print_info "データをコピー中..."
-                            sudo /usr/bin/rsync -aH --info=progress2 "$target_path/" "$temp_migrate/" 2>/dev/null
+                            sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
                             local rsync_exit=$?
                             sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
                             sudo /bin/rm -rf "$temp_migrate"
@@ -2380,7 +2380,8 @@ switch_storage_location() {
         # Use rsync with --update flag for incremental sync (skip existing files)
         # This is much faster when re-running after interruption
         # Exclude system metadata files and backup directories
-        sudo /usr/bin/rsync -avH --update --info=progress2 \
+        # Note: macOS rsync doesn't support --info=progress2, use --progress instead
+        sudo /usr/bin/rsync -avH --update --progress \
             --exclude='.Spotlight-V100' \
             --exclude='.fseventsd' \
             --exclude='.Trashes' \
@@ -2896,7 +2897,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.11.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.11.1${NC}"
     echo ""
     
     show_quick_status
@@ -3441,17 +3442,77 @@ show_installed_apps() {
 
 app_management_menu() {
     # Ensure PlayCover volume is mounted before showing menu
+    local playcover_mounted=false
+    
     if volume_exists "$PLAYCOVER_VOLUME_NAME" 2>/dev/null; then
         local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         
         if [[ -z "$pc_current_mount" ]]; then
-            # Volume exists but not mounted - mount it silently
-            mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1 || true
+            # Volume exists but not mounted - try to mount it
+            authenticate_sudo
+            
+            # Clear internal data first if needed
+            if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
+                local storage_type=$(get_storage_type "$PLAYCOVER_CONTAINER")
+                if [[ "$storage_type" == "internal" ]]; then
+                    clear
+                    print_warning "⚠️  PlayCoverボリュームが未マウントですが、内部ストレージにデータがあります"
+                    echo ""
+                    echo "${YELLOW}対処方法:${NC}"
+                    echo "  1. 内部データを外部に移行してマウント（推奨）"
+                    echo "  2. 内部データを削除してクリーンな状態でマウント"
+                    echo "  3. キャンセル"
+                    echo ""
+                    echo -n "選択してください (1/2/3): "
+                    read cleanup_choice
+                    
+                    case "$cleanup_choice" in
+                        1|2)
+                            # Call mount_playcover_main_volume which handles cleanup
+                            mount_playcover_main_volume
+                            playcover_mounted=true
+                            ;;
+                        *)
+                            print_info "キャンセルしました"
+                            echo ""
+                            echo -n "Enterキーで続行..."
+                            read
+                            return
+                            ;;
+                    esac
+                else
+                    # No internal data, mount directly
+                    mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1
+                    playcover_mounted=$?
+                    [[ $playcover_mounted -eq 0 ]] && playcover_mounted=true || playcover_mounted=false
+                fi
+            else
+                # Directory doesn't exist, create and mount
+                mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1
+                playcover_mounted=$?
+                [[ $playcover_mounted -eq 0 ]] && playcover_mounted=true || playcover_mounted=false
+            fi
         elif [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
             # Volume mounted to wrong location - remount
+            authenticate_sudo
             unmount_volume "$PLAYCOVER_VOLUME_NAME" >/dev/null 2>&1 || true
-            mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1 || true
+            mount_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "true" >/dev/null 2>&1
+            playcover_mounted=$?
+            [[ $playcover_mounted -eq 0 ]] && playcover_mounted=true || playcover_mounted=false
+        else
+            # Already mounted correctly
+            playcover_mounted=true
         fi
+    fi
+    
+    # If PlayCover volume couldn't be mounted, show warning
+    if [[ "$playcover_mounted" == false ]]; then
+        clear
+        print_warning "PlayCoverボリュームがマウントされていません"
+        print_info "アプリ一覧を正しく表示するには、ボリュームをマウントしてください"
+        echo ""
+        echo -n "Enterキーで続行..."
+        read
     fi
     
     while true; do
@@ -4326,7 +4387,7 @@ mount_playcover_main_volume() {
                 mkdir -p "$temp_mount"
                 sudo mount -t apfs -o nobrowse "$volume_device" "$temp_mount"
                 print_info "データをコピー中..."
-                sudo rsync -aH --info=progress2 "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
+                sudo rsync -aH --progress "$PLAYCOVER_CONTAINER/" "$temp_mount/" 2>/dev/null || true
                 sudo umount "$temp_mount"
                 rmdir "$temp_mount"
                 print_info "内部ストレージをクリア中..."
