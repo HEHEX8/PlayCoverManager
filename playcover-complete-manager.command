@@ -2705,11 +2705,12 @@ switch_storage_location() {
             echo ""
             print_success "データのコピーが完了しました"
             
-            local copied_count=$(sudo /usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-            local copied_size=$(sudo /usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
-            print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
-            
+            # Change ownership first, then check without sudo
             sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
+            
+            local copied_count=$(/usr/bin/find "$target_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+            local copied_size=$(/usr/bin/du -sh "$target_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+            print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
         else
             echo ""
             print_error "データのコピーに失敗しました"
