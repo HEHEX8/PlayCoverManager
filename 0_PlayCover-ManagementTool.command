@@ -3164,7 +3164,6 @@ switch_storage_location() {
                 echo "  ${LIGHT_GREEN}2.${NC} その後、このストレージ切り替え機能を使用"
                 wait_for_enter
                 continue
-                return
                 ;;
             *)
                 print_error "現在のストレージ状態を判定できません"
@@ -3174,7 +3173,6 @@ switch_storage_location() {
                 echo "  - データディレクトリが存在しない"
                 wait_for_enter
                 continue
-                return
                 ;;
         esac
         
@@ -3226,7 +3224,6 @@ switch_storage_location() {
                 print_error "コピー元が存在しません: $source_path"
                 wait_for_enter
                 continue
-                return
             fi
             
             # Check if Data directory exists at root level
@@ -3296,7 +3293,6 @@ switch_storage_location() {
                         echo -n "Enterキーで続行..."
                         read
                     continue
-                        return
                     fi
                 else
                     print_error "内蔵ストレージにデータがありません"
@@ -3310,7 +3306,6 @@ switch_storage_location() {
                     echo "  - コンテナディレクトリが破損している"
                     wait_for_enter
                     continue
-                    return
                 fi
             fi
             
@@ -3321,7 +3316,6 @@ switch_storage_location() {
                 print_error "コピー元のサイズを取得できませんでした"
                 wait_for_enter
                 continue
-                return
             fi
             
             # Get available space on external volume (mount temporarily to check)
@@ -3334,7 +3328,6 @@ switch_storage_location() {
                 echo "  ボリューム名: $volume_name"
                 wait_for_enter
                 continue
-                return
             fi
             
             print_info "外部ボリューム: $volume_device"
@@ -3411,7 +3404,6 @@ switch_storage_location() {
                     print_info "$MSG_CANCELED"
                     wait_for_enter
                     continue
-                    return
                 fi
                 
                 print_warning "容量不足を承知で続行します..."
@@ -3543,7 +3535,6 @@ switch_storage_location() {
                     /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
                     wait_for_enter
                     continue
-                    return
                 fi
                 check_mount_point="$temp_check_mount"
             fi
@@ -3561,7 +3552,6 @@ switch_storage_location() {
                 print_error "コピー元のサイズを取得できませんでした"
                 wait_for_enter
                 continue
-                return
             fi
             
             # Get available space on internal disk (where target_path will be created)
@@ -3599,7 +3589,6 @@ switch_storage_location() {
                     print_info "$MSG_CANCELED"
                     wait_for_enter
                     continue
-                    return
                 fi
                 
                 print_warning "容量不足を承知で続行します..."
@@ -3625,7 +3614,6 @@ switch_storage_location() {
                     /usr/bin/sudo /bin/rm -rf "$temp_mount"
                     wait_for_enter
                     continue
-                    return
                 fi
                 source_mount="$temp_mount"
                 temp_mount_created=true
@@ -3638,29 +3626,19 @@ switch_storage_location() {
                 
                 # Try unmount with automatic fallback
                 if ! unmount_with_fallback "$target_path" "verbose"; then
-                    local umount_exit=1
-                else
-                    local umount_exit=0
-                fi
-                    
-                    if [[ $umount_exit -ne 0 ]]; then
-                        print_error "強制アンマウントも失敗しました"
-                        echo "理由: $umount_output"
-                        echo ""
-                        print_warning "このアプリが使用中の可能性があります"
-                        print_info "推奨される対応:"
-                        echo "  1. アプリが起動していないか確認"
-                        echo "  2. Finderでこのディレクトリを開いていないか確認"
-                        echo "  3. 上記を確認後、再度実行"
-                        echo ""
-                        echo -n "Enterキーで続行..."
-                        read </dev/tty
+                    print_error "強制アンマウントも失敗しました"
+                    echo ""
+                    print_warning "このアプリが使用中の可能性があります"
+                    print_info "推奨される対応:"
+                    echo "  1. アプリが起動していないか確認"
+                    echo "  2. Finderでこのディレクトリを開いていないか確認"
+                    echo "  3. 上記を確認後、再度実行"
+                    echo ""
+                    wait_for_enter
                     continue
-                        return
-                    else
-                        print_success "強制アンマウントに成功しました"
-                    fi
                 fi
+                
+                print_success "アンマウントに成功しました"
                 
                 /bin/sleep 1
                 
@@ -3672,7 +3650,6 @@ switch_storage_location() {
                     /usr/bin/sudo /bin/rm -rf "$temp_mount"
                     wait_for_enter
                     continue
-                    return
                 fi
                 source_mount="$temp_mount"
                 temp_mount_created=true
@@ -3743,7 +3720,6 @@ switch_storage_location() {
                 
                 wait_for_enter
                 continue
-                return
             fi
             
             # Unmount volume
