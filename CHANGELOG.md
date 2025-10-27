@@ -1,6 +1,6 @@
 # PlayCover Scripts Changelog
 
-## 2025-01-28 - Version 4.34.0: Major Refactoring - Terminology Unification and Code Cleanup
+## 2025-01-28 - Version 4.34.0: Major Refactoring - Code Consolidation and Optimization
 
 ### Major Refactoring to `0_PlayCover-ManagementTool.command`
 
@@ -35,13 +35,32 @@ readonly MSG_UNINTENDED_INTERNAL_DATA="⚠️  内蔵ストレージに意図し
 - **Readability**: Code is cleaner with constants
 - **Localization**: Easy to add multi-language support in future
 
-**3. Code Cleanup Summary**
+**3. Function Consolidation (関数の統合)**
+
+Added utility functions to eliminate duplicate code patterns:
+
+```zsh
+# New utility functions (Line 229-279)
+show_error_and_return()  # Unified error display + menu return pattern
+cleanup_temp_dir()       # Safe temporary directory cleanup
+quit_app_if_running()    # Unified app quit logic (replaced quit_app_for_bundle)
+```
+
+**Consolidation Results:**
+- **Removed**: `quit_app_for_bundle()` (duplicate of `quit_app_if_running`)
+- **Unified**: App quit logic (5 occurrences → 1 function)
+- **Unified**: Temp directory cleanup patterns (multiple → 1 function)
+- **Added**: Generic error display helper
+
+**4. Code Cleanup Summary**
 
 | Category | Before | After | Improvement |
 |----------|--------|-------|-------------|
 | Terminology variants | 2 types | 1 type | 100% unified |
 | Duplicate messages | 39+ copies | 8 constants | 80% reduction |
-| Total replacements | - | 39 | - |
+| Duplicate functions | 2 quit functions | 1 unified | 50% reduction |
+| Code consolidation | - | 3 new utilities | Better structure |
+| Total replacements | - | 45+ | - |
 
 #### Changes Made
 
@@ -56,21 +75,29 @@ readonly MSG_UNINTENDED_INTERNAL_DATA="⚠️  内蔵ストレージに意図し
 
 **Line 108-117: Added Common Messages Constants**
 ```zsh
-# ═══════════════════════════════════════════════════════════════════
 # Common Messages (for consistency and maintainability)
-# ═══════════════════════════════════════════════════════════════════
-
-# Operation status messages
 readonly MSG_CANCELED="キャンセルしました"
 readonly MSG_INVALID_SELECTION="無効な選択です"
 readonly MSG_MOUNT_FAILED="ボリュームのマウントに失敗しました"
 # ... (8 constants total)
 ```
 
-**Throughout Script: Terminology Unification**
-- All `"内部ストレージ"` → `"内蔵ストレージ"`
-- All `"内部データ"` → `"内蔵データ"`
-- All duplicate messages → Message constants
+**Line 229-279: Added Utility Functions**
+```zsh
+show_error_and_return()   # Show error + return to menu
+cleanup_temp_dir()        # Safe temp directory cleanup  
+quit_app_if_running()     # Unified app quit (replaced quit_app_for_bundle)
+```
+
+**Line 728-740: Removed Duplicate Function**
+- Deleted `quit_app_for_bundle()` (redundant)
+- All calls redirected to `quit_app_if_running()`
+
+**Throughout Script: Comprehensive Changes**
+- All `"内部ストレージ"` → `"内蔵ストレージ"` (11 replacements)
+- All `"内部データ"` → `"内蔵データ"` (4 replacements)
+- All duplicate messages → Message constants (39 replacements)
+- All `quit_app_for_bundle` → `quit_app_if_running` (3 replacements)
 
 #### No Functional Changes
 

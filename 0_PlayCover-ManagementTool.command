@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.34.0 - Major refactoring: terminology unification and code cleanup
+# Version: 4.34.0 - Major refactoring: code consolidation and optimization
 #######################################################
 
 #######################################################
@@ -225,6 +225,96 @@ wait_for_enter() {
     echo ""
     echo -n "$message"
     read
+}
+
+# Show error and return to previous menu (common pattern)
+show_error_and_return() {
+    local title="$1"
+    local error_message="$2"
+    local callback="${3:-}"  # Optional callback function to return to
+    
+    clear
+    print_header "$title"
+    echo ""
+    print_error "$error_message"
+    echo ""
+    wait_for_enter
+    
+    # Call callback function if provided
+    if [[ -n "$callback" ]] && type "$callback" &>/dev/null; then
+        "$callback"
+    fi
+}
+
+# Clean up temporary directory with error handling
+cleanup_temp_dir() {
+    local temp_dir="$1"
+    local silent="${2:-false}"  # Optional: suppress messages
+    
+    if [[ -n "$temp_dir" ]] && [[ -e "$temp_dir" ]]; then
+        if /usr/bin/sudo /bin/rm -rf "$temp_dir" 2>/dev/null; then
+            [[ "$silent" != "true" ]] && print_success "一時ディレクトリをクリーンアップしました"
+            return 0
+        else
+            [[ "$silent" != "true" ]] && print_warning "一時ディレクトリの削除に失敗しました: $temp_dir"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Quit app before volume operations (unified function)
+quit_app_if_running() {
+    local bundle_id="$1"
+    
+    # Skip if bundle_id is empty or is PlayCover itself
+    if [[ -z "$bundle_id" ]] || [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+        return 0
+    fi
+    
+    # Force quit any process matching the bundle_id
+    /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+    
+    # Wait a moment for cleanup
+    /bin/sleep 0.3
+    return 0
+}
+
+# Prompt for confirmation with default option (Y/n or y/N)
+prompt_confirmation() {
+    local message="$1"
+    local default="${2:-Y}"  # Default: Y (yes)
+    
+    if [[ "$default" == "Y" ]]; then
+        echo -n "${message} (Y/n): "
+    else
+        echo -n "${message} (y/N): "
+    fi
+    read response
+    
+    # Apply default if empty
+    response=${response:-$default}
+    
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        return 0  # User confirmed
+    else
+        return 1  # User declined
+    fi
+}
+
+# Check volume existence with automatic error handling and callback
+# Returns 0 if volume exists, 1 if not (with error display and callback)
+check_volume_exists_or_error() {
+    local volume_name="$1"
+    local title="$2"
+    local callback="${3:-}"  # Optional callback function
+    
+    if ! volume_exists "$volume_name"; then
+        show_error_and_return "$title" "ボリューム '${volume_name}' が見つかりません" "$callback"
+        return 1
+    fi
+    
+    return 0
 }
 
 is_playcover_running() {
@@ -637,7 +727,7 @@ mount_volume() {
                     /usr/bin/sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
                     local rsync_exit=$?
                     /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
-                    /usr/bin/sudo /bin/rm -rf "$temp_migrate"
+                    cleanup_temp_dir "$temp_migrate" true
                     
                     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
                         print_success "データの移行が完了しました"
@@ -650,7 +740,7 @@ mount_volume() {
                     fi
                 else
                     print_error "一時マウントに失敗しました"
-                    /usr/bin/sudo /bin/rm -rf "$temp_migrate"
+                    cleanup_temp_dir "$temp_migrate" true
                     return 1
                 fi
                 fi  # End of if [[ "$cleanup_choice" == "2" ]]
@@ -673,22 +763,6 @@ mount_volume() {
         print_error "マウント失敗"
         return 1
     fi
-}
-
-# Quit application before unmounting (v4.7.0)
-quit_app_for_bundle() {
-    local bundle_id=$1
-    
-    # Skip if bundle_id is empty or is PlayCover itself
-    if [[ -z "$bundle_id" ]] || [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-        return 0
-    fi
-    
-    # Force quit any process matching the bundle_id
-    /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-    
-    # Wait a moment for cleanup
-    /bin/sleep 0.3
 }
 
 unmount_volume() {
@@ -715,7 +789,7 @@ unmount_volume() {
     
     # Quit app before unmounting if bundle_id is provided
     if [[ -n "$bundle_id" ]]; then
-        quit_app_for_bundle "$bundle_id"
+        quit_app_if_running "$bundle_id"
     fi
     
     local device=$(get_volume_device "$volume_name" "$diskutil_cache")
@@ -1668,8 +1742,7 @@ individual_volume_control() {
     
     # Check if we have any mappings
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "$MSG_NO_REGISTERED_VOLUMES"
-        wait_for_enter
+        show_error_and_return "ボリューム情報" "$MSG_NO_REGISTERED_VOLUMES"
         return
     fi
     
@@ -1834,13 +1907,7 @@ individual_volume_control() {
     # Quick switch without confirmation
     if [[ -n "$current_mount" ]]; then
         # Volume is mounted somewhere
-        if ! volume_exists "$volume_name"; then
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "ボリュームが見つかりません"
-            wait_for_enter
-            individual_volume_control
+        if ! check_volume_exists_or_error "$volume_name" "${display_name} の操作" "individual_volume_control"; then
             return
         fi
         
@@ -1849,10 +1916,7 @@ individual_volume_control() {
             # Correctly mounted -> Unmount
             
             # Quit app first
-            if [[ -n "$bundle_id" ]]; then
-                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-                /bin/sleep 0.3
-            fi
+            quit_app_if_running "$bundle_id"
             
             local device=$(get_volume_device "$volume_name")
             if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
@@ -1877,10 +1941,7 @@ individual_volume_control() {
             # Mounted at wrong location -> Remount to correct location
             
             # Quit app first
-            if [[ -n "$bundle_id" ]]; then
-                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-                /bin/sleep 0.3
-            fi
+            quit_app_if_running "$bundle_id"
             
             local device=$(get_volume_device "$volume_name")
             
@@ -1912,13 +1973,7 @@ individual_volume_control() {
         fi
     else
         # Currently unmounted -> Mount
-        if ! volume_exists "$volume_name"; then
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "ボリュームが見つかりません"
-            wait_for_enter
-            individual_volume_control
+        if ! check_volume_exists_or_error "$volume_name" "${display_name} の操作" "individual_volume_control"; then
             return
         fi
         
@@ -1933,7 +1988,7 @@ individual_volume_control() {
             print_error "$MSG_INTENTIONAL_INTERNAL_MODE"
             print_info "$MSG_SWITCH_VIA_STORAGE_MENU"
             echo ""
-            wait_for_enter
+            wait_for_enter "Enterキーで続行..."
             individual_volume_control
             return
         elif [[ "$storage_mode" == "internal_contaminated" ]]; then
@@ -1962,10 +2017,7 @@ individual_volume_control() {
                     # Continue to mount below
                     ;;
                 *)
-                    print_info "$MSG_CANCELED"
-                    echo ""
-                    wait_for_enter
-                    individual_volume_control
+                    show_error_and_return "${display_name} の操作" "$MSG_CANCELED" "individual_volume_control"
                     return
                     ;;
             esac
@@ -1974,12 +2026,7 @@ individual_volume_control() {
         # Ensure PlayCover volume is mounted first (dependency requirement)
         if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
             if ! ensure_playcover_main_volume >/dev/null 2>&1; then
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                print_error "PlayCover ボリュームのマウントに失敗しました"
-                wait_for_enter
-                individual_volume_control
+                show_error_and_return "${display_name} の操作" "PlayCover ボリュームのマウントに失敗しました" "individual_volume_control"
                 return
             fi
         fi
@@ -1991,12 +2038,7 @@ individual_volume_control() {
             return
         else
             # Failed - show error
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "マウントに失敗しました"
-            wait_for_enter
-            individual_volume_control
+            show_error_and_return "${display_name} の操作" "マウントに失敗しました" "individual_volume_control"
             return
         fi
     fi
@@ -2009,8 +2051,7 @@ batch_mount_all() {
     
     # Read mapping file directly
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
-        wait_for_enter
+        show_error_and_return "全ボリュームをマウント" "$MSG_MAPPING_FILE_NOT_FOUND"
         return
     fi
     
@@ -2022,8 +2063,7 @@ batch_mount_all() {
     done < "$MAPPING_FILE"
     
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "$MSG_NO_REGISTERED_VOLUMES"
-        wait_for_enter
+        show_error_and_return "全ボリュームをマウント" "$MSG_NO_REGISTERED_VOLUMES"
         return
     fi
     
@@ -2172,16 +2212,18 @@ batch_unmount_all() {
     
     # Check if PlayCover is running
     if is_playcover_running; then
+        clear
+        print_header "全ボリュームをアンマウント"
+        echo ""
         print_error "PlayCoverが起動中です"
         print_info "PlayCoverを終了してから再度実行してください"
-        wait_for_enter
+        wait_for_enter "Enterキーで続行..."
         return
     fi
     
     # Read mapping file directly
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
-        wait_for_enter
+        show_error_and_return "全ボリュームをアンマウント" "$MSG_MAPPING_FILE_NOT_FOUND"
         return
     fi
     
@@ -2193,8 +2235,7 @@ batch_unmount_all() {
     done < "$MAPPING_FILE"
     
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "$MSG_NO_REGISTERED_VOLUMES"
-        wait_for_enter
+        show_error_and_return "全ボリュームをアンマウント" "$MSG_NO_REGISTERED_VOLUMES"
         return
     fi
     
@@ -2311,15 +2352,10 @@ eject_disk() {
     echo ""
     print_info "注意: PlayCover関連ボリューム以外も含まれる可能性があります"
     echo ""
-    echo -n "続行しますか？ (Y/n): "
-    read confirm
     
-    # Default to Yes if empty
-    confirm=${confirm:-Y}
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    if ! prompt_confirmation "続行しますか？" "Y"; then
         print_info "$MSG_CANCELED"
-        wait_for_enter
+        wait_for_enter "Enterキーで続行..."
         return
     fi
     
@@ -2369,7 +2405,7 @@ eject_disk() {
                     ((success_count++))
                 else
                     if [[ -n "$bundle_id" ]]; then
-                        quit_app_for_bundle "$bundle_id"
+                        quit_app_if_running "$bundle_id"
                     fi
                     
                     if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
@@ -2607,7 +2643,7 @@ nuclear_cleanup() {
         for vol_info in "${(@)mapped_volumes}"; do
             local bundle_id=$(echo "$vol_info" | /usr/bin/cut -d'|' -f4)
             if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
-                quit_app_for_bundle "$bundle_id" 2>/dev/null || true
+                quit_app_if_running "$bundle_id" 2>/dev/null || true
             fi
         done
         
@@ -2805,8 +2841,7 @@ switch_storage_location() {
         local mappings_content=$(read_mappings)
         
         if [[ -z "$mappings_content" ]]; then
-            print_warning "$MSG_NO_REGISTERED_VOLUMES"
-            wait_for_enter
+            show_error_and_return "ストレージ切替（内蔵⇄外部）" "$MSG_NO_REGISTERED_VOLUMES"
             return
         fi
         
@@ -3071,11 +3106,9 @@ switch_storage_location() {
             print_info "内蔵から外部ストレージへデータを移行中..."
             
             # Check if volume exists
-            if ! volume_exists "$volume_name"; then
-                print_error "外部ボリュームが見つかりません: ${volume_name}"
-                wait_for_enter
+            if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替"; then
+                wait_for_enter "Enterキーで続行..."
                 continue
-                return
             fi
             
             # For internal -> external, determine correct source path
@@ -3231,10 +3264,9 @@ switch_storage_location() {
                     echo "  - ボリュームが破損している"
                     echo "  - ディスクが接続されていない"
                     echo "  - 権限の問題"
-                    /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
-                    wait_for_enter
+                    cleanup_temp_dir "$temp_check_mount" true
+                    wait_for_enter "Enterキーで続行..."
                     continue
-                    return
                 fi
             fi
             
@@ -3244,7 +3276,7 @@ switch_storage_location() {
                 /usr/bin/sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
                 /bin/sleep 1
             fi
-            /usr/bin/sudo /bin/rm -rf "$temp_check_mount" 2>/dev/null || true
+            cleanup_temp_dir "$temp_check_mount" true
             
             # Convert to human readable
             local source_size_mb=$((source_size_bytes / 1024))
@@ -3299,10 +3331,9 @@ switch_storage_location() {
             print_info "ボリュームを一時マウント中..."
             if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
                 print_error "$MSG_MOUNT_FAILED"
-                /usr/bin/sudo /bin/rm -rf "$temp_mount"
-                wait_for_enter
+                cleanup_temp_dir "$temp_mount" true
+                wait_for_enter "Enterキーで続行..."
                 continue
-                return
             fi
             
             # Debug: Show source path and content
@@ -3347,10 +3378,9 @@ switch_storage_location() {
                     /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
                 }
                 /bin/sleep 1  # Wait for unmount to complete
-                /usr/bin/sudo /bin/rm -rf "$temp_mount" 2>/dev/null || true
-                wait_for_enter
+                cleanup_temp_dir "$temp_mount" true
+                wait_for_enter "Enterキーで続行..."
                 continue
-                return
             fi
             
             # Unmount temporary mount
@@ -3360,7 +3390,7 @@ switch_storage_location() {
                 /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount"
             }
             /bin/sleep 1  # Wait for unmount to complete
-            /usr/bin/sudo /bin/rm -rf "$temp_mount"
+            cleanup_temp_dir "$temp_mount" true
             
             # Delete internal data (no backup needed)
             print_info "内蔵データを削除中..."
@@ -3386,11 +3416,9 @@ switch_storage_location() {
             print_info "外部から内蔵ストレージへデータを移行中..."
             
             # Check if volume exists
-            if ! volume_exists "$volume_name"; then
-                print_error "外部ボリュームが見つかりません: ${volume_name}"
-                wait_for_enter
+            if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替"; then
+                wait_for_enter "Enterキーで続行..."
                 continue
-                return
             fi
             
             # Check disk space before migration
