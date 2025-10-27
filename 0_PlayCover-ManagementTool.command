@@ -1857,6 +1857,18 @@ individual_volume_control() {
     local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
     local mount_cache=$(/sbin/mount 2>/dev/null)
     
+    # Check if any app is running (affects PlayCover lock status)
+    local any_app_running=false
+    for ((j=1; j<=${#mappings_array}; j++)); do
+        IFS='|' read -r _ check_bundle_id _ <<< "${mappings_array[$j]}"
+        if [[ "$check_bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
+            if is_app_running "$check_bundle_id"; then
+                any_app_running=true
+                break
+            fi
+        fi
+    done
+    
     # Build selectable array (excluding locked volumes)
     local -a selectable_array=()
     local -a selectable_indices=()
@@ -1873,7 +1885,8 @@ individual_volume_control() {
         
         # Check if app is running (locked)
         if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            if is_playcover_running; then
+            # PlayCover volume is locked if PlayCover is running OR any app is running
+            if is_playcover_running || [[ "$any_app_running" == "true" ]]; then
                 is_locked=true
             fi
         else
