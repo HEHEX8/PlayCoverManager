@@ -1,5 +1,134 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.13: Enhanced Empty Internal Mode Handling in Volume Control
+
+### Enhancement to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Empty Internal Mode Not Handled in Individual Volume Control
+
+**Missing Features:**
+1. Individual Volume Control didn't recognize `"internal_intentional_empty"` mode
+2. Empty internal mode not shown as selectable in volume list
+3. Display text had duplicate "使用容量:" label
+
+**Expected Behavior:**
+- Empty internal mode (flag only, no data) should be **selectable**
+- Should show as "🏠 内蔵ストレージモード (空)" in volume list
+- Selecting it should auto-cleanup flag and mount external volume
+
+#### Changes Made
+
+**1. Individual Volume Control Display (Line 1711-1728)**
+
+Added case for `"internal_intentional_empty"`:
+```zsh
+case "$storage_mode" in
+    "none")
+        status_line="⚪️ 未マウント"
+        ;;
+    "internal_intentional")
+        # Has data - show as locked
+        status_line="⚪️ 未マウント"
+        extra_info="internal_intentional"
+        ;;
+    "internal_intentional_empty")  # ← New case!
+        # Empty - show as selectable
+        status_line="⚪️ 未マウント"
+        extra_info="internal_intentional_empty"
+        ;;
+```
+
+**2. Display Logic Enhancement (Line 1738-1751)**
+
+Added display case for empty internal mode:
+```zsh
+elif [[ "$extra_info" == "internal_intentional" ]]; then
+    # Has data: show as locked, not selectable
+    echo "🔒 ロック中 ${display_name} | 🏠 内蔵ストレージモード"
+    ;;
+elif [[ "$extra_info" == "internal_intentional_empty" ]]; then
+    # Empty: show as selectable with number
+    selectable_array+=("${mappings_array[$i]}")
+    selectable_indices+=("$i")
+    
+    echo "${display_index}. ${display_name} | 🏠 内蔵ストレージモード (空)"
+    ((display_index++))
+    ;;
+```
+
+**3. Fixed Duplicate Label (Line 2857)**
+
+Removed duplicate "使用容量:" from usage_text:
+```zsh
+# Before
+usage_text="使用容量: 0B / 残容量: XXX"
+# Displayed as: "使用容量: 使用容量: 0B / 残容量: XXX"
+
+# After
+usage_text="0B / 残容量: XXX"
+# Displayed as: "使用容量: 0B / 残容量: XXX"
+```
+
+#### Test Scenario
+
+**Individual Volume Control Display:**
+
+**Before v4.33.13:**
+```
+  3. 原神
+      ⚪️ 未マウント
+      
+  🔒 ロック中 崩壊：スターレイル | 🏠 内蔵ストレージモード
+      ⚪️ 未マウント
+```
+- Empty internal mode not recognized
+- Would fail if trying to handle it
+
+**After v4.33.13:**
+```
+  3. 原神
+      ⚪️ 未マウント
+      
+  4. 崩壊：スターレイル | 🏠 内蔵ストレージモード (空)
+      ⚪️ 未マウント
+      
+  🔒 ロック中 アプリ名 | 🏠 内蔵ストレージモード
+      ⚪️ 未マウント
+```
+- Empty internal mode shown as selectable (#4)
+- Has data internal mode shown as locked (no number)
+
+**Storage Switch Menu Display:**
+
+**Before v4.33.13:**
+```
+  2. 原神
+      位置: 🏠 内部ストレージモード (空)
+      使用容量: 使用容量: 0B / 残容量: 156G  ← Duplicate!
+```
+
+**After v4.33.13:**
+```
+  2. 原神
+      位置: 🏠 内部ストレージモード (空)
+      使用容量: 0B / 残容量: 156G  ← Fixed!
+```
+
+#### Behavior Summary
+
+| State | Flag | Data | Volume Control Display | Selectable | Mount Behavior |
+|-------|------|------|------------------------|------------|----------------|
+| Empty external | No | No | 未マウント | ✅ Yes | Mount directly |
+| Empty internal | Yes | No | 🏠 内蔵 (空) | ✅ Yes | Auto-cleanup, mount |
+| Internal w/data | Yes | Yes | 🔒 ロック中 🏠 内蔵 | ❌ No | Locked |
+| Contaminated | No | Yes | ⚠️ 内蔵データ検出 | ✅ Yes | Prompt user |
+
+#### Related Changes
+- Updated script version to 4.33.13
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.12: Fixed Empty Internal Mode Display and Mounting
 
 ### Enhancement to `0_PlayCover-ManagementTool.command`

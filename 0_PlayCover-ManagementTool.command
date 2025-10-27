@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.12 - Fixed empty internal mode display and mounting
+# Version: 4.33.13 - Enhanced empty internal mode handling in volume control
 #######################################################
 
 #######################################################
@@ -1713,9 +1713,14 @@ individual_volume_control() {
                         status_line="⚪️ 未マウント"
                         ;;
                     "internal_intentional")
-                        # Intentionally switched to internal storage
+                        # Intentionally switched to internal storage with data
                         status_line="⚪️ 未マウント"
                         extra_info="internal_intentional"
+                        ;;
+                    "internal_intentional_empty")
+                        # Intentionally switched to internal storage but empty
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_intentional_empty"
                         ;;
                     "internal_contaminated")
                         # Unintended internal data contamination
@@ -1736,10 +1741,19 @@ individual_volume_control() {
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
         elif [[ "$extra_info" == "internal_intentional" ]]; then
-            # Intentional internal storage mode: show as locked
+            # Intentional internal storage mode with data: show as locked
             echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージモード${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
+        elif [[ "$extra_info" == "internal_intentional_empty" ]]; then
+            # Intentional internal storage mode but empty: show as selectable
+            selectable_array+=("${mappings_array[$i]}")
+            selectable_indices+=("$i")
+            
+            echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM_GRAY}| 🏠 内蔵ストレージモード (空)${NC}"
+            echo "      ${GRAY}${status_line}${NC}"
+            echo ""
+            ((display_index++))
         elif [[ "$extra_info" == "internal_contaminated" ]]; then
             # Contaminated: show as warning (selectable)
             selectable_array+=("${mappings_array[$i]}")
@@ -2840,7 +2854,7 @@ switch_storage_location() {
                 "internal_intentional_empty")
                     location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC} ${DIM_GRAY}(空)${NC}"
                     free_space=$(get_storage_free_space "$HOME")
-                    usage_text="${GRAY}使用容量: 0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_contaminated")
                     location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
