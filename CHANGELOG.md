@@ -1,5 +1,132 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.0: Comprehensive Code Consolidation - Complete Refactoring
+
+### Major Refactoring Phase 2 to `0_PlayCover-ManagementTool.command`
+
+#### Goals: Eliminate Redundancy, Consolidate Similar Patterns, Unify Code Structure
+
+This release completes the comprehensive refactoring requested by the user:
+- **冗長・重複処理の排除** (Eliminate redundancy and duplicate processing)
+- **類似処理の共通化** (Consolidate similar processing patterns)
+- **文言、表現、書式、文法の統一** (Unify terminology, expressions, formatting, and grammar)
+
+### Completed Tasks
+
+#### ✅ Task 1: Error Handling Pattern Consolidation (10+ locations)
+- Created `show_error_and_return()` function with callback support
+- Unified error display → wait → return pattern
+- Replaced 10+ instances of repetitive error handling code
+
+#### ✅ Task 2: Volume Existence Check Pattern Consolidation (8 locations)
+- Created `check_volume_exists_or_error()` function
+- Automatic error handling with callback support
+- Unified volume validation across the script
+
+#### ✅ Task 3: Temporary Directory Cleanup Consolidation (6+ locations)
+- Extended `cleanup_temp_dir()` function usage
+- Added silent mode support
+- Replaced manual `sudo rm -rf` calls with centralized function
+
+#### ✅ Task 4: Mount/Unmount Operation Consolidation (20+ locations)
+**New Unified Functions:**
+```zsh
+unmount_volume()           # Low-level unmount (silent/verbose, force support)
+unmount_with_fallback()    # Auto force fallback (try normal → force)
+mount_volume()             # Low-level mount (nobrowse support)
+unmount_app_volume()       # High-level unmount (with app quit)
+```
+
+**Consolidation Results:**
+- Silent unmount: 13 locations unified
+- Unmount with fallback: 5 locations unified
+- Mount operations: 2 locations unified
+- High-level unmount: 3 locations unified
+
+#### ✅ Task 5: Confirmation Prompt Pattern Consolidation (5/5 completed)
+- Created `prompt_confirmation()` function
+- Supports Y/n and y/N patterns with configurable defaults
+- Unified 5 confirmation prompts
+- Intentionally preserved `yes/NO` pattern for dangerous operations
+
+#### ✅ Task 6: Container Size Calculation Consolidation (4 locations)
+- Extended usage of existing `get_container_size()` function
+- Replaced direct `du` command calls with unified function
+- Consistent size calculation across the script
+
+#### ✅ Task 8: Code Structure Optimization
+- Fixed duplicate module numbers
+- Reorganized module structure (Module 1-14)
+- Clear separation of concerns
+
+### Code Statistics
+
+| Metric | Before | After | Result |
+|--------|--------|-------|--------|
+| Script lines | 5,627 | 5,725 | +98 lines (new utility functions) |
+| Error handling patterns | 10+ duplicates | 1 unified function | ~90% reduction |
+| Volume check patterns | 8 duplicates | 1 unified function | 87.5% reduction |
+| Confirmation prompts | 5 duplicates | 1 unified function | 80% reduction |
+| Mount/unmount operations | 20+ duplicates | 4 unified functions | ~85% reduction |
+| Container size calculations | 4 duplicates | 1 unified function | 75% reduction |
+| **Total consolidated locations** | **54+ duplicates** | **10 unified functions** | **~80% reduction** |
+
+### New Utility Functions Summary
+
+```zsh
+# Module 2: Utility Functions (Lines 158-428)
+
+# Error handling
+show_error_and_return()          # Unified error display + callback
+check_volume_exists_or_error()   # Volume validation + error handling
+
+# Resource management
+cleanup_temp_dir()               # Safe temp directory cleanup
+unmount_volume()                 # Low-level unmount operations
+unmount_with_fallback()          # Auto force fallback
+mount_volume()                   # Low-level mount operations
+unmount_app_volume()             # High-level unmount with app quit
+
+# User interaction
+prompt_confirmation()            # Unified Y/n, y/N confirmation prompts
+
+# Storage operations
+get_container_size()             # Unified size calculation (extended usage)
+```
+
+### Benefits
+
+1. **Maintainability**: Changes in one place update all usages
+2. **Consistency**: Uniform behavior across all operations
+3. **Readability**: Clear function names explain intent
+4. **Error Handling**: Unified error messages and callbacks
+5. **Testing**: Easier to test centralized functions
+6. **Future Development**: Easier to add features with established patterns
+
+### Git Commits
+
+```bash
+# Phase 1
+git commit "v4.35.0 - コード統合の大規模リファクタリング（第1フェーズ）"
+# 138 insertions(+), 75 deletions(-) = +63 net
+
+# Phase 2  
+git commit "v4.35.0 - Task 4 完了: マウント/アンマウント操作の完全統合"
+# 32 insertions(+), 40 deletions(-) = -8 net
+
+# Phase 3
+git commit "v4.35.0 - Task 8 完了: コード構造の最適化"
+# Module structure reorganization
+```
+
+### Remaining Future Enhancements (Optional)
+
+- **Task 7**: diskutil operation caching optimization (complex, low priority)
+- Further comment standardization
+- Additional code pattern consolidation as discovered
+
+---
+
 ## 2025-01-28 - Version 4.34.0: Major Refactoring - Code Consolidation and Optimization
 
 ### Major Refactoring to `0_PlayCover-ManagementTool.command`

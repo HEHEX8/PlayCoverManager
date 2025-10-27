@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.34.0 - Major refactoring: code consolidation and optimization
+# Version: 4.35.0 - Major refactoring: comprehensive code consolidation completed
 #######################################################
 
 #######################################################
@@ -2550,7 +2550,7 @@ eject_disk() {
 }
 
 #######################################################
-# Module 7.5: Nuclear Cleanup Functions
+# Module 8: Nuclear Cleanup Functions
 #######################################################
 
 nuclear_cleanup() {
@@ -2934,7 +2934,7 @@ nuclear_cleanup() {
 }
 
 #######################################################
-# Module 8: Storage Switching Functions (Complete Implementation)
+# Module 9: Storage Switching Functions (Complete Implementation)
 #######################################################
 
 switch_storage_location() {
@@ -3763,7 +3763,7 @@ switch_storage_location() {
 }
 
 #######################################################
-# Module 9: Menu & UI Functions
+# Module 10: Menu & UI Functions
 #######################################################
 
 show_quick_status() {
@@ -4261,7 +4261,7 @@ show_auto_mount_setup_guide() {
 }
 
 #######################################################
-# Module 10: Main Execution
+# Module 11: Main Execution
 #######################################################
 
 show_installed_apps() {
@@ -4949,7 +4949,7 @@ uninstall_all_apps() {
 }
 
 #######################################################
-# Module 16: Initial Setup Functions (from 0_playcover-initial-setup.command)
+# Module 12: Initial Setup Functions (from 0_playcover-initial-setup.command)
 #######################################################
 
 check_architecture() {
@@ -5549,7 +5549,7 @@ create_initial_mapping() {
 }
 
 #######################################################
-# Module 17: Environment Check & Initial Setup Flow
+# Module 13: Environment Check & Initial Setup Flow
 #######################################################
 
 is_playcover_environment_ready() {
@@ -5637,7 +5637,7 @@ run_initial_setup() {
 }
 
 #######################################################
-# Module 17: Main Execution
+# Module 14: Main Execution
 #######################################################
 
 main() {
