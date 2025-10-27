@@ -1,5 +1,149 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.11: Fixed mount_volume Freeze with Flag-Only State
+
+### Critical Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Selecting Empty Volume in Individual Volume Control Causes Freeze
+
+**User Scenario:**
+```
+ボリューム管理 → 個別ボリューム操作
+3. 原神 (⚪️ 未マウント) を選択
+
+→ フリーズ（入力待ちでブロック）
+```
+
+**Root Cause:**
+`mount_volume()` function's content check (line 563) did NOT exclude flag file:
+- Flag file detected as "content"
+- Triggered user prompt: "内蔵データ処理方法を選択"
+- But in `individual_volume_control()`, `mount_volume()` called with `>/dev/null 2>&1` redirect (line 1952)
+- User prompt hidden, appears frozen while waiting for input
+
+#### Root Cause Analysis (Line 563 in mount_volume)
+
+**Problem Code:**
+```zsh
+# Line 563 - mount_volume() content check
+local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -x -F '.Spotlight-V100' | \
+    /usr/bin/grep -v -x -F '.Trashes' | \
+    /usr/bin/grep -v -x -F '.fseventsd' | \
+    /usr/bin/grep -v -x -F '.TemporaryItems' | \
+    /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+# ❌ Flag file NOT excluded!
+
+if [[ -n "$content_check" ]]; then
+    # Directory has actual content = internal storage data exists
+    
+    # Check storage mode
+    local storage_mode=$(get_storage_mode "$target_path")
+    
+    if [[ "$storage_mode" == "internal_intentional" ]]; then
+        print_error "意図的に内蔵ストレージモード"
+        return 1
+    fi
+    
+    # Contaminated data detected - ask user
+    print_warning "意図しないデータ検出"
+    echo -n "選択 (1-3) [デフォルト: 1]: "
+    read cleanup_choice  # ← BLOCKS HERE with >/dev/null redirect!
+```
+
+**Why This Fails:**
+1. Empty volume switched to internal → Creates flag file only
+2. User selects volume in Individual Volume Control
+3. `mount_volume()` called with `>/dev/null 2>&1` (line 1952)
+4. Flag file detected as "content" → Enters cleanup prompt
+5. `read cleanup_choice` blocks waiting for input
+6. But stdout/stdin redirected → User sees nothing, appears frozen
+
+#### Solution (Line 563)
+
+**Fixed Code:**
+```zsh
+# Line 563 - Added flag file exclusion
+local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -x -F '.Spotlight-V100' | \
+    /usr/bin/grep -v -x -F '.Trashes' | \
+    /usr/bin/grep -v -x -F '.fseventsd' | \
+    /usr/bin/grep -v -x -F '.TemporaryItems' | \
+    /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \
+    /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")  # ← Added!
+
+if [[ -n "$content_check" ]]; then
+    # Now only triggers for ACTUAL data, not flag-only
+```
+
+**Result:**
+- Flag-only state: `content_check` is empty → No prompt, proceeds to mount
+- Actual data: `content_check` has content → Shows prompt (as intended)
+
+#### Additional Fixes from v4.33.10
+
+Also refined logic in `get_storage_mode()` and `get_storage_type()`:
+
+1. **get_storage_type()** (Line 854): Restored to NOT exclude flag file
+   - Pure physical location detection
+   - Flag handling moved to `get_storage_mode()`
+
+2. **get_storage_mode()** (Line 975-983): Enhanced flag-only detection
+   - Checks if only flag exists (no real data)
+   - Returns `"none"` for flag-only → Allows mounting
+
+3. **get_storage_mode()** (Line 988-996): Added "none" case flag check
+   - Even when `storage_type` is "none", check for flag
+   - Returns `"none"` regardless (allow mounting)
+
+#### Test Scenario
+
+**Before v4.33.11:**
+```
+1. Empty volume: External → Internal (creates flag)
+2. Individual Volume Control: Select volume #3
+3. Calls mount_volume() with >/dev/null 2>&1
+4. Flag detected as "content"
+5. Prompts user: "選択 (1-3):"
+6. read blocks with redirected stdin
+❌ Appears frozen (no visible prompt)
+```
+
+**After v4.33.11:**
+```
+1. Empty volume: External → Internal (creates flag)
+2. Individual Volume Control: Select volume #3
+3. Calls mount_volume() with >/dev/null 2>&1
+4. Flag excluded from content_check
+5. content_check is empty → No prompt
+6. Proceeds to mount directly
+✅ Mounts successfully, returns to menu
+```
+
+#### Changes Made
+
+1. **mount_volume() Content Check (Line 563)**
+   - Added `${INTERNAL_STORAGE_FLAG}` to exclusion list
+   - Flag-only state no longer triggers user prompt
+   - Fixes freeze in Individual Volume Control
+
+2. **get_storage_type() Restoration (Line 854)**
+   - Removed flag exclusion (keep pure physical detection)
+   - Simplifies logic separation
+
+3. **get_storage_mode() Enhancement (Line 975-996)**
+   - Flag-only detection in "internal" case
+   - Flag check in "none" case
+   - Returns "none" for flag-only (allow mounting)
+
+#### Related Changes
+- Updated script version to 4.33.11
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.10: Fixed Empty Volume Lifecycle Management (Flag-Only Detection)
 
 ### Critical Bug Fix to `0_PlayCover-ManagementTool.command`

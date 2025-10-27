@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.10 - Fixed empty volume lifecycle management (flag-only detection)
+# Version: 4.33.11 - Fixed mount_volume freeze with flag-only state
 #######################################################
 
 #######################################################
@@ -558,9 +558,9 @@ mount_volume() {
         if [[ -z "$mount_check" ]]; then
             # Directory exists but is NOT a /sbin/mount point
             # Check if it contains actual data (not just an empty /sbin/mount point directory)
-            # Ignore macOS metadata files (.DS_Store, .Spotlight-V100, etc.)
+            # Ignore macOS metadata files AND internal storage flag
             # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
-            local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+            local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
             
             if [[ -n "$content_check" ]] && [[ "$force" != "true" ]]; then
                 # Directory has actual content (not just metadata) = internal storage data exists
@@ -849,16 +849,17 @@ get_storage_type() {
     
     # If it's a directory but not a /sbin/mount point, check if it has content
     if [[ -d "$container_path" ]]; then
-        # Ignore macOS metadata files AND internal storage flag when checking for content
+        # Ignore macOS metadata files when checking for content
+        # Note: Do NOT exclude flag file here - that's handled in get_storage_mode()
         # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
-        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
         if [[ -z "$content_check" ]]; then
-            # Directory exists but is empty (or only has metadata/flag) = no actual data
-            # This is just an empty /sbin/mount point directory left after unmount, or only flag file
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata/flag (none)" >&2
+            # Directory exists but is empty (or only has metadata) = no actual data
+            # This is just an empty /sbin/mount point directory left after unmount
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata (none)" >&2
             echo "none"
             return
         else
@@ -974,19 +975,29 @@ get_storage_mode() {
             ;;
         "internal")
             # Check if has actual data or just flag file
+            # Exclude metadata AND flag file to determine if real data exists
             local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
             
             if [[ -z "$content_check" ]]; then
-                # Only flag file exists, treat as none
+                # Only flag file (and/or metadata) exists, no real data
+                # Treat as "none" for UI purposes (allow mounting)
                 echo "none"
             elif has_internal_storage_flag "$container_path"; then
-                echo "internal_intentional"  # Intentionally switched to internal
+                # Has flag + actual data = intentional internal storage
+                echo "internal_intentional"
             else
-                echo "internal_contaminated"  # Unintended contamination
+                # Has data but no flag = unintended contamination
+                echo "internal_contaminated"
             fi
             ;;
         "none")
-            echo "none"
+            # Directory is empty, but check if flag file exists
+            if has_internal_storage_flag "$container_path"; then
+                # Flag file exists without data - treat as none (allow mounting)
+                echo "none"
+            else
+                echo "none"
+            fi
             ;;
         *)
             echo "unknown"
