@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.27.0 - Pure zsh syntax (removed bash compatibility)
+# Version: 4.28.0 - UI improvements and capacity checks
 #######################################################
 
 #######################################################
@@ -632,6 +632,39 @@ get_container_size() {
         echo "0B"
     else
         echo "$size"
+    fi
+}
+
+# Get container size in bytes (for capacity comparison)
+get_container_size_bytes() {
+    local container_path=$1
+    
+    if [[ ! -e "$container_path" ]]; then
+        echo "0"
+        return
+    fi
+    
+    # Use du -sk for kilobytes, then convert to bytes
+    local size_kb=$(/usr/bin/du -sk "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    
+    if [[ -z "$size_kb" ]]; then
+        echo "0"
+    else
+        echo $((size_kb * 1024))
+    fi
+}
+
+# Get storage free space in bytes (for capacity comparison)
+get_storage_free_space_bytes() {
+    local target_path="${1:-$HOME}"
+    
+    # Get free space using df (1K-blocks)
+    local free_blocks=$(/bin/df "$target_path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    
+    if [[ -z "$free_blocks" ]]; then
+        echo "0"
+    else
+        echo $((free_blocks * 1024))
     fi
 }
 
@@ -1366,7 +1399,7 @@ ensure_playcover_main_volume() {
 
 individual_volume_control() {
     clear
-    print_header "個別ボリューム操作"
+    print_header "ボリューム情報"
     
     # Read mapping file directly
     if [[ ! -f "$MAPPING_FILE" ]]; then
@@ -1392,7 +1425,7 @@ individual_volume_control() {
         return
     fi
     
-    echo "登録されているボリューム:"
+    echo "登録ボリューム"
     echo ""
     
     # Cache /usr/sbin/diskutil output once for performance
@@ -1456,8 +1489,13 @@ individual_volume_control() {
         # Display with lock status or number
         if $is_locked; then
             # Locked: show with lock icon, no number
-            echo "  🔒 ${YELLOW}アプリ起動中${NC} ${display_name}"
-            echo "      ${status_line}${extra_info}"
+            echo "  🔒${YELLOW}ロック中${NC} ${display_name} | 🏃${YELLOW}アプリ起動中${NC}"
+            echo "      ${status_line}"
+            echo ""
+        elif [[ -n "$extra_info" ]]; then
+            # Internal storage mode: show as locked
+            echo "  🔒${YELLOW}ロック中${NC} ${display_name} | 🏠${YELLOW}内蔵ストレージにデータ有${NC}"
+            echo "      ${status_line}"
             echo ""
         else
             # Not locked: add to selectable array and show with number
@@ -1465,7 +1503,7 @@ individual_volume_control() {
             selectable_indices+=("$i")
             
             echo "  ${display_index}. ${display_name}"
-            echo "      ${status_line}${extra_info}"
+            echo "      ${status_line}"
             echo ""
             ((display_index++))
         fi
@@ -2417,7 +2455,7 @@ nuclear_cleanup() {
 switch_storage_location() {
     while true; do
         clear
-        print_header "ストレージ切り替え（内蔵⇄外部）"
+        print_header "ストレージ切替（内蔵⇄外部）"
         
         local mappings_content=$(read_mappings)
         
@@ -2428,7 +2466,7 @@ switch_storage_location() {
         fi
         
         # Display volume list with storage type and /sbin/mount status
-        echo "データステータス:"
+        echo "データ位置情報"
         echo ""
         
         # Cache /usr/sbin/diskutil and /sbin/mount output for performance
@@ -2478,18 +2516,30 @@ switch_storage_location() {
                     ;;
             esac
             
+            # Get free space for display
+            local free_space=""
+            if [[ "$storage_type" == "external" ]]; then
+                free_space=$(get_external_drive_free_space "$volume_name")
+            elif [[ "$storage_type" == "internal" ]]; then
+                free_space=$(get_storage_free_space "$HOME")
+            fi
+            
             # Format with fixed spacing
             printf "  %s. %s\n" "$index" "$display_name"
-            printf "      %-20s %s\n" "$storage_icon" "$mount_status"
-            printf "      使用容量: %s\n" "$container_size"
+            printf "      位置: %-16s %s\n" "$storage_icon" "$mount_status"
+            if [[ -n "$free_space" ]]; then
+                printf "      使用容量: %s / 残容量: %s\n" "$container_size" "$free_space"
+            else
+                printf "      使用容量: %s\n" "$container_size"
+            fi
             echo ""
             ((index++))
         done <<< "$mappings_content"
         
         print_separator
         echo ""
-        echo "切り替えるアプリを選択してください:"
-        echo "  [番号] : ストレージ切り替え"
+        echo "切り替えるアプリを選択してください"
+        echo "  [番号] : データ位置切替"
         echo "  [0]    : 戻る"
         echo ""
         echo -n "選択: "
@@ -2510,7 +2560,7 @@ switch_storage_location() {
         IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
         
         echo ""
-        print_header "${display_name} のストレージ切り替え"
+        print_header "${display_name} のストレージ切替"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local backup_path="${HOME}/Library/.playcover_backup_${bundle_id}"
@@ -2521,18 +2571,21 @@ switch_storage_location() {
             current_storage=$(get_storage_type "$target_path")
         fi
         
-        # Get current size
+        # Get current size (both human-readable and bytes)
         local current_size=$(get_container_size "$target_path")
+        local current_size_bytes=$(get_container_size_bytes "$target_path")
         
-        echo "${CYAN}現在の状態:${NC}"
+        echo "${CYAN}現在のデータ位置${NC}"
         case "$current_storage" in
             "internal")
-                echo "  💾 内蔵ストレージ"
-                echo "     使用容量: ${current_size}"
+                local internal_free=$(get_storage_free_space "$HOME")
+                echo "  🏠 内部ストレージ"
+                echo "     使用容量: ${current_size} / 残容量: ${internal_free}"
                 ;;
             "external")
+                local external_free=$(get_external_drive_free_space "$volume_name")
                 echo "  🔌 外部ストレージ"
-                echo "     使用容量: ${current_size}"
+                echo "     使用容量: ${current_size} / 残容量: ${external_free}"
                 ;;
             *)
                 echo "  ❓ 不明 / データなし"
@@ -2543,7 +2596,9 @@ switch_storage_location() {
         # Determine target action and show appropriate free space
         local action=""
         local storage_free=""
+        local storage_free_bytes=0
         local storage_location=""
+        local capacity_warning=""
         
         case "$current_storage" in
             "internal")
@@ -2551,16 +2606,27 @@ switch_storage_location() {
                 # Moving to external - show external drive free space
                 storage_free=$(get_external_drive_free_space "$volume_name")
                 storage_location="外部ドライブ"
-                echo "${CYAN}実行する操作:${NC} 内蔵 → 外部ストレージへ移動"
-                echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
+                
+                # Get mount point for external drive to check capacity
+                local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+                if [[ -n "$playcover_mount" ]]; then
+                    storage_free_bytes=$(get_storage_free_space_bytes "$playcover_mount")
+                else
+                    storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
+                fi
+                
+                echo "${CYAN}実行する操作:${NC} 🏠内蔵 → 🔌外部 へ移動"
+                echo "  🔌${CYAN}外部ストレージ残容量:${NC} ${storage_free}"
                 ;;
             "external")
                 action="internal"
                 # Moving to internal - show internal drive free space
                 storage_free=$(get_storage_free_space "$HOME")
                 storage_location="内蔵ドライブ"
-                echo "${CYAN}実行する操作:${NC} 外部 → 内蔵ストレージへ移動"
-                echo "${CYAN}移行先の空き容量:${NC} ${storage_free} ${MAGENTA}(${storage_location})${NC}"
+                storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
+                
+                echo "${CYAN}実行する操作:${NC} 🔌外部 → 🏠内蔵 へ移動"
+                echo "  🏠${CYAN}内部ストレージ残容量:${NC} ${storage_free}"
                 ;;
             "none")
                 print_error "ストレージ切り替えを実行できません"
@@ -2586,8 +2652,21 @@ switch_storage_location() {
                 ;;
         esac
         
+        
+        # Check if there's enough space (with 10% safety margin)
+        local required_bytes=$((current_size_bytes + current_size_bytes / 10))
+        if [[ $storage_free_bytes -lt $required_bytes ]] && [[ $storage_free_bytes -gt 0 ]]; then
+            echo ""
+            print_error "⚠️ 警告: 移行先の容量が不足している可能性があります"
+            echo ""
+            echo "  必要容量: ${current_size} + 10% 安全余裕"
+            echo "  利用可能: ${storage_free}"
+            echo ""
+            echo "${YELLOW}続行するとデータ破損のリスクがあります${NC}"
+        fi
+        
         echo ""
-        print_warning "この操作には時間がかかる場合があります"
+        print_warning "⚠️この操作には時間がかかる場合があります"
         echo ""
         echo -n "${YELLOW}続行しますか？ (Y/n):${NC} "
         read confirm
