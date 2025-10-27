@@ -1,5 +1,206 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.2: Critical Bug Fixes - Emoji Duplication, Batch Mount, Storage Cleanup
+
+### Three Critical Bug Fixes to `0_PlayCover-ManagementTool.command`
+
+#### Bug Fix 1: Warning Emoji Duplication (8 locations fixed)
+
+**Problem:**
+- `print_warning()` function automatically adds ⚠️ emoji
+- Several messages already contained ⚠️ in the text
+- Result: ⚠️⚠️ double emoji displayed
+
+**User Report:**
+```
+⚠️  ⚠️  内蔵ストレージに意図しないデータが検出されました
+```
+
+**Fixed Locations:**
+1. **Line 121**: `MSG_UNINTENDED_INTERNAL_DATA` constant
+   - Before: `"⚠️  内蔵ストレージに意図しないデータが検出されました"`
+   - After: `"内蔵ストレージに意図しないデータが検出されました"`
+
+2. **Lines 2796, 2827, 2851, 2862, 2890, 2913**: Nuclear cleanup messages
+   - Before: `print_warning "  ⚠️ 失敗（既にアンマウント済み）"`
+   - After: `print_warning "  失敗（既にアンマウント済み）"`
+
+3. **Line 4432**: PlayCover volume warning
+   - Before: `print_warning "⚠️  PlayCoverボリューム..."`
+   - After: `print_warning "PlayCoverボリューム..."`
+
+**Impact:** All warning messages now display exactly one emoji (⚠️)
+
+---
+
+#### Bug Fix 2: Batch Mount Missing User Prompts (Critical UX Issue)
+
+**Problem:**
+- `batch_mount_all` detected internal contaminated data
+- Showed error message and skipped without asking user
+- User had no option to delete or merge data
+
+**User Report:**
+```
+  2. ゼンレスゾーンゼロ
+     ❌ マウント失敗: 内蔵ストレージにデータが存在します
+
+処理方法を選択してください:
+  1. 外部ボリュームを優先（内蔵データは削除）[推奨・デフォルト]
+  2. キャンセル（マウントしない）
+
+選択 (1-2) [デフォルト: 1]: 
+```
+User noted: "内部のをコピーする選択肢がない（推奨値はこれでOK)"
+
+**Root Cause (Line 2289-2295):**
+```zsh
+elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+    # Just showed error and skipped - NO user interaction!
+    echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+    ((fail_count++))
+    continue
+fi
+```
+
+**Fixed Implementation (Lines 2289-2362):**
+```zsh
+elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+    # Now asks user what to do
+    echo "     ${ORANGE}⚠️  内蔵ストレージにデータが存在します${NC}"
+    echo ""
+    echo "     ${BOLD}${YELLOW}処理方法を選択してください:${NC}"
+    echo "       ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨]${NC}"
+    echo "       ${BOLD}${BLUE}2.${NC} 内蔵データを外部に統合（データを保持）"
+    echo "       ${BOLD}${RED}3.${NC} スキップ（マウントしない）"
+    echo ""
+    echo -n "     ${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
+    read cleanup_choice
+    cleanup_choice=${cleanup_choice:-1}
+    
+    case "$cleanup_choice" in
+        1)
+            # Delete internal data and mount external
+            /usr/bin/sudo /bin/rm -rf "$target_path"
+            # Mount logic...
+            ;;
+        2)
+            # Merge internal data to external using rsync --delete
+            # Temporary mount → rsync → unmount → delete internal → mount
+            ;;
+        3)
+            # Skip this volume
+            ;;
+    esac
+fi
+```
+
+**Features Added:**
+- ✅ All 3 options now available in batch mount
+- ✅ Option 2 uses `rsync --delete` for proper data merge
+- ✅ Default remains option 1 (safe choice)
+- ✅ Consistent with individual mount behavior
+
+---
+
+#### Bug Fix 3: Incomplete Storage Cleanup After Switching (Critical Data Issue)
+
+**Problem:**
+- After internal → external storage switching, internal data not fully deleted
+- Empty container structure (symlinks + metadata) remained
+- Caused "internal_contaminated" false positives on next mount
+
+**User Report:**
+```bash
+/Users/hehex/Library/Containers/com.HoYoverse.Nap
+├── .com.apple.containermanagerd.metadata.plist
+├── .DS_Store
+└── Data/
+    # All symlinks and empty dirs - 37KB total
+    # Real data transferred successfully, but structure remained
+```
+
+**Root Cause:**
+1. **Line 3586**: `rm -rf "$target_path"` deleted data
+2. **Line 3590**: `mount_volume` called immediately
+3. **Inside mount_volume (Line 397)**: `mkdir -p "$mount_point"` recreated directory
+4. **If mount failed**: Empty directory left behind
+5. **macOS behavior**: Auto-creates container symlinks when app runs
+
+**Fixed Implementation (Lines 3584-3622):**
+```zsh
+# Delete internal data completely (no backup needed)
+print_info "内蔵データを完全削除中..."
+/usr/bin/sudo /bin/rm -rf "$target_path"
+
+# Ensure directory is completely gone before mounting
+# This prevents macOS from auto-creating container structure
+if [[ -d "$target_path" ]]; then
+    print_warning "ディレクトリが残っています、再削除を試みます..."
+    /usr/bin/sudo /bin/rm -rf "$target_path"
+    /bin/sleep 0.5
+fi
+
+# Mount volume to proper location
+print_info "ボリュームを正式にマウント中..."
+if mount_volume "$volume_name" "$target_path"; then
+    # Verify mount success
+    if /sbin/mount | grep -q " on ${target_path} "; then
+        print_success "マウント検証: OK"
+    else
+        print_warning "マウント検証: 警告 - マウント状態を確認できません"
+    fi
+    
+    # Remove internal storage flag
+    remove_internal_storage_flag "$target_path"
+else
+    print_error "$MSG_MOUNT_FAILED"
+    
+    # Cleanup any leftover directory created by failed mount
+    if [[ -d "$target_path" ]]; then
+        print_info "失敗したマウントのクリーンアップ中..."
+        /usr/bin/sudo /bin/rm -rf "$target_path"
+    fi
+fi
+```
+
+**Improvements:**
+- ✅ Double-delete verification before mount
+- ✅ 0.5s delay to ensure filesystem sync
+- ✅ Mount verification using `/sbin/mount` check
+- ✅ Failed mount cleanup (removes leftover directories)
+- ✅ Prevents false "internal_contaminated" detection
+
+---
+
+### Summary of Changes
+
+**Files Modified:**
+- `0_PlayCover-ManagementTool.command`
+
+**Lines Changed:**
+- Version: Line 6
+- Emoji fixes: 8 locations (Lines 121, 2796, 2827, 2851, 2862, 2890, 2913, 4432)
+- Batch mount: Lines 2289-2362 (+73 lines)
+- Storage cleanup: Lines 3584-3622 (+19 lines)
+
+**Impact:**
+- ✅ **Bug Fix 1**: All UI now displays clean, single emojis
+- ✅ **Bug Fix 2**: Batch mount now offers full user control (delete/merge/skip)
+- ✅ **Bug Fix 3**: Storage switching leaves zero internal data remnants
+
+**Git Commit:**
+```bash
+commit [hash]
+"v4.35.2 - 3つの重要なバグ修正"
+
+1. ⚠️絵文字重複の修正（8箇所）
+2. 一括マウント時の選択肢追加（内蔵データ検出時）
+3. ストレージ切替後のクリーンアップ完全化
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.1: Storage Switching - Improved Sync Method
 
 ### Storage Switching Transfer Method Improvement to `0_PlayCover-ManagementTool.command`

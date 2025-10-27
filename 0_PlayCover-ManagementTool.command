@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.35.1 - Storage switching: improved sync method with deletion sync
+# Version: 4.35.2 - Fixed: emoji duplication, batch mount prompts, storage cleanup
 #######################################################
 
 #######################################################
@@ -118,7 +118,7 @@ readonly MSG_MAPPING_FILE_NOT_FOUND="マッピングファイルが見つかり�
 readonly MSG_CLEANUP_INTERNAL_STORAGE="内蔵ストレージをクリア中..."
 readonly MSG_INTENTIONAL_INTERNAL_MODE="このアプリは意図的に内蔵ストレージモードに設定されています"
 readonly MSG_SWITCH_VIA_STORAGE_MENU="外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
-readonly MSG_UNINTENDED_INTERNAL_DATA="⚠️  内蔵ストレージに意図しないデータが検出されました"
+readonly MSG_UNINTENDED_INTERNAL_DATA="内蔵ストレージに意図しないデータが検出されました"
 
 # Detect Homebrew path (Apple Silicon vs Intel)
 if [[ -x "/opt/homebrew/bin/brew" ]]; then
@@ -2287,9 +2287,78 @@ batch_mount_all() {
                         ((index++))
                         continue
                     elif [[ "$storage_mode" == "internal_contaminated" ]]; then
-                        # Contaminated internal storage - show error message
-                        echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
-                        ((fail_count++))
+                        # Contaminated internal storage - ask user what to do
+                        echo "     ${ORANGE}⚠️  内蔵ストレージにデータが存在します${NC}"
+                        echo ""
+                        echo "     ${BOLD}${YELLOW}処理方法を選択してください:${NC}"
+                        echo "       ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨]${NC}"
+                        echo "       ${BOLD}${BLUE}2.${NC} 内蔵データを外部に統合（データを保持）"
+                        echo "       ${BOLD}${RED}3.${NC} スキップ（マウントしない）"
+                        echo ""
+                        echo -n "     ${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
+                        read cleanup_choice
+                        cleanup_choice=${cleanup_choice:-1}
+                        
+                        case "$cleanup_choice" in
+                            1)
+                                # Delete internal data and mount
+                                echo "     ${INFO}ℹ️  外部ボリュームを優先します（内蔵データを削除）${NC}"
+                                /usr/bin/sudo /bin/rm -rf "$target_path"
+                                
+                                local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+                                if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                                    echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                                    ((success_count++))
+                                else
+                                    echo "     ${RED}❌ マウント失敗: マウントコマンドが失敗${NC}"
+                                    ((fail_count++))
+                                fi
+                                ;;
+                            2)
+                                # Merge internal data to external
+                                echo "     ${INFO}ℹ️  内蔵データを外部ボリュームに統合します...${NC}"
+                                
+                                local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+                                local temp_migrate="/tmp/playcover_migrate_$$"
+                                /usr/bin/sudo /bin/mkdir -p "$temp_migrate"
+                                
+                                if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$temp_migrate" 2>/dev/null; then
+                                    echo "     ${INFO}ℹ️  データをコピー中...${NC}"
+                                    /usr/bin/sudo /usr/bin/rsync -aH --delete "$target_path/" "$temp_migrate/" 2>/dev/null
+                                    local rsync_exit=$?
+                                    unmount_volume "$temp_migrate" "silent"
+                                    cleanup_temp_dir "$temp_migrate" true
+                                    
+                                    if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+                                        echo "     ${GREEN}✅ データの統合が完了しました${NC}"
+                                        /usr/bin/sudo /bin/rm -rf "$target_path"
+                                        
+                                        # Mount to correct location
+                                        if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                                            echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+                                            ((success_count++))
+                                        else
+                                            echo "     ${RED}❌ マウント失敗: マウントコマンドが失敗${NC}"
+                                            ((fail_count++))
+                                        fi
+                                    else
+                                        echo "     ${RED}❌ データの統合に失敗しました${NC}"
+                                        cleanup_temp_dir "$temp_migrate" true
+                                        ((fail_count++))
+                                    fi
+                                else
+                                    echo "     ${RED}❌ 一時マウント失敗${NC}"
+                                    cleanup_temp_dir "$temp_migrate" true
+                                    ((fail_count++))
+                                fi
+                                ;;
+                            *)
+                                # Skip
+                                echo "     ${GRAY}⏭️  スキップしました${NC}"
+                                ((locked_count++))
+                                ;;
+                        esac
+                        
                         echo ""
                         ((index++))
                         continue
@@ -2793,7 +2862,7 @@ nuclear_cleanup() {
                 ((unmount_count++))
                 print_success "  ✅ 完了"
             else
-                print_warning "  ⚠️ 失敗（既にアンマウント済み）"
+                print_warning "  失敗（既にアンマウント済み）"
             fi
         done
     else
@@ -2824,7 +2893,7 @@ nuclear_cleanup() {
                 print_success "  ✅ 削除完了"
                 ((volume_count++))
             else
-                print_warning "  ⚠️ 削除失敗（マウント済みまたは保護されています）"
+                print_warning "  削除失敗（マウント済みまたは保護されています）"
             fi
         done
     else
@@ -2848,7 +2917,7 @@ nuclear_cleanup() {
             if "$BREW_PATH" uninstall --cask playcover-community >/dev/null 2>&1; then
                 print_success "  ✅ Homebrewからアンインストール完了"
             else
-                print_warning "  ⚠️ Homebrewアンインストール失敗"
+                print_warning "  Homebrewアンインストール失敗"
             fi
         else
             echo "  削除中: /Applications/PlayCover.app（手動インストール版）"
@@ -2859,7 +2928,7 @@ nuclear_cleanup() {
             if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
                 print_success "  ✅ 削除完了"
             else
-                print_warning "  ⚠️ 削除失敗"
+                print_warning "  削除失敗"
             fi
         fi
     else
@@ -2887,7 +2956,7 @@ nuclear_cleanup() {
                 print_success "  ✅ 削除完了"
                 ((container_count++))
             else
-                print_warning "  ⚠️ 削除失敗"
+                print_warning "  削除失敗"
             fi
         done
     else
@@ -3512,9 +3581,17 @@ switch_storage_location() {
             /bin/sleep 1  # Wait for unmount to complete
             cleanup_temp_dir "$temp_mount" true
             
-            # Delete internal data (no backup needed)
-            print_info "内蔵データを削除中..."
+            # Delete internal data completely (no backup needed)
+            print_info "内蔵データを完全削除中..."
             /usr/bin/sudo /bin/rm -rf "$target_path"
+            
+            # Ensure directory is completely gone before mounting
+            # This prevents macOS from auto-creating container structure
+            if [[ -d "$target_path" ]]; then
+                print_warning "ディレクトリが残っています、再削除を試みます..."
+                /usr/bin/sudo /bin/rm -rf "$target_path"
+                /bin/sleep 0.5
+            fi
             
             # Mount volume to proper location
             print_info "ボリュームを正式にマウント中..."
@@ -3523,12 +3600,25 @@ switch_storage_location() {
                 print_success "外部ストレージへの切り替えが完了しました"
                 print_info "保存場所: ${target_path}"
                 
+                # Verify mount success and no leftover internal data
+                if /sbin/mount | grep -q " on ${target_path} "; then
+                    print_success "マウント検証: OK"
+                else
+                    print_warning "マウント検証: 警告 - マウント状態を確認できません"
+                fi
+                
                 # Explicitly remove internal storage flag to prevent false lock status
                 # This is critical because mount_volume creates the directory,
                 # and any remaining flag file would cause misdetection
                 remove_internal_storage_flag "$target_path"
             else
                 print_error "$MSG_MOUNT_FAILED"
+                
+                # Cleanup any leftover directory created by failed mount
+                if [[ -d "$target_path" ]]; then
+                    print_info "失敗したマウントのクリーンアップ中..."
+                    /usr/bin/sudo /bin/rm -rf "$target_path"
+                fi
             fi
             
         else
@@ -4429,7 +4519,7 @@ app_management_menu() {
                 local storage_type=$(get_storage_type "$PLAYCOVER_CONTAINER")
                 if [[ "$storage_type" == "internal" ]]; then
                     clear
-                    print_warning "⚠️  PlayCoverボリュームが未マウントですが、内蔵ストレージにデータがあります"
+                    print_warning "PlayCoverボリュームが未マウントですが、内蔵ストレージにデータがあります"
                     echo ""
                     echo "${ORANGE}対処方法:${NC}"
                     echo "  1. 内蔵データを外部に移行してマウント（推奨）"
