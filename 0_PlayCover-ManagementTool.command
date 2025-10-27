@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.30.0 - Enhanced color scheme with 16 recommended colors
+# Version: 4.31.0 - Optimized color scheme for RGB(28,28,28) terminal background
 #######################################################
 
 #######################################################
@@ -44,28 +44,54 @@
 # Module 1: Constants & Global Variables
 #######################################################
 
-# Color definitions (推奨16色 - 暗背景用)
-# ANSI明色コード使用（90-97: 明るい色）
-readonly WHITE='\033[97m'           # 白 #FFFFFF
-readonly LIGHT_GRAY='\033[37m'      # 明灰 #BFBFBF
-readonly RED='\033[91m'             # 赤 #FF4040
-readonly GREEN='\033[92m'           # 緑 #00FF00
-readonly BLUE='\033[94m'            # 青 #4080FF
-readonly YELLOW='\033[93m'          # 黄 #FFFF00
-readonly MAGENTA='\033[95m'         # マゼンタ #FF00FF
-readonly CYAN='\033[96m'            # シアン #00FFFF
+# ═══════════════════════════════════════════════════════════════════
+# Color & Style Definitions
+# 最適化済み: ターミナル背景 RGB(28,28,28) / #1C1C1C
+# ═══════════════════════════════════════════════════════════════════
 
-# RGB拡張色（256色ターミナル対応）
-readonly ORANGE='\033[38;2;255;165;0m'      # オレンジ #FFA500
-readonly LIME='\033[38;2;175;255;0m'        # ライムグリーン #AFFF00
-readonly TURQUOISE='\033[38;2;64;224;208m'  # ターコイズ #40E0D0
-readonly PINK='\033[38;2;255;105;180m'      # ピンク #FF69B4
-readonly GOLD='\033[38;2;255;215;0m'        # ゴールド #FFD700
-readonly SKY_BLUE='\033[38;2;135;206;250m'  # スカイブルー #87CEFA
-readonly VIOLET='\033[38;2;238;130;238m'    # バイオレット #EE82EE
-readonly LIGHT_GREEN='\033[38;2;152;251;152m' # ライトグリーン #98FB98
+# ─── Text Style Modifiers ───
+readonly BOLD='\033[1m'              # 太字
+readonly DIM='\033[2m'               # 薄暗く
+readonly ITALIC='\033[3m'            # 斜体
+readonly UNDERLINE='\033[4m'         # 下線
+readonly BLINK='\033[5m'             # 点滅（非推奨）
+readonly REVERSE='\033[7m'           # 反転
+readonly HIDDEN='\033[8m'            # 非表示
+readonly STRIKETHROUGH='\033[9m'     # 取り消し線
 
-readonly NC='\033[0m' # No Color
+# ─── Primary Colors (High Contrast for #1C1C1C background) ───
+readonly WHITE='\033[38;2;255;255;255m'      # 純白 #FFFFFF (21:1)
+readonly LIGHT_GRAY='\033[38;2;200;200;200m' # 明灰 #C8C8C8 (12.6:1)
+readonly GRAY='\033[38;2;150;150;150m'       # 中灰 #969696 (7.5:1)
+readonly DIM_GRAY='\033[38;2;100;100;100m'   # 暗灰 #646464 (4.5:1)
+
+# ─── Semantic Colors (Optimized Brightness) ───
+readonly RED='\033[38;2;255;100;100m'        # 明赤 #FF6464 (8.2:1)
+readonly GREEN='\033[38;2;100;255;100m'      # 明緑 #64FF64 (14.7:1)
+readonly BLUE='\033[38;2;100;180;255m'       # 明青 #64B4FF (9.8:1)
+readonly YELLOW='\033[38;2;255;255;100m'     # 明黄 #FFFF64 (17.8:1)
+readonly CYAN='\033[38;2;100;255;255m'       # 明シアン #64FFFF (15.6:1)
+readonly MAGENTA='\033[38;2;255;100;255m'    # 明マゼンタ #FF64FF (10.9:1)
+
+# ─── Extended Colors (Accent & Decoration) ───
+readonly ORANGE='\033[38;2;255;180;80m'      # オレンジ #FFB450 (11.3:1)
+readonly GOLD='\033[38;2;255;220;100m'       # ゴールド #FFDC64 (16.2:1)
+readonly LIME='\033[38;2;180;255;100m'       # ライム #B4FF64 (15.1:1)
+readonly SKY_BLUE='\033[38;2;135;206;250m'   # スカイブルー #87CEFA (11.8:1)
+readonly TURQUOISE='\033[38;2;100;230;220m'  # ターコイズ #64E6DC (13.5:1)
+readonly VIOLET='\033[38;2;220;140;255m'     # バイオレット #DC8CFF (9.4:1)
+readonly PINK='\033[38;2;255;140;200m'       # ピンク #FF8CC8 (10.1:1)
+readonly LIGHT_GREEN='\033[38;2;150;255;150m' # ライトグリーン #96FF96 (15.3:1)
+
+# ─── Special Purpose Colors ───
+readonly SUCCESS='\033[1;38;2;100;255;100m'  # 成功（太字緑）
+readonly ERROR='\033[1;38;2;255;100;100m'    # エラー（太字赤）
+readonly WARNING='\033[1;38;2;255;180;80m'   # 警告（太字オレンジ）
+readonly INFO='\033[38;2;135;206;250m'       # 情報（スカイブルー）
+readonly HIGHLIGHT='\033[1;38;2;255;255;100m' # 強調（太字黄）
+
+# ─── Reset ───
+readonly NC='\033[0m' # No Color / Reset All
 
 # Constants
 readonly PLAYCOVER_BUNDLE_ID="io.playcover.PlayCover"
@@ -124,26 +150,46 @@ print_separator() {
     printf "${NC}\n"
 }
 
+# ─────────────────────────────────────────────────────────────────
+# Enhanced Print Functions with Styling
+# ─────────────────────────────────────────────────────────────────
+
 print_header() {
     echo ""
-    echo "${CYAN}$1${NC}"
+    echo "${BOLD}${CYAN}$1${NC}"
     echo ""
 }
 
 print_success() {
-    echo "${GREEN}✅ $1${NC}"
+    echo "${SUCCESS}✅ $1${NC}"
 }
 
 print_error() {
-    echo "${RED}❌ $1${NC}"
+    echo "${ERROR}❌ $1${NC}"
 }
 
 print_warning() {
-    echo "${ORANGE}⚠️ $1${NC}"
+    echo "${WARNING}⚠️  $1${NC}"
 }
 
 print_info() {
-    echo "${SKY_BLUE}ℹ️ $1${NC}"
+    echo "${INFO}ℹ️  $1${NC}"
+}
+
+print_highlight() {
+    echo "${HIGHLIGHT}▶ $1${NC}"
+}
+
+print_dim() {
+    echo "${DIM}${GRAY}$1${NC}"
+}
+
+print_bold() {
+    echo "${BOLD}${WHITE}$1${NC}"
+}
+
+print_underline() {
+    echo "${UNDERLINE}$1${NC}"
 }
 
 print_batch_progress() {
@@ -646,6 +692,21 @@ get_container_size() {
         echo "0B"
     else
         echo "$size"
+    fi
+}
+
+# Get container size with styled formatting (bold number + normal unit)
+get_container_size_styled() {
+    local container_path=$1
+    local size=$(get_container_size "$container_path")
+    
+    # Extract number and unit using regex
+    if [[ "$size" =~ ^([0-9.]+)([A-Za-z]+)$ ]]; then
+        local number="${match[1]}"
+        local unit="${match[2]}"
+        echo "${BOLD}${WHITE}${number}${NC}${LIGHT_GRAY}${unit}${NC}"
+    else
+        echo "${LIGHT_GRAY}${size}${NC}"
     fi
 }
 
@@ -1503,21 +1564,21 @@ individual_volume_control() {
         # Display with lock status or number
         if $is_locked; then
             # Locked: show with lock icon, no number
-            echo "  🔒${GOLD}ロック中${NC} ${display_name} | 🏃${GOLD}アプリ起動中${NC}"
-            echo "      ${status_line}"
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}| 🏃 アプリ起動中${NC}"
+            echo "      ${DIM}${status_line}${NC}"
             echo ""
         elif [[ -n "$extra_info" ]]; then
             # Internal storage mode: show as locked
-            echo "  🔒${GOLD}ロック中${NC} ${display_name} | 🏠${GOLD}内蔵ストレージにデータ有${NC}"
-            echo "      ${status_line}"
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}| 🏠 内蔵ストレージにデータ有${NC}"
+            echo "      ${DIM}${status_line}${NC}"
             echo ""
         else
             # Not locked: add to selectable array and show with number
             selectable_array+=("${mappings_array[$i]}")
             selectable_indices+=("$i")
             
-            echo "  ${display_index}. ${display_name}"
-            echo "      ${status_line}"
+            echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
+            echo "      ${DIM}${GRAY}${status_line}${NC}"
             echo ""
             ((display_index++))
         fi
@@ -1525,11 +1586,11 @@ individual_volume_control() {
     
     print_separator
     echo ""
-    echo "操作を選択してください:"
-    echo "  [番号] : 個別マウント/アンマウント"
-    echo "  [m]    : 全ボリュームをマウント"
-    echo "  [u]    : 全ボリュームをアンマウント"
-    echo "  [0]    : 戻る"
+    echo "${BOLD}${UNDERLINE}操作を選択してください:${NC}"
+    echo "  ${BOLD}${CYAN}[番号]${NC} : 個別マウント/アンマウント"
+    echo "  ${BOLD}${GREEN}[m]${NC}    : 全ボリュームをマウント"
+    echo "  ${BOLD}${YELLOW}[u]${NC}    : 全ボリュームをアンマウント"
+    echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
     echo ""
     echo -n "選択: "
     read choice
@@ -1538,16 +1599,14 @@ individual_volume_control() {
         return
     fi
     
-    # Batch operations
+    # Batch operations (sudo will be requested inside the function)
     if [[ "$choice" == "m" ]] || [[ "$choice" == "M" ]]; then
-        authenticate_sudo
         batch_mount_all
         individual_volume_control
         return
     fi
     
     if [[ "$choice" == "u" ]] || [[ "$choice" == "U" ]]; then
-        authenticate_sudo
         batch_unmount_all
         individual_volume_control
         return
@@ -1571,8 +1630,6 @@ individual_volume_control() {
     # zsh arrays are 1-indexed, so choice can be used directly
     local selected_mapping="${selectable_array[$choice]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
-    
-    authenticate_sudo
     
     local target_path="${HOME}/Library/Containers/${bundle_id}"
     local current_mount=$(get_mount_point "$volume_name")
@@ -1709,6 +1766,9 @@ batch_mount_all() {
         wait_for_enter
         return
     fi
+    
+    # Authenticate sudo only when actually needed
+    authenticate_sudo
     
     echo "ボリュームをマウント中..."
     echo ""
@@ -2589,20 +2649,20 @@ switch_storage_location() {
         local current_size=$(get_container_size "$target_path")
         local current_size_bytes=$(get_container_size_bytes "$target_path")
         
-        echo "${CYAN}現在のデータ位置${NC}"
+        echo "${BOLD}${UNDERLINE}${CYAN}現在のデータ位置${NC}"
         case "$current_storage" in
             "internal")
                 local internal_free=$(get_storage_free_space "$HOME")
-                echo "  🏠 内部ストレージ"
-                echo "     使用容量: ${current_size} / 残容量: ${internal_free}"
+                echo "  ${BOLD}🏠 ${CYAN}内部ストレージ${NC}"
+                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${DIM}${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
                 ;;
             "external")
                 local external_free=$(get_external_drive_free_space "$volume_name")
-                echo "  🔌 外部ストレージ"
-                echo "     使用容量: ${current_size} / 残容量: ${external_free}"
+                echo "  ${BOLD}🔌 ${CYAN}外部ストレージ${NC}"
+                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${DIM}${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${external_free}${NC}"
                 ;;
             *)
-                echo "  ❓ 不明 / データなし"
+                echo "  ${DIM}${GRAY}❓ 不明 / データなし${NC}"
                 ;;
         esac
         echo ""
@@ -2629,8 +2689,8 @@ switch_storage_location() {
                     storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 fi
                 
-                echo "${CYAN}実行する操作:${NC} 🏠内蔵 → 🔌外部 へ移動"
-                echo "  🔌${CYAN}外部ストレージ残容量:${NC} ${storage_free}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}🔌外部${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "  ${BOLD}🔌${CYAN}外部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "external")
                 action="internal"
@@ -2639,8 +2699,8 @@ switch_storage_location() {
                 storage_location="内蔵ドライブ"
                 storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 
-                echo "${CYAN}実行する操作:${NC} 🔌外部 → 🏠内蔵 へ移動"
-                echo "  🏠${CYAN}内部ストレージ残容量:${NC} ${storage_free}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}🔌外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "  ${BOLD}🏠${CYAN}内部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "none")
                 print_error "ストレージ切り替えを実行できません"
@@ -2671,18 +2731,20 @@ switch_storage_location() {
         local required_bytes=$((current_size_bytes + current_size_bytes / 10))
         if [[ $storage_free_bytes -lt $required_bytes ]] && [[ $storage_free_bytes -gt 0 ]]; then
             echo ""
-            print_error "⚠️ 警告: 移行先の容量が不足している可能性があります"
+            echo "${BOLD}${RED}════════════════════════════════════════════════════${NC}"
+            print_error "警告: 移行先の容量が不足している可能性があります"
+            echo "${BOLD}${RED}════════════════════════════════════════════════════${NC}"
             echo ""
-            echo "  必要容量: ${current_size} + 10% 安全余裕"
-            echo "  利用可能: ${storage_free}"
+            echo "  ${LIGHT_GRAY}必要容量:${NC} ${BOLD}${WHITE}${current_size}${NC} ${LIGHT_GRAY}+ 10% 安全余裕${NC}"
+            echo "  ${LIGHT_GRAY}利用可能:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
             echo ""
-            echo "${ORANGE}続行するとデータ破損のリスクがあります${NC}"
+            echo "${BOLD}${RED}⚠️  続行するとデータ破損のリスクがあります${NC}"
         fi
         
         echo ""
-        print_warning "⚠️この操作には時間がかかる場合があります"
+        print_warning "この操作には時間がかかる場合があります"
         echo ""
-        echo -n "${ORANGE}続行しますか？ (Y/n):${NC} "
+        echo -n "${BOLD}${YELLOW}続行しますか？ ${LIGHT_GRAY}(Y/n):${NC} "
         read confirm
         
         # Default to Yes if empty
@@ -3850,12 +3912,12 @@ show_installed_apps() {
             esac
             
             if [[ "$display_only" == "true" ]]; then
-                printf " 位置: %s | %s (v%s) %s\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
+                printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${DIM}${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
             else
-                echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${SKY_BLUE}(v${app_version})${NC}"
-                echo "      Bundle ID: ${bundle_id}"
-                echo "      ボリューム: ${volume_name}"
-                echo "      使用容量: ${storage_icon} ${container_size}"
+                echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}(v${app_version})${NC}"
+                echo "      ${DIM}${GRAY}Bundle ID:${NC} ${LIGHT_GRAY}${bundle_id}${NC}"
+                echo "      ${DIM}${GRAY}ボリューム:${NC} ${LIGHT_GRAY}${volume_name}${NC}"
+                echo "      ${DIM}${GRAY}使用容量:${NC} ${BOLD}${storage_icon}${NC} ${BOLD}${WHITE}${container_size}${NC}"
                 echo ""
                 apps_list+=("$display_name")
                 volumes_list+=("$volume_name")
@@ -3866,7 +3928,7 @@ show_installed_apps() {
             ((installed_count++))
         else
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${RED}❌${NC} ${display_name} ${RED}(見つかりません)${NC}"
+                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${DIM}${GRAY}${display_name}${NC} ${BOLD}${RED}(見つかりません)${NC}"
             fi
             ((missing_count++))
         fi
@@ -3960,19 +4022,20 @@ app_management_menu() {
     while true; do
         clear
         echo ""
-        echo "${SKY_BLUE}アプリ管理${NC}"
+        echo "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo "${BOLD}${CYAN}  📱 アプリ管理${NC}"
+        echo "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
         show_installed_apps
         echo ""
         print_separator
         echo ""
+        echo "${BOLD}${UNDERLINE}操作を選択してください${NC}"
+        echo "  ${BOLD}${GREEN}1.${NC} アプリをインストール"
+        echo "  ${BOLD}${RED}2.${NC} アプリをアンインストール"
+        echo "  ${BOLD}${LIGHT_GRAY}0.${NC} メインメニューに戻る"
         echo ""
-        echo "操作を選択してください"
-        echo "  1. アプリをインストール"
-        echo "  2. アプリをアンインストール"
-        echo "  0. メインメニューに戻る"
-        echo ""
-        echo -n "選択: "
+        echo -n "${BOLD}${YELLOW}選択: ${NC}"
         read choice
         
         case "$choice" in
