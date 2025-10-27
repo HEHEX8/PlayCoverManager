@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.9 - Fixed empty volume wrong mount location handling
+# Version: 4.33.10 - Fixed empty volume lifecycle management (flag-only detection)
 #######################################################
 
 #######################################################
@@ -849,16 +849,16 @@ get_storage_type() {
     
     # If it's a directory but not a /sbin/mount point, check if it has content
     if [[ -d "$container_path" ]]; then
-        # Ignore macOS metadata files when checking for content
+        # Ignore macOS metadata files AND internal storage flag when checking for content
         # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
-        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
         [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
         if [[ -z "$content_check" ]]; then
-            # Directory exists but is empty (or only has metadata) = no actual data
-            # This is just an empty /sbin/mount point directory left after unmount
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata (none)" >&2
+            # Directory exists but is empty (or only has metadata/flag) = no actual data
+            # This is just an empty /sbin/mount point directory left after unmount, or only flag file
+            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata/flag (none)" >&2
             echo "none"
             return
         else
@@ -973,7 +973,13 @@ get_storage_mode() {
             echo "external"
             ;;
         "internal")
-            if has_internal_storage_flag "$container_path"; then
+            # Check if has actual data or just flag file
+            local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+            
+            if [[ -z "$content_check" ]]; then
+                # Only flag file exists, treat as none
+                echo "none"
+            elif has_internal_storage_flag "$container_path"; then
                 echo "internal_intentional"  # Intentionally switched to internal
             else
                 echo "internal_contaminated"  # Unintended contamination
@@ -3051,13 +3057,13 @@ switch_storage_location() {
                 print_info "コンテナ構造を検証中..."
                 
                 # Check if only flag file exists (no actual data)
-                local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+                local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
                 
                 if [[ -z "$content_check" ]]; then
                     # Only flag file exists, no actual data
                     # This happens when switching empty volume: external → internal → external
-                    print_info "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
-                    print_info "フラグファイルを削除して外部ボリュームをマウントします"
+                    print_info "空のボリューム検出: 実データなし（フラグファイルのみ）"
+                    print_info "内蔵ストレージをクリーンアップして外部ボリュームをマウントします"
                     echo ""
                     
                     # Check if external volume is mounted at wrong location

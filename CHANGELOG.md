@@ -1,5 +1,207 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.10: Fixed Empty Volume Lifecycle Management (Flag-Only Detection)
+
+### Critical Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Empty Volume with Flag-Only State Causes Multiple Problems
+
+**User Reported Issues (All with Empty Volumes):**
+1. ✅ External mount works (no flag) → OK
+2. ✅ External→Internal switch (creates flag) → OK
+3. ❌ Internal state shows as "locked" when trying to mount → NG
+4. ✅ External→Internal switch again → OK  
+5. ❌ Internal→External switch shows error → NG
+
+**Root Cause:**
+Flag file (`.playcover_internal_storage_flag`) was NOT excluded from content detection, causing:
+- Empty volume with only flag file detected as "internal" instead of "none"
+- UI shows "locked" status when it should allow mounting
+- Storage mode switching fails with "no data" error
+
+#### Root Cause Analysis (Multiple Functions)
+
+**Problem 1: `get_storage_type()` Not Excluding Flag File (Line 854)**
+
+```zsh
+# BEFORE (v4.33.9)
+local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -x -F '.Spotlight-V100' | \
+    /usr/bin/grep -v -x -F '.Trashes' | \
+    /usr/bin/grep -v -x -F '.fseventsd' | \
+    /usr/bin/grep -v -x -F '.TemporaryItems' | \
+    /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
+# ❌ Flag file NOT excluded!
+
+if [[ -z "$content_check" ]]; then
+    echo "none"  # ← Never reached when flag exists
+```
+
+**Why This Fails:**
+- Flag file detected as "content" → Returns "internal"
+- Should return "none" when only flag exists
+- Causes all downstream logic to misidentify empty volumes
+
+**Problem 2: `get_storage_mode()` Not Checking Flag-Only State (Line 968-989)**
+
+```zsh
+# BEFORE (v4.33.9)
+case "$storage_type" in
+    "internal")
+        if has_internal_storage_flag "$container_path"; then
+            echo "internal_intentional"  # ← Returned even for flag-only
+        else
+            echo "internal_contaminated"
+        fi
+        ;;
+```
+
+**Why This Fails:**
+- Doesn't distinguish between "flag-only" and "actual internal data"
+- Flag-only should be treated as "none" for mounting purposes
+- UI shows "locked" (internal_intentional) when it should allow mounting
+
+**Problem 3: Content Check in Internal→External Switch (Line 3054)**
+
+```zsh
+# BEFORE (v4.33.9)
+local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+# ❌ Missing .com.apple.containermanagerd.metadata.plist exclusion!
+
+if [[ -z "$content_check" ]]; then
+    # Only flag file exists
+```
+
+**Why This Fails:**
+- `.com.apple.containermanagerd.metadata.plist` counted as "content"
+- Never reaches flag-only detection
+- Falls through to "no data" error at line 3115
+
+#### Solution (3 Functions Fixed)
+
+**Fix 1: Exclude Flag from `get_storage_type()` (Line 854)**
+
+```zsh
+# AFTER (v4.33.10) - Added flag exclusion
+local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -x -F '.Spotlight-V100' | \
+    /usr/bin/grep -v -x -F '.Trashes' | \
+    /usr/bin/grep -v -x -F '.fseventsd' | \
+    /usr/bin/grep -v -x -F '.TemporaryItems' | \
+    /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \
+    /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")  # ← Added!
+
+if [[ -z "$content_check" ]]; then
+    # Directory is empty or only has metadata/flag (none)
+    echo "none"
+    return
+```
+
+**Fix 2: Flag-Only Detection in `get_storage_mode()` (Line 968-989)**
+
+```zsh
+# AFTER (v4.33.10) - Check for flag-only state
+case "$storage_type" in
+    "internal")
+        # Check if has actual data or just flag file
+        local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | \
+            /usr/bin/grep -v -x -F '.DS_Store' | \
+            /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \
+            /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+        
+        if [[ -z "$content_check" ]]; then
+            # Only flag file exists, treat as none
+            echo "none"  # ← Returns "none" for flag-only
+        elif has_internal_storage_flag "$container_path"; then
+            echo "internal_intentional"
+        else
+            echo "internal_contaminated"
+        fi
+        ;;
+```
+
+**Fix 3: Complete Metadata Exclusion in Switch Logic (Line 3054)**
+
+```zsh
+# AFTER (v4.33.10) - Added metadata exclusion
+local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | \
+    /usr/bin/grep -v -x -F '.DS_Store' | \
+    /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \  # ← Added!
+    /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+
+if [[ -z "$content_check" ]]; then
+    # Only flag file exists, no actual data
+    print_info "空のボリューム検出: 実データなし（フラグファイルのみ）"
+```
+
+#### Changes Made
+
+1. **get_storage_type() Enhancement (Line 854)**
+   - Added `${INTERNAL_STORAGE_FLAG}` to exclusion list
+   - Flag-only directories now correctly return "none"
+   - Prevents misidentification of empty volumes as "internal"
+
+2. **get_storage_mode() Flag-Only Detection (Line 975-983)**
+   - Added content check within "internal" case
+   - Returns "none" when only flag exists (no actual data)
+   - Prevents "locked" status for empty volumes
+
+3. **Internal→External Switch Metadata Exclusion (Line 3054)**
+   - Added `.com.apple.containermanagerd.metadata.plist` exclusion
+   - Ensures flag-only detection works correctly
+   - Improved message: "空のボリューム検出" instead of "フラグファイルのみ"
+
+#### Test Scenario (Empty Volume Lifecycle)
+
+**Before v4.33.10:**
+```
+1. Empty volume mounted at /Volumes/GenshinImpact
+   ls -a: .  ..  .fseventsd  .Spotlight-V100  .com.apple.containermanagerd.metadata.plist
+   
+2. External→Internal switch
+   Creates flag → State: "internal_intentional"
+   ls -a: .  ..  .com.apple.containermanagerd.metadata.plist  .playcover_internal_storage_flag
+   
+3. Try to mount (Individual Volume Control)
+   ❌ Shows "🔒 ロック中 | 🏠 内蔵ストレージモード"
+   ❌ Cannot select to mount
+   
+4. Try Internal→External switch
+   ❌ Error: "内蔵ストレージにデータがありません"
+   ❌ Falls through to line 3115 error
+```
+
+**After v4.33.10:**
+```
+1. Empty volume mounted at /Volumes/GenshinImpact
+   Storage mode: "external"
+   
+2. External→Internal switch
+   Creates flag
+   ls -a: .  ..  .com.apple.containermanagerd.metadata.plist  .playcover_internal_storage_flag
+   Storage mode: "none" (flag-only treated as empty)
+   
+3. Try to mount (Individual Volume Control)
+   ✅ Shows "⚪️ 未マウント" (selectable)
+   ✅ Can mount normally
+   
+4. Internal→External switch
+   ✅ Detects flag-only state at line 3056
+   ✅ "空のボリューム検出: 実データなし（フラグファイルのみ）"
+   ✅ Cleans up and mounts external volume
+   ✅ Success!
+```
+
+#### Related Changes
+- Updated script version to 4.33.10
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.9: Fixed Empty Volume Wrong Mount Location Handling
 
 ### Bug Fix to `0_PlayCover-ManagementTool.command`
