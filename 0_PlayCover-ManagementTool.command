@@ -1468,7 +1468,7 @@ create_app_volume() {
     existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/awk '/Device Node:/ {gsub(/\/dev\//, "", $NF); print $NF}')
     
     if [[ -z "$existing_volume" ]]; then
-        existing_volume=$(/usr/sbin/diskutil list 2>/dev/null | /usr/bin/grep -E "${APP_VOLUME_NAME}" | /usr/bin/grep "APFS" | head -n 1 | /usr/bin/awk '{print $NF}')
+        existing_volume=$(get_volume_device "${APP_VOLUME_NAME}")
     fi
     
     if [[ -n "$existing_volume" ]]; then
@@ -1883,7 +1883,7 @@ individual_volume_control() {
         fi
         
         # Check if volume exists (using cached /usr/sbin/diskutil output)
-        if ! echo "$diskutil_cache" | /usr/bin/grep -q "APFS Volume ${volume_name}"; then
+        if ! volume_exists "$volume_name" "$diskutil_cache"; then
             status_line="❌ ボリュームが見つかりません"
         else
             # Check actual /sbin/mount point of the volume (could be anywhere)
@@ -2177,6 +2177,9 @@ batch_mount_all() {
     echo "ボリュームをマウント中..."
     echo ""
     
+    # Cache diskutil list for performance (single call for all volumes)
+    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    
     local success_count=0
     local fail_count=0
     local locked_count=0
@@ -2192,7 +2195,7 @@ batch_mount_all() {
             
             if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
                 echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
-                local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+                local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache")
                 if unmount_volume "$pc_device" "silent"; then
                     if mount_volume "$pc_device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
@@ -2209,11 +2212,11 @@ batch_mount_all() {
                 echo "     ${GREEN}✅ 既にマウント済: ${PLAYCOVER_CONTAINER}${NC}"
                 ((success_count++))
             else
-                if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+                if ! volume_exists "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache"; then
                     echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
                     ((fail_count++))
                 else
-                    local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+                    local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache")
                     if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
                         ((success_count++))
@@ -2229,7 +2232,7 @@ batch_mount_all() {
             
             if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
                 echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
-                local device=$(get_volume_device "$volume_name")
+                local device=$(get_volume_device "$volume_name" "$diskutil_cache")
                 if unmount_volume "$device" "silent"; then
                     if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
@@ -2246,7 +2249,7 @@ batch_mount_all() {
                 echo "     ${GREEN}✅ 既にマウント済: ${target_path}${NC}"
                 ((success_count++))
             else
-                if ! volume_exists "$volume_name"; then
+                if ! volume_exists "$volume_name" "$diskutil_cache"; then
                     echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
                     ((fail_count++))
                 else
@@ -2269,7 +2272,7 @@ batch_mount_all() {
                         continue
                     fi
                     
-                    local device=$(get_volume_device "$volume_name")
+                    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
                     if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                         ((success_count++))
@@ -2346,6 +2349,9 @@ batch_unmount_all() {
     echo "ボリュームをアンマウント中..."
     echo ""
     
+    # Cache diskutil list for performance (single call for all volumes)
+    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    
     local success_count=0
     local fail_count=0
     
@@ -2355,7 +2361,7 @@ batch_unmount_all() {
         local display_index=$i
         echo "  ${display_index}. ${CYAN}${display_name}${NC}"
         
-        local current_mount=$(get_mount_point "$volume_name")
+        local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
         
         if [[ -z "$current_mount" ]]; then
             echo "     ${GREEN}✅ 既にアンマウント済${NC}"
@@ -2366,7 +2372,7 @@ batch_unmount_all() {
                 /bin/sleep 0.3
             fi
             
-            local device=$(get_volume_device "$volume_name")
+            local device=$(get_volume_device "$volume_name" "$diskutil_cache")
             if unmount_volume "$device" "silent"; then
                 echo "     ${GREEN}✅ アンマウント成功${NC}"
                 ((success_count++))
@@ -2482,6 +2488,9 @@ eject_disk() {
             print_info "登録済みボリュームをアンマウント中..."
             echo ""
             
+            # Cache diskutil list for performance (single call for all volumes)
+            local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+            
             local success_count=0
             local fail_count=0
             
@@ -2490,7 +2499,7 @@ eject_disk() {
                 IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
                 
                 # Check if this volume is on the target disk
-                local device=$(get_volume_device "$volume_name" 2>/dev/null)
+                local device=$(get_volume_device "$volume_name" "$diskutil_cache" 2>/dev/null)
                 if [[ -z "$device" ]]; then
                     continue
                 fi
@@ -2502,7 +2511,7 @@ eject_disk() {
                 
                 echo "  ${CYAN}${display_name}${NC} (${volume_name})"
                 
-                local current_mount=$(get_mount_point "$volume_name")
+                local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
                 
                 if [[ -z "$current_mount" ]]; then
                     echo "     ${GREEN}✅ 既にアンマウント済${NC}"
@@ -4729,7 +4738,7 @@ uninstall_workflow() {
     fi
     
     # Step 8: Delete APFS volume
-    local volume_device=$(diskutil list | grep "$selected_volume" | awk '{print $NF}')
+    local volume_device=$(get_volume_device "$selected_volume")
     
     if [[ -n "$volume_device" ]]; then
         if ! /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
@@ -4861,6 +4870,9 @@ uninstall_all_apps() {
     local success_count=0
     local fail_count=0
     
+    # Cache diskutil list for performance (single call for all apps)
+    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
+    
     # Loop through all apps (1-indexed zsh arrays)
     for ((i=1; i<=${#apps_list}; i++)); do
         local app_name="${apps_list[$i]}"
@@ -4906,8 +4918,8 @@ uninstall_all_apps() {
             unmount_volume "$volume_mount_point" "silent"
         fi
         
-        # Find and delete volume
-        local volume_device=$(diskutil list | grep "$volume_name" | awk '{print $NF}')
+        # Find and delete volume (use cached diskutil output)
+        local volume_device=$(get_volume_device "$volume_name" "$diskutil_cache")
         if [[ -n "$volume_device" ]]; then
             if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$volume_device" >/dev/null 2>&1; then
                 print_success "${app_name}"
