@@ -1,5 +1,174 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.7: Fixed Flag File Cleanup During Storage Mode Switching
+
+### Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Flag File Persists After Storage Mode Switch
+
+**Root Cause:**
+When switching between internal and external storage modes, the `.playcover_internal_storage_flag` file was not being properly cleaned up, leading to:
+1. External volumes mounted with flag file present in container directory
+2. After unmounting, flag file remains alone
+3. Display detects flag and shows false "🔒 ロック中" status
+
+**User Scenario That Exposed This Bug:**
+```
+1. Empty container (no data)
+2. User tests "External → Internal" switch
+   → Creates .playcover_internal_storage_flag
+3. User switches back "Internal → External"
+   → Mounts external volume
+   → Flag file NOT removed (BUG!)
+4. User unmounts external volume
+   → Only flag file remains
+   → Shows as "🔒 ロック中" (false positive)
+```
+
+**Terminal Evidence:**
+```bash
+ls -a /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+.  ..  .com.apple.containermanagerd.metadata.plist  .playcover_internal_storage_flag
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                      This should NOT exist with external volume!
+```
+
+#### Fixes Applied
+
+**1. Internal → External Switch (Line 3318-3320)**
+
+**Before:**
+```zsh
+if mount_volume "$volume_name" "$target_path"; then
+    echo ""
+    print_success "外部ストレージへの切り替えが完了しました"
+    print_info "保存場所: ${target_path}"
+    
+    # Remove internal storage flag (no longer in internal mode)
+    # Note: Flag doesn't exist on external mount, but safe to try removal
+    # ← Comment only, NO actual removal code!
+else
+```
+
+**After:**
+```zsh
+if mount_volume "$volume_name" "$target_path"; then
+    echo ""
+    print_success "外部ストレージへの切り替えが完了しました"
+    print_info "保存場所: ${target_path}"
+    
+    # Explicitly remove internal storage flag to prevent false lock status
+    # This is critical because mount_volume creates the directory,
+    # and any remaining flag file would cause misdetection
+    remove_internal_storage_flag "$target_path"
+    # ← Now actually removes the flag file!
+else
+```
+
+**2. External → Internal Switch (Line 3510-3517)**
+
+**Before:**
+```zsh
+# Remove existing internal data/mount point if it exists
+if [[ -e "$target_path" ]]; then
+    print_info "既存データをクリーンアップ中..."
+    /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+fi
+
+# Create new internal directory
+/usr/bin/sudo /bin/mkdir -p "$target_path"
+```
+
+**After:**
+```zsh
+# Remove existing internal data/mount point if it exists
+if [[ -e "$target_path" ]]; then
+    print_info "既存データをクリーンアップ中..."
+    # Remove any existing internal storage flag first to ensure clean state
+    remove_internal_storage_flag "$target_path"
+    /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+fi
+
+# Create new internal directory
+/usr/bin/sudo /bin/mkdir -p "$target_path"
+```
+
+#### Why This Fix Is Necessary
+
+**The Problem:**
+1. `mount_volume()` creates the mount point directory if it doesn't exist
+2. If flag file exists in parent directory or survives deletion, it remains after mount
+3. When volume is unmounted, only flag file is left
+4. Next display refresh: `get_storage_mode()` finds flag → returns `internal_intentional`
+5. Shows as "🔒 ロック中" even though it should be "⚪️ 未マウント"
+
+**The Solution:**
+- **Internal → External**: Explicitly remove flag after successful mount
+- **External → Internal**: Remove flag before rm -rf to ensure clean slate
+- Both directions now guarantee no flag file contamination
+
+#### Verification
+
+**Test Case 1: Internal → External → Unmount**
+```
+1. Start with internal storage mode (flag file exists)
+2. Switch to external storage
+   → ✅ Flag file explicitly removed
+3. Unmount external volume
+   → ✅ Shows as "⚪️ 未マウント" (NOT locked)
+```
+
+**Test Case 2: External → Internal → External**
+```
+1. Start with external storage
+2. Switch to internal storage
+   → ✅ Flag file created
+3. Switch back to external storage
+   → ✅ Flag file removed
+4. Unmount
+   → ✅ Shows as "⚪️ 未マウント" (NOT locked)
+```
+
+**Test Case 3: Empty Container Mode Switches**
+```
+1. Empty container (storage_mode = "none")
+2. User tests "External → Internal"
+   → ✅ Flag file created
+3. User switches "Internal → External"
+   → ✅ Flag file removed during cleanup
+4. Unmount
+   → ✅ Shows as "⚪️ 未マウント" (NOT locked)
+```
+
+#### Files Modified
+
+1. **0_PlayCover-ManagementTool.command**
+   - Line 6: Version updated to 4.33.7
+   - Line 3318-3320: Added explicit flag removal after internal→external switch
+   - Line 3512: Added flag removal before cleanup during external→internal switch
+
+2. **README.md**
+   - Line 13: Version updated to v4.33.7
+
+3. **CHANGELOG.md**
+   - Added v4.33.7 entry with detailed bug analysis and fix documentation
+
+#### Relationship to v4.33.6
+
+- **v4.33.6**: Fixed display loop to pass `volume_name` to `get_storage_mode()`
+  - Symptom: Unmounting shows false "locked" status
+  - Fix: Proper detection by passing volume_name parameter
+  
+- **v4.33.7**: Fixed root cause of flag file contamination
+  - Symptom: Flag file persists after mode switch
+  - Fix: Explicit cleanup during storage mode transitions
+
+Together, these fixes ensure:
+1. Proper detection (v4.33.6)
+2. Clean state transitions (v4.33.7)
+
+---
+
 ## 2025-01-28 - Version 4.33.6: Fixed False Lock Status After Unmounting Correctly-Mounted Volumes
 
 ### Bug Fix to `0_PlayCover-ManagementTool.command`

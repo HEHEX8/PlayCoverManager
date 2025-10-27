@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.6 - Fixed false lock status after unmounting correctly-mounted volumes
+# Version: 4.33.7 - Fixed flag file cleanup during storage mode switching
 #######################################################
 
 #######################################################
@@ -3315,8 +3315,10 @@ switch_storage_location() {
                 print_success "外部ストレージへの切り替えが完了しました"
                 print_info "保存場所: ${target_path}"
                 
-                # Remove internal storage flag (no longer in internal mode)
-                # Note: Flag doesn't exist on external mount, but safe to try removal
+                # Explicitly remove internal storage flag to prevent false lock status
+                # This is critical because mount_volume creates the directory,
+                # and any remaining flag file would cause misdetection
+                remove_internal_storage_flag "$target_path"
             else
                 print_error "ボリュームのマウントに失敗しました"
             fi
@@ -3508,6 +3510,8 @@ switch_storage_location() {
             # Remove existing internal data/mount point if it exists
             if [[ -e "$target_path" ]]; then
                 print_info "既存データをクリーンアップ中..."
+                # Remove any existing internal storage flag first to ensure clean state
+                remove_internal_storage_flag "$target_path"
                 /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
             fi
             
