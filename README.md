@@ -10,7 +10,7 @@ PlayCoverを外部ストレージで運用するための**オールインワン
 ## 📦 メインツール
 
 ### `0_PlayCover-ManagementTool.command`
-**PlayCover統合管理ツール（v4.29.0）**
+**PlayCover統合管理ツール（v4.30.0）**
 
 すべての機能を1つのスクリプトに統合した完全版です。
 
@@ -270,7 +270,41 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.29.0 (最新) - App Management UI and Emoji Consistency
+### v4.30.0 (最新) - Enhanced Color Scheme with 16 Recommended Colors
+- 🎨 **カラースキームの完全刷新**: 推奨16色（暗背景用）を採用
+- ✅ ANSI明色コード（90-97）とRGB拡張色を併用
+- ✅ 新しいカラー定義:
+  * 白 (WHITE) - #FFFFFF
+  * 明灰 (LIGHT_GRAY) - #BFBFBF
+  * 赤 (RED) - #FF4040
+  * 緑 (GREEN) - #00FF00
+  * 青 (BLUE) - #4080FF
+  * 黄 (YELLOW) - #FFFF00
+  * マゼンタ (MAGENTA) - #FF00FF
+  * シアン (CYAN) - #00FFFF
+  * オレンジ (ORANGE) - #FFA500
+  * ライムグリーン (LIME) - #AFFF00
+  * ターコイズ (TURQUOISE) - #40E0D0
+  * ピンク (PINK) - #FF69B4
+  * ゴールド (GOLD) - #FFD700
+  * スカイブルー (SKY_BLUE) - #87CEFA
+  * バイオレット (VIOLET) - #EE82EE
+  * ライトグリーン (LIGHT_GREEN) - #98FB98
+- 🎨 色の使い分けを最適化:
+  * 見出し/ヘッダー: CYAN
+  * 成功メッセージ: GREEN
+  * エラーメッセージ: RED
+  * 警告メッセージ: ORANGE
+  * 情報メッセージ: SKY_BLUE
+  * 強調/重要: GOLD
+  * 進行中: VIOLET
+  * メニュー項目番号: LIGHT_GREEN
+  * 戻る/終了(0番): WHITE
+- ✅ 全メニュー項目の色をLIGHT_GREENに統一
+- ✅ ロック表示をGOLDで強調
+- 👀 暗い背景でも見やすい高輝度色を使用
+
+### v4.29.0 - App Management UI and Emoji Consistency
 - 🎨 **アプリ管理UI改善**: インストール済みアプリリストの表示形式を改善
 - ✅ リスト表示: 「・ 🔌 7.0M (v3.6.0) 崩壊：スターレイル」→「位置: 🔌 外部 | 7.0M (v3.6.0) 崩壊：スターレイル」
 - ✅ ストレージアイコンにラベル追加: 「🔌」→「🔌 外部」、「🏠」→「🏠 内部」
@@ -428,4 +462,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.29.0）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.30.0）

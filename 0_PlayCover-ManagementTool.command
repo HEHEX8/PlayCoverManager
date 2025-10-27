@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.29.0 - App management UI and emoji consistency
+# Version: 4.30.0 - Enhanced color scheme with 16 recommended colors
 #######################################################
 
 #######################################################
@@ -44,13 +44,27 @@
 # Module 1: Constants & Global Variables
 #######################################################
 
-# Color definitions
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
-readonly MAGENTA='\033[0;35m'
+# Color definitions (推奨16色 - 暗背景用)
+# ANSI明色コード使用（90-97: 明るい色）
+readonly WHITE='\033[97m'           # 白 #FFFFFF
+readonly LIGHT_GRAY='\033[37m'      # 明灰 #BFBFBF
+readonly RED='\033[91m'             # 赤 #FF4040
+readonly GREEN='\033[92m'           # 緑 #00FF00
+readonly BLUE='\033[94m'            # 青 #4080FF
+readonly YELLOW='\033[93m'          # 黄 #FFFF00
+readonly MAGENTA='\033[95m'         # マゼンタ #FF00FF
+readonly CYAN='\033[96m'            # シアン #00FFFF
+
+# RGB拡張色（256色ターミナル対応）
+readonly ORANGE='\033[38;2;255;165;0m'      # オレンジ #FFA500
+readonly LIME='\033[38;2;175;255;0m'        # ライムグリーン #AFFF00
+readonly TURQUOISE='\033[38;2;64;224;208m'  # ターコイズ #40E0D0
+readonly PINK='\033[38;2;255;105;180m'      # ピンク #FF69B4
+readonly GOLD='\033[38;2;255;215;0m'        # ゴールド #FFD700
+readonly SKY_BLUE='\033[38;2;135;206;250m'  # スカイブルー #87CEFA
+readonly VIOLET='\033[38;2;238;130;238m'    # バイオレット #EE82EE
+readonly LIGHT_GREEN='\033[38;2;152;251;152m' # ライトグリーン #98FB98
+
 readonly NC='\033[0m' # No Color
 
 # Constants
@@ -112,7 +126,7 @@ print_separator() {
 
 print_header() {
     echo ""
-    echo "${BLUE}$1${NC}"
+    echo "${CYAN}$1${NC}"
     echo ""
 }
 
@@ -125,11 +139,11 @@ print_error() {
 }
 
 print_warning() {
-    echo "${YELLOW}⚠️ $1${NC}"
+    echo "${ORANGE}⚠️ $1${NC}"
 }
 
 print_info() {
-    echo "${BLUE}ℹ️ $1${NC}"
+    echo "${SKY_BLUE}ℹ️ $1${NC}"
 }
 
 print_batch_progress() {
@@ -138,8 +152,8 @@ print_batch_progress() {
     local app_name=$3
     
     echo ""
-    echo "${MAGENTA}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
-    print_separator "$SEPARATOR_CHAR" "$MAGENTA"
+    echo "${VIOLET}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
+    print_separator "$SEPARATOR_CHAR" "$VIOLET"
     echo ""
 }
 
@@ -1489,12 +1503,12 @@ individual_volume_control() {
         # Display with lock status or number
         if $is_locked; then
             # Locked: show with lock icon, no number
-            echo "  🔒${YELLOW}ロック中${NC} ${display_name} | 🏃${YELLOW}アプリ起動中${NC}"
+            echo "  🔒${GOLD}ロック中${NC} ${display_name} | 🏃${GOLD}アプリ起動中${NC}"
             echo "      ${status_line}"
             echo ""
         elif [[ -n "$extra_info" ]]; then
             # Internal storage mode: show as locked
-            echo "  🔒${YELLOW}ロック中${NC} ${display_name} | 🏠${YELLOW}内蔵ストレージにデータ有${NC}"
+            echo "  🔒${GOLD}ロック中${NC} ${display_name} | 🏠${GOLD}内蔵ストレージにデータ有${NC}"
             echo "      ${status_line}"
             echo ""
         else
@@ -1712,7 +1726,7 @@ batch_mount_all() {
             local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
             
             if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
-                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
                 local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
                 if /usr/bin/sudo /usr/sbin/diskutil unmount "$pc_device" >/dev/null 2>&1; then
                     if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
@@ -1749,7 +1763,7 @@ batch_mount_all() {
             local current_mount=$(get_mount_point "$volume_name")
             
             if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
-                echo "     ${YELLOW}⚠️  マウント位置が異なる為修正します${NC}"
+                echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
                 local device=$(get_volume_device "$volume_name")
                 if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
                     if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
@@ -1803,19 +1817,19 @@ batch_mount_all() {
     
     print_separator
     echo ""
-    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    echo "${SKY_BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
     
     if [[ $fail_count -eq 0 ]]; then
         echo "${GREEN}✅ 全ボリュームのマウント完了${NC}"
     elif [[ $success_count -eq 0 ]]; then
         echo "${RED}❌ マウント失敗: 全てのボリュームがマウントできませんでした${NC}"
         echo ""
-        echo "${YELLOW}対処法:${NC}"
+        echo "${ORANGE}対処法:${NC}"
         echo "  1. 外部SSDが正しく接続されているか確認"
         echo "  2. ボリュームが作成されているか確認（メニュー9）"
         echo "  3. 既存のマウント状態を確認（メニュー5）"
     else
-        echo "${YELLOW}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+        echo "${ORANGE}⚠️  一部マウントに失敗したボリュームがあります${NC}"
     fi
     wait_for_enter
 }
@@ -1894,19 +1908,19 @@ batch_unmount_all() {
     
     print_separator
     echo ""
-    echo "${BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    echo "${SKY_BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
     
     if [[ $fail_count -eq 0 ]]; then
         echo "${GREEN}✅ 全ボリュームのアンマウント完了${NC}"
     elif [[ $success_count -eq 0 ]]; then
         echo "${RED}❌ アンマウント失敗: 全てのボリュームがアンマウントできませんでした${NC}"
         echo ""
-        echo "${YELLOW}対処法:${NC}"
+        echo "${ORANGE}対処法:${NC}"
         echo "  1. PlayCoverとアプリを終了してから再試行"
         echo "  2. Finderでファイルを開いている場合は閉じる"
         echo "  3. 強制アンマウント: /usr/sbin/diskutil unmount force /dev/diskX"
     else
-        echo "${YELLOW}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
+        echo "${ORANGE}⚠️  一部アンマウントに失敗したボリュームがあります${NC}"
     fi
     wait_for_enter
 }
@@ -2142,13 +2156,13 @@ nuclear_cleanup() {
     # 1. Volumes to unmount and delete
     if [[ ${#mapped_volumes} -gt 0 ]]; then
         echo "${CYAN}【1】マップ登録ボリューム: ${#mapped_volumes}個${NC}"
-        echo "     ${YELLOW}→ アンマウント後、削除されます${NC}"
+        echo "     ${ORANGE}→ アンマウント後、削除されます${NC}"
         for vol_info in "${(@)mapped_volumes}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             echo "  ${RED}💥${NC}  ${display}"
-            echo "      ${YELLOW}${vol_name}${NC} (${device})"
+            echo "      ${ORANGE}${vol_name}${NC} (${device})"
             ((total_items++))
         done
         echo ""
@@ -2162,7 +2176,7 @@ nuclear_cleanup() {
     if [[ "$playcover_app_exists" == true ]]; then
         if [[ "$playcover_homebrew" == true ]]; then
             echo "  ${RED}🗑${NC}  PlayCover (Homebrew Cask)"
-            echo "      ${YELLOW}brew uninstall --cask playcover-community${NC}"
+            echo "      ${ORANGE}brew uninstall --cask playcover-community${NC}"
         else
             echo "  ${RED}🗑${NC}  /Applications/PlayCover.app（手動インストール版）"
         fi
@@ -2200,7 +2214,7 @@ nuclear_cleanup() {
     
     print_separator "─" "$YELLOW"
     echo ""
-    echo "${YELLOW}合計削除項目: ${total_items}個${NC}"
+    echo "${ORANGE}合計削除項目: ${total_items}個${NC}"
     echo ""
     echo "${RED}⚠️  この操作は取り消せません！${NC}"
     echo ""
@@ -2253,7 +2267,7 @@ nuclear_cleanup() {
     # Step 1: Unmount all mapped volumes
     #######################################################
     
-    echo "${BLUE}【ステップ 1/5】マップ登録ボリュームをアンマウント${NC}"
+    echo "${CYAN}【ステップ 1/5】マップ登録ボリュームをアンマウント${NC}"
     echo ""
     
     local unmount_count=0
@@ -2291,7 +2305,7 @@ nuclear_cleanup() {
     # Step 2: Delete all mapped volumes
     #######################################################
     
-    echo "${BLUE}【ステップ 2/5】マップ登録ボリュームを削除${NC}"
+    echo "${CYAN}【ステップ 2/5】マップ登録ボリュームを削除${NC}"
     echo ""
     
     local volume_count=0
@@ -2322,7 +2336,7 @@ nuclear_cleanup() {
     # Step 3: Uninstall PlayCover app
     #######################################################
     
-    echo "${BLUE}【ステップ 3/5】PlayCoverアプリをアンインストール${NC}"
+    echo "${CYAN}【ステップ 3/5】PlayCoverアプリをアンインストール${NC}"
     echo ""
     
     if [[ "$playcover_app_exists" == true ]]; then
@@ -2356,7 +2370,7 @@ nuclear_cleanup() {
     # Step 4: Delete all mapped containers
     #######################################################
     
-    echo "${BLUE}【ステップ 4/5】マップ登録コンテナ（内蔵）を削除${NC}"
+    echo "${CYAN}【ステップ 4/5】マップ登録コンテナ（内蔵）を削除${NC}"
     echo ""
     
     local container_count=0
@@ -2385,7 +2399,7 @@ nuclear_cleanup() {
     # Step 5: Delete mapping file
     #######################################################
     
-    echo "${BLUE}【ステップ 5/5】マッピングファイルを削除${NC}"
+    echo "${CYAN}【ステップ 5/5】マッピングファイルを削除${NC}"
     echo ""
     
     if [[ "$mapping_exists" == true ]]; then
@@ -2419,20 +2433,20 @@ nuclear_cleanup() {
     print_separator "=" "$GREEN"
     echo ""
     
-    echo "${YELLOW}⚠️  重要: 再セットアップが必要です${NC}"
+    echo "${ORANGE}⚠️  重要: 再セットアップが必要です${NC}"
     echo ""
     echo "${CYAN}次のステップ:${NC}"
     echo ""
-    echo "  ${GREEN}1.${NC} このツールを再起動"
-    echo "      ${BLUE}→ 0_PlayCover-ManagementTool.command${NC}"
+    echo "  ${LIGHT_GREEN}1.${NC} このツールを再起動"
+    echo "      ${SKY_BLUE}→ 0_PlayCover-ManagementTool.command${NC}"
     echo ""
-    echo "  ${GREEN}2.${NC} メニューから初期セットアップを実行"
-    echo "      ${BLUE}→ [1] 初期セットアップ${NC}"
+    echo "  ${LIGHT_GREEN}2.${NC} メニューから初期セットアップを実行"
+    echo "      ${SKY_BLUE}→ [1] 初期セットアップ${NC}"
     echo ""
-    echo "  ${GREEN}3.${NC} IPAインストールを実行"
-    echo "      ${BLUE}→ [2] IPAインストール${NC}"
+    echo "  ${LIGHT_GREEN}3.${NC} IPAインストールを実行"
+    echo "      ${SKY_BLUE}→ [2] IPAインストール${NC}"
     echo ""
-    echo "${YELLOW}📝 注意事項:${NC}"
+    echo "${ORANGE}📝 注意事項:${NC}"
     echo ""
     echo "  • ${RED}すべてのPlayCoverデータが削除されました${NC}"
     echo "  • ${RED}外部ボリュームも削除されました${NC}"
@@ -2634,8 +2648,8 @@ switch_storage_location() {
                 echo "理由: データが存在しません（未マウント）"
                 echo ""
                 echo "推奨される操作:"
-                echo "  ${CYAN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
-                echo "  ${CYAN}2.${NC} その後、このストレージ切り替え機能を使用"
+                echo "  ${LIGHT_GREEN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
+                echo "  ${LIGHT_GREEN}2.${NC} その後、このストレージ切り替え機能を使用"
                 wait_for_enter
                 continue
                 return
@@ -2662,13 +2676,13 @@ switch_storage_location() {
             echo "  必要容量: ${current_size} + 10% 安全余裕"
             echo "  利用可能: ${storage_free}"
             echo ""
-            echo "${YELLOW}続行するとデータ破損のリスクがあります${NC}"
+            echo "${ORANGE}続行するとデータ破損のリスクがあります${NC}"
         fi
         
         echo ""
         print_warning "⚠️この操作には時間がかかる場合があります"
         echo ""
-        echo -n "${YELLOW}続行しますか？ (Y/n):${NC} "
+        echo -n "${ORANGE}続行しますか？ (Y/n):${NC} "
         read confirm
         
         # Default to Yes if empty
@@ -2845,7 +2859,7 @@ switch_storage_location() {
                 echo ""
                 print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
                 echo ""
-                echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+                echo -n "${ORANGE}それでも続行しますか？ (y/N):${NC} "
                 read force_continue
                 
                 if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
@@ -3036,7 +3050,7 @@ switch_storage_location() {
                 echo ""
                 print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
                 echo ""
-                echo -n "${YELLOW}それでも続行しますか？ (y/N):${NC} "
+                echo -n "${ORANGE}それでも続行しますか？ (y/N):${NC} "
                 read force_continue
                 
                 if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
@@ -3260,11 +3274,11 @@ show_quick_status() {
         local status_parts=()
         
         if [[ $external_count -gt 0 ]]; then
-            status_parts+=("${BLUE}🔌 外部マウント: ${external_count}件${NC}")
+            status_parts+=("${SKY_BLUE}🔌 外部マウント: ${external_count}件${NC}")
         fi
         
         if [[ $internal_count -gt 0 ]]; then
-            status_parts+=("${YELLOW}🏠 内部マウント: ${internal_count}件${NC}")
+            status_parts+=("${ORANGE}🏠 内部マウント: ${internal_count}件${NC}")
         fi
         
         if [[ $unmounted_count -gt 0 ]]; then
@@ -3293,16 +3307,16 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${BLUE}Version 4.21.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.21.0${NC}"
     echo ""
     
     show_quick_status
     
-    echo "${BLUE}メインメニュー${NC}"
+    echo "${CYAN}メインメニュー${NC}"
     echo ""
-    echo "  ${GREEN}1.${NC} アプリ管理"
-    echo "  ${YELLOW}2.${NC} ボリューム操作"
-    echo "  ${CYAN}3.${NC} ストレージ切り替え（内蔵⇄外部）"
+    echo "  ${LIGHT_GREEN}1.${NC} アプリ管理"
+    echo "  ${LIGHT_GREEN}2.${NC} ボリューム操作"
+    echo "  ${LIGHT_GREEN}3.${NC} ストレージ切り替え（内蔵⇄外部）"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -3318,9 +3332,9 @@ show_menu() {
         fi
     fi
     
-    echo "  ${RED}4.${NC} ${eject_label}"
-    echo "  ${MAGENTA}5.${NC} 🔥 超強力クリーンアップ（完全リセット）"
-    echo "  ${BLUE}0.${NC} 終了"
+    echo "  ${LIGHT_GREEN}4.${NC} ${eject_label}"
+    echo "  ${LIGHT_GREEN}5.${NC} 🔥 超強力クリーンアップ（完全リセット）"
+    echo "  ${LIGHT_GREEN}0.${NC} 終了"
     echo ""
     echo -n "${CYAN}選択 (0-5):${NC} "
 }
@@ -3393,13 +3407,13 @@ show_auto_mount_menu() {
         print_separator
         echo ""
         
-        echo "${BLUE}メニュー${NC}"
+        echo "${CYAN}メニュー${NC}"
         echo ""
-        echo "  ${GREEN}1.${NC} 自動マウント機能をインストール"
-        echo "  ${YELLOW}2.${NC} 自動マウント機能をアンインストール"
-        echo "  ${CYAN}3.${NC} 動作確認・ログ表示"
-        echo "  ${MAGENTA}4.${NC} インストール手順を表示"
-        echo "  ${BLUE}0.${NC} 戻る"
+        echo "  ${LIGHT_GREEN}1.${NC} 自動マウント機能をインストール"
+        echo "  ${LIGHT_GREEN}2.${NC} 自動マウント機能をアンインストール"
+        echo "  ${LIGHT_GREEN}3.${NC} 動作確認・ログ表示"
+        echo "  ${LIGHT_GREEN}4.${NC} インストール手順を表示"
+        echo "  ${LIGHT_GREEN}0.${NC} 戻る"
         echo ""
         echo -n "${CYAN}選択 (0-4):${NC} "
         
@@ -3505,13 +3519,13 @@ install_auto_mount() {
     echo ""
     echo "${CYAN}次のステップ:${NC}"
     echo "  ${GREEN}推奨:${NC} システムを再起動またはログアウト→ログイン"
-    echo "  ${BLUE}理由:${NC} ログイン時にPlayCoverボリュームが自動マウントされます"
+    echo "  ${SKY_BLUE}理由:${NC} ログイン時にPlayCoverボリュームが自動マウントされます"
     echo ""
     echo "${CYAN}動作確認方法:${NC}"
     echo "  1. ログイン後、ボリュームがマウントされていることを確認"
     echo "  2. PlayCover.appを起動して正常動作を確認"
     echo ""
-    echo "${YELLOW}ログファイル:${NC} ${HOME}/Library/Logs/playcover-auto-mount.log"
+    echo "${ORANGE}ログファイル:${NC} ${HOME}/Library/Logs/playcover-auto-mount.log"
     echo ""
     echo "${MAGENTA}注意:${NC} WatchPaths方式は廃止し、ログイン時マウントに変更しました"
     echo "       これにより、PlayCover起動前の確実なマウントを実現"
@@ -3629,7 +3643,7 @@ check_auto_mount_status() {
             elif echo "$line" | grep -q "SUCCESS"; then
                 echo "${GREEN}${line}${NC}"
             elif echo "$line" | grep -q "INFO"; then
-                echo "${BLUE}${line}${NC}"
+                echo "${SKY_BLUE}${line}${NC}"
             else
                 echo "$line"
             fi
@@ -3707,7 +3721,7 @@ show_auto_mount_setup_guide() {
     echo "   c) PlayCover.appを起動して正常動作を確認"
     echo ""
     echo "${GREEN}3. ログ確認${NC}"
-    echo "   ${YELLOW}${HOME}/Library/Logs/playcover-auto-mount.log${NC}"
+    echo "   ${ORANGE}${HOME}/Library/Logs/playcover-auto-mount.log${NC}"
     echo ""
     print_separator
     echo ""
@@ -3739,7 +3753,7 @@ show_installed_apps() {
     # Check if mapping file exists
     if [[ ! -f "$MAPPING_FILE" ]]; then
         if [[ "$display_only" == "true" ]]; then
-            echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+            echo "${ORANGE}インストール済みアプリ:${NC} ${SKY_BLUE}0個${NC}"
         fi
         return
     fi
@@ -3748,7 +3762,7 @@ show_installed_apps() {
     
     if [[ -z "$mappings_content" ]]; then
         if [[ "$display_only" == "true" ]]; then
-            echo "${YELLOW}インストール済みアプリ:${NC} ${BLUE}0個${NC}"
+            echo "${ORANGE}インストール済みアプリ:${NC} ${SKY_BLUE}0個${NC}"
         fi
         return
     fi
@@ -3765,14 +3779,14 @@ show_installed_apps() {
         # Check again after creation attempt
         if [[ ! -d "$playcover_apps" ]]; then
             if [[ "$display_only" == "true" ]]; then
-                echo "${YELLOW}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
+                echo "${ORANGE}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
             fi
             return
         fi
     fi
     
     if [[ "$display_only" == "true" ]]; then
-        echo "${YELLOW}インストール済みアプリ${NC}"
+        echo "${ORANGE}インストール済みアプリ${NC}"
         echo ""
     fi
     
@@ -3838,7 +3852,7 @@ show_installed_apps() {
             if [[ "$display_only" == "true" ]]; then
                 printf " 位置: %s | %s (v%s) %s\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
             else
-                echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${BLUE}(v${app_version})${NC}"
+                echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${SKY_BLUE}(v${app_version})${NC}"
                 echo "      Bundle ID: ${bundle_id}"
                 echo "      ボリューム: ${volume_name}"
                 echo "      使用容量: ${storage_icon} ${container_size}"
@@ -3888,7 +3902,7 @@ app_management_menu() {
                     clear
                     print_warning "⚠️  PlayCoverボリュームが未マウントですが、内部ストレージにデータがあります"
                     echo ""
-                    echo "${YELLOW}対処方法:${NC}"
+                    echo "${ORANGE}対処方法:${NC}"
                     echo "  1. 内部データを外部に移行してマウント（推奨）"
                     echo "  2. 内部データを削除してクリーンな状態でマウント"
                     echo "  3. キャンセル"
@@ -3946,7 +3960,7 @@ app_management_menu() {
     while true; do
         clear
         echo ""
-        echo "${BLUE}アプリ管理${NC}"
+        echo "${SKY_BLUE}アプリ管理${NC}"
         echo ""
         show_installed_apps
         echo ""
@@ -4079,13 +4093,13 @@ uninstall_workflow() {
     echo ""
     print_separator "$SEPARATOR_CHAR" "$CYAN"
     echo ""
-    echo "${YELLOW}▼ アンインストール方法を選択${NC}"
+    echo "${ORANGE}▼ アンインストール方法を選択${NC}"
     echo ""
     echo "  ${GREEN}個別削除${NC}: 1-${total_apps} の番号を入力"
     echo "  ${RED}一括削除${NC}: ${RED}ALL${NC} を入力（すべてのアプリを一度に削除）"
     echo "  ${CYAN}キャンセル${NC}: 0 を入力"
     echo ""
-    echo -n "${YELLOW}選択:${NC} "
+    echo -n "${ORANGE}選択:${NC} "
     read app_choice
     
     # Check for batch uninstall
@@ -4299,7 +4313,7 @@ uninstall_all_apps() {
         ((index++))
     done <<< "$mappings_content"
     
-    echo "${YELLOW}合計: ${total_apps} 個のアプリ${NC}"
+    echo "${ORANGE}合計: ${total_apps} 個のアプリ${NC}"
     echo ""
     print_warning "この操作は以下を実行します:"
     echo "  1. すべてのアプリを PlayCover から削除"
@@ -4906,14 +4920,14 @@ install_playcover() {
     print_warning "重要: PlayCoverを一度起動して完全なコンテナを作成します"
     echo ""
     print_info "手順:"
-    echo "  ${BLUE}1.${NC} PlayCoverが自動的に起動します"
-    echo "  ${BLUE}2.${NC} PlayCoverのウィンドウが表示されたら${YELLOW}すぐに終了${NC}してください"
-    echo "  ${BLUE}3.${NC} 終了後、このターミナルに戻ってEnterキーを押してください"
+    echo "  ${LIGHT_GREEN}1.${NC} PlayCoverが自動的に起動します"
+    echo "  ${LIGHT_GREEN}2.${NC} PlayCoverのウィンドウが表示されたら${ORANGE}すぐに終了${NC}してください"
+    echo "  ${LIGHT_GREEN}3.${NC} 終了後、このターミナルに戻ってEnterキーを押してください"
     echo ""
     print_info "これにより、設定ファイルやフレームワークが正しく配置されます"
     echo ""
     
-    echo -n "${YELLOW}Enterキーを押すとPlayCoverが起動します...${NC} "
+    echo -n "${ORANGE}Enterキーを押すとPlayCoverが起動します...${NC} "
     read
     
     # Launch PlayCover
@@ -4923,7 +4937,7 @@ install_playcover() {
     print_info "PlayCoverが起動しました"
     print_warning "PlayCoverを終了したら、このターミナルに戻ってください"
     echo ""
-    echo -n "${YELLOW}PlayCoverを終了したらEnterキーを押してください...${NC} "
+    echo -n "${ORANGE}PlayCoverを終了したらEnterキーを押してください...${NC} "
     read
     
     # Verify container was created
@@ -4933,7 +4947,7 @@ install_playcover() {
         print_info "コンテナ: ${PLAYCOVER_CONTAINER}"
         print_warning "PlayCoverが正常に起動しなかった可能性があります"
         echo ""
-        echo -n "${YELLOW}再試行しますか? (Y/n):${NC} "
+        echo -n "${ORANGE}再試行しますか? (Y/n):${NC} "
         read retry
         case "$retry" in
             [nN]|[nN][oO])
@@ -4945,7 +4959,7 @@ install_playcover() {
                 # Retry
                 open -a PlayCover
                 echo ""
-                echo -n "${YELLOW}PlayCoverを終了したらEnterキーを押してください...${NC} "
+                echo -n "${ORANGE}PlayCoverを終了したらEnterキーを押してください...${NC} "
                 read
                 
                 if [[ ! -d "${PLAYCOVER_CONTAINER}" ]]; then
@@ -5070,7 +5084,7 @@ run_initial_setup() {
     echo "  - 外部ストレージ（SSD推奨）"
     echo ""
     
-    echo -n "${YELLOW}初回セットアップを開始しますか？ (y/N):${NC} "
+    echo -n "${ORANGE}初回セットアップを開始しますか？ (y/N):${NC} "
     read response
     
     # Default to No if empty
@@ -5137,7 +5151,7 @@ main() {
             echo ""
             print_error "初期セットアップが完了しましたが、環境が正しく構成されていません"
             echo ""
-            echo "${YELLOW}デバッグ情報（上記を確認してください）${NC}"
+            echo "${ORANGE}デバッグ情報（上記を確認してください）${NC}"
             wait_for_enter
             exit 1
         fi
