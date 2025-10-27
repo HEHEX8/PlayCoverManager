@@ -3,14 +3,42 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.26.3 - Fix rsync compatibility for macOS
+# Version: 4.27.0 - Pure zsh syntax (removed bash compatibility)
+#######################################################
+
+#######################################################
+# 前提条件・環境・注意点
+#######################################################
+# 
+# 【前提条件】
+# - Apple Silicon Mac (M1/M2/M3/M4)
+# - macOS Sequoia 15.1 (Tahoe 26.0.1) 以降
+# - zsh シェル
+# - ターミナルへのフルディスクアクセス権限
+# 
+# 【環境】
+# - Homebrew: /opt/homebrew (Apple Silicon) または /usr/local (Intel)
+# - PlayCover: Homebrew Cask経由でインストール
+# - 外部ストレージ: USB/Thunderbolt/SSD (APFSフォーマット)
+# 
+# 【使用コマンド (macOS標準)】
+# awk, cat, chmod, chown, cp, cut, df, diskutil, du, find, grep
+# head, kill, mkdir, mount, mv, open, osascript, pgrep, pkill
+# rm, rmdir, rsync, sed, sleep, sudo, tail, tr, tty, unzip, xargs
+# 
+# 【外部依存】
+# - Homebrew (brew): PlayCoverインストールに必要
+# - PlayCover.app: /Applications/PlayCover.app
+# 
+# 【注意事項】
+# - sudo権限が必要な操作あり（diskutil, mount等）
+# - 外部ストレージの選択を誤るとデータ損失の危険
+# - 超強力クリーンアップは全データを削除（取り消し不可）
+#
 #######################################################
 
 # Note: set -e is NOT used here to allow graceful error handling
 # Volume operations require explicit error checking
-
-# Enable zsh options for bash-like behavior
-setopt KSH_ARRAYS  # Use 0-based array indexing like bash
 
 #######################################################
 # Module 1: Constants & Global Variables
@@ -828,7 +856,7 @@ EOF
         fi
     done <<< "$selected"
     
-    TOTAL_IPAS=${#SELECTED_IPAS[@]}
+    TOTAL_IPAS=${#SELECTED_IPAS}
     
     if [[ $TOTAL_IPAS -eq 0 ]]; then
         print_error "有効な IPA ファイルが選択されませんでした"
@@ -842,8 +870,8 @@ EOF
         BATCH_MODE=true
         print_success "IPA ファイルを ${TOTAL_IPAS} 個選択しました"
     else
-        # Using KSH_ARRAYS (0-based indexing)
-        print_success "$(basename "${SELECTED_IPAS[0]}")"
+        # zsh 1-based indexing
+        print_success "$(basename "${SELECTED_IPAS[1]}")"
     fi
     
     echo ""
@@ -1358,7 +1386,7 @@ individual_volume_control() {
     done < "$MAPPING_FILE"
     
     # Check if we have any mappings
-    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+    if [[ ${#mappings_array} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         wait_for_enter
         return
@@ -1377,7 +1405,7 @@ individual_volume_control() {
     
     # Display volumes with detailed status (single column)
     local display_index=1
-    for ((i=0; i<${#mappings_array[@]}; i++)); do
+    for ((i=1; i<=${#mappings_array}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
@@ -1474,23 +1502,22 @@ individual_volume_control() {
     fi
     
     # Check if no selectable volumes
-    if [[ ${#selectable_array[@]} -eq 0 ]]; then
+    if [[ ${#selectable_array} -eq 0 ]]; then
         print_warning "選択可能なボリュームがありません（全てロック中）"
         wait_for_enter
         individual_volume_control
         return
     fi
     
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#selectable_array[@]} ]]; then
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#selectable_array} ]]; then
         print_error "無効な選択です"
         /bin/sleep 2
         individual_volume_control
         return
     fi
     
-    # Convert 1-based user input to 0-based array index
-    local array_index=$((choice - 1))
-    local selected_mapping="${selectable_array[$array_index]}"
+    # zsh arrays are 1-indexed, so choice can be used directly
+    local selected_mapping="${selectable_array[$choice]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
     authenticate_sudo
@@ -1625,7 +1652,7 @@ batch_mount_all() {
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
     done < "$MAPPING_FILE"
     
-    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+    if [[ ${#mappings_array} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         wait_for_enter
         return
@@ -1638,7 +1665,7 @@ batch_mount_all() {
     local fail_count=0
     local index=1
     
-    for ((i=0; i<${#mappings_array[@]}; i++)); do
+    for ((i=1; i<=${#mappings_array}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         echo "  ${index}. ${CYAN}${display_name}${NC}"
@@ -1782,7 +1809,7 @@ batch_unmount_all() {
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
     done < "$MAPPING_FILE"
     
-    if [[ ${#mappings_array[@]} -eq 0 ]]; then
+    if [[ ${#mappings_array} -eq 0 ]]; then
         print_warning "登録されているアプリボリュームがありません"
         wait_for_enter
         return
@@ -1794,10 +1821,10 @@ batch_unmount_all() {
     local success_count=0
     local fail_count=0
     
-    for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
+    for ((i=${#mappings_array}; i>=1; i--)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
-        local display_index=$((i + 1))
+        local display_index=$i
         echo "  ${display_index}. ${CYAN}${display_name}${NC}"
         
         local current_mount=$(get_mount_point "$volume_name")
@@ -1928,7 +1955,7 @@ eject_disk() {
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
         done <<< "$mappings_content"
         
-        if [[ ${#mappings_array[@]} -gt 0 ]]; then
+        if [[ ${#mappings_array} -gt 0 ]]; then
             print_info "登録済みボリュームをアンマウント中..."
             echo ""
             
@@ -1936,7 +1963,7 @@ eject_disk() {
             local fail_count=0
             
             # Unmount in reverse order (apps first, PlayCover last)
-            for ((i=${#mappings_array[@]}-1; i>=0; i--)); do
+            for ((i=${#mappings_array}; i>=1; i--)); do
                 IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
                 
                 # Check if this volume is on the target disk
@@ -2075,10 +2102,10 @@ nuclear_cleanup() {
     local total_items=0
     
     # 1. Volumes to unmount and delete
-    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
-        echo "${CYAN}【1】マップ登録ボリューム: ${#mapped_volumes[@]}個${NC}"
+    if [[ ${#mapped_volumes} -gt 0 ]]; then
+        echo "${CYAN}【1】マップ登録ボリューム: ${#mapped_volumes}個${NC}"
         echo "     ${YELLOW}→ アンマウント後、削除されます${NC}"
-        for vol_info in "${mapped_volumes[@]}"; do
+        for vol_info in "${(@)mapped_volumes}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
@@ -2108,9 +2135,9 @@ nuclear_cleanup() {
     echo ""
     
     # 3. Mapped containers
-    if [[ ${#mapped_containers[@]} -gt 0 ]]; then
-        echo "${CYAN}【3】マップ登録コンテナ（内蔵）: ${#mapped_containers[@]}個${NC}"
-        for container_info in "${mapped_containers[@]}"; do
+    if [[ ${#mapped_containers} -gt 0 ]]; then
+        echo "${CYAN}【3】マップ登録コンテナ（内蔵）: ${#mapped_containers}個${NC}"
+        for container_info in "${(@)mapped_containers}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
             local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             echo "  ${RED}🗑${NC}  ${display}"
@@ -2192,9 +2219,9 @@ nuclear_cleanup() {
     echo ""
     
     local unmount_count=0
-    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
+    if [[ ${#mapped_volumes} -gt 0 ]]; then
         # Quit all running apps first
-        for vol_info in "${mapped_volumes[@]}"; do
+        for vol_info in "${(@)mapped_volumes}"; do
             local bundle_id=$(echo "$vol_info" | /usr/bin/cut -d'|' -f4)
             if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
                 quit_app_for_bundle "$bundle_id" 2>/dev/null || true
@@ -2202,7 +2229,7 @@ nuclear_cleanup() {
         done
         
         # Unmount volumes
-        for vol_info in "${mapped_volumes[@]}"; do
+        for vol_info in "${(@)mapped_volumes}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             
@@ -2230,8 +2257,8 @@ nuclear_cleanup() {
     echo ""
     
     local volume_count=0
-    if [[ ${#mapped_volumes[@]} -gt 0 ]]; then
-        for vol_info in "${mapped_volumes[@]}"; do
+    if [[ ${#mapped_volumes} -gt 0 ]]; then
+        for vol_info in "${(@)mapped_volumes}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
@@ -2295,8 +2322,8 @@ nuclear_cleanup() {
     echo ""
     
     local container_count=0
-    if [[ ${#mapped_containers[@]} -gt 0 ]]; then
-        for container_info in "${mapped_containers[@]}"; do
+    if [[ ${#mapped_containers} -gt 0 ]]; then
+        for container_info in "${(@)mapped_containers}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
             local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
@@ -2472,15 +2499,14 @@ switch_storage_location() {
             return
         fi
         
-        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array[@]} ]]; then
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array} ]]; then
             print_error "無効な選択です"
             /bin/sleep 2
             continue
         fi
         
-        # Convert 1-based user input to 0-based array index
-        local array_index=$((choice - 1))
-        local selected_mapping="${mappings_array[$array_index]}"
+        # zsh arrays are 1-indexed, so choice can be used directly
+        local selected_mapping="${mappings_array[$choice]}"
         IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
         
         echo ""
@@ -3168,7 +3194,7 @@ show_quick_status() {
         
         # Join status parts with separator
         local first=true
-        for part in "${status_parts[@]}"; do
+        for part in "${(@)status_parts}"; do
             if [[ "$first" == true ]]; then
                 echo -n "$part"
                 first=false
@@ -3889,7 +3915,7 @@ install_workflow() {
     select_ipa_files || return
     
     CURRENT_IPA_INDEX=0
-    for ipa_file in "${SELECTED_IPAS[@]}"; do
+    for ipa_file in "${(@)SELECTED_IPAS}"; do
         ((CURRENT_IPA_INDEX++))
         
         if [[ $BATCH_MODE == true ]]; then
@@ -3906,18 +3932,18 @@ install_workflow() {
     echo ""
     print_success "全ての処理が完了しました"
     
-    if [[ ${#INSTALL_SUCCESS[@]} -gt 0 ]]; then
+    if [[ ${#INSTALL_SUCCESS} -gt 0 ]]; then
         echo ""
-        print_success "インストール成功: ${#INSTALL_SUCCESS[@]} 個"
-        for app in "${INSTALL_SUCCESS[@]}"; do
+        print_success "インストール成功: ${#INSTALL_SUCCESS} 個"
+        for app in "${(@)INSTALL_SUCCESS}"; do
             echo "  ✓ $app"
         done
     fi
     
-    if [[ ${#INSTALL_FAILED[@]} -gt 0 ]]; then
+    if [[ ${#INSTALL_FAILED} -gt 0 ]]; then
         echo ""
-        print_error "インストール失敗: ${#INSTALL_FAILED[@]} 個"
-        for app in "${INSTALL_FAILED[@]}"; do
+        print_error "インストール失敗: ${#INSTALL_FAILED} 個"
+        for app in "${(@)INSTALL_FAILED}"; do
             echo "  ✗ $app"
         done
     fi
@@ -3996,11 +4022,10 @@ uninstall_workflow() {
         return
     fi
     
-    # Get selected app info (convert 1-based user input to 0-based array index)
-    local array_index=$((app_choice - 1))
-    local selected_app="${apps_list[$array_index]}"
-    local selected_volume="${volumes_list[$array_index]}"
-    local selected_bundle="${bundles_list[$array_index]}"
+    # Get selected app info (zsh arrays are 1-indexed)
+    local selected_app="${apps_list[$app_choice]}"
+    local selected_volume="${volumes_list[$app_choice]}"
+    local selected_bundle="${bundles_list[$app_choice]}"
     
     # Check if trying to delete PlayCover volume with other apps remaining
     if [[ "$selected_volume" == "PlayCover" ]] && [[ $total_apps -gt 1 ]]; then
@@ -4219,12 +4244,12 @@ uninstall_all_apps() {
     local success_count=0
     local fail_count=0
     
-    # Loop through all apps (using KSH_ARRAYS - 0-based indexing)
-    for ((i=0; i<${#apps_list[@]}; i++)); do
+    # Loop through all apps (1-indexed zsh arrays)
+    for ((i=1; i<=${#apps_list}; i++)); do
         local app_name="${apps_list[$i]}"
         local volume_name="${volumes_list[$i]}"
         local bundle_id="${bundles_list[$i]}"
-        local current=$((i + 1))  # Display 1-based counter to user
+        local current=$i  # Display 1-based counter to user
         
         # Step 1: Remove app from PlayCover
         local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
@@ -4398,7 +4423,7 @@ select_external_disk() {
             local full_line="$line"
             
             local already_seen=false
-            for seen in "${seen_disks[@]}"; do
+            for seen in "${(@)seen_disks}"; do
                 if [[ "$seen" == "$disk_id" ]]; then
                     already_seen=true
                     break
@@ -4445,35 +4470,34 @@ select_external_disk() {
         fi
     done < <(diskutil list)
     
-    if [[ ${#external_disks[@]} -eq 0 ]]; then
+    if [[ ${#external_disks} -eq 0 ]]; then
         print_error "外部ストレージが見つかりません"
         print_info "外部ストレージを接続してから再実行してください"
         wait_for_enter
         exit 1
     fi
     
-    for info in "${disk_info[@]}"; do
+    for info in "${(@)disk_info}"; do
         echo "$info"
     done
     
     echo ""
     
     # If only one disk, auto-select with Enter key
-    if [[ ${#external_disks[@]} -eq 1 ]]; then
-        echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}) [Enter=1]: "
+    if [[ ${#external_disks} -eq 1 ]]; then
+        echo -n "ボリューム作成先を選択してください (1-${#external_disks}) [Enter=1]: "
         read selection
         # Default to 1 if empty
         selection=${selection:-1}
     else
-        echo -n "ボリューム作成先を選択してください (1-${#external_disks[@]}): "
+        echo -n "ボリューム作成先を選択してください (1-${#external_disks}): "
         read selection
     fi
     
-    if [[ "$selection" =~ ^[0-9]+$ ]] && [[ $selection -ge 1 ]] && [[ $selection -le ${#external_disks[@]} ]]; then
-        # Convert 1-based user input to 0-based array index
-        local array_index=$((selection - 1))
-        SELECTED_DISK="${external_disks[$array_index]}"
-        print_success "選択されたディスク: ${disk_info[$array_index]}"
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [[ $selection -ge 1 ]] && [[ $selection -le ${#external_disks} ]]; then
+        # zsh arrays are 1-indexed, so selection can be used directly
+        SELECTED_DISK="${external_disks[$selection]}"
+        print_success "選択されたディスク: ${disk_info[$selection]}"
     else
         print_error "無効な選択です"
         /bin/sleep 1
@@ -4511,7 +4535,7 @@ confirm_software_installations() {
     fi
     
     print_warning "以下の項目をインストールする必要があります:"
-    for item in "${install_items[@]}"; do
+    for item in "${(@)install_items}"; do
         echo "  - ${item}"
     done
     echo ""
@@ -5096,3 +5120,6 @@ trap 'echo ""; print_info "終了します"; /bin/sleep 1; /usr/bin/osascript -e
 
 # Execute main
 main
+
+# Explicit exit
+exit 0

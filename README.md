@@ -10,7 +10,7 @@ PlayCoverを外部ストレージで運用するための**オールインワン
 ## 📦 メインツール
 
 ### `0_PlayCover-ManagementTool.command`
-**PlayCover統合管理ツール（v4.24.2）**
+**PlayCover統合管理ツール（v4.27.0）**
 
 すべての機能を1つのスクリプトに統合した完全版です。
 
@@ -270,7 +270,19 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.26.3 (最新) - Fix rsync Compatibility for macOS
+### v4.27.0 (最新) - Pure zsh Syntax (Removed bash Compatibility)
+- 🔧 **純粋なzsh構文に書き直し**: bash互換機能を完全削除
+- ✅ `setopt KSH_ARRAYS` を削除
+- ✅ 配列構文を変換: `${#array[@]}` → `${#array}`
+- ✅ 配列インデックスを1-basedに変換
+- ✅ C-style forループをzsh構文に変換
+- ✅ `for ... in "${array[@]}"` → `for ... in "${(@)array}"`
+- ✅ 前提条件・環境・注意点セクションを追加
+- ✅ スクリプト末尾に明示的な `exit 0` を追加
+- ✅ 29箇所の配列長構文、5箇所のforループ、13箇所のfor-in構文を変換
+- ✅ より純粋でネイティブなzshスクリプトに進化
+
+### v4.26.3 - Fix rsync Compatibility for macOS
 - 🐛 **rsync互換性修正**: macOS標準rsyncに対応
 - ✅ `--info=progress2` → `--progress` に変更
 - ✅ macOS標準rsync (古いバージョン) をサポート
@@ -388,4 +400,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.26.3）
+**最終更新:** 2025年10月27日（macOS Sequoia 15.1対応、v4.27.0）
