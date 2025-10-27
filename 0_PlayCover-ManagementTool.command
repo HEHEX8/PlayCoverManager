@@ -1889,15 +1889,15 @@ individual_volume_control() {
             # PlayCover volume is locked if PlayCover is running OR any app is running
             if is_playcover_running; then
                 is_locked=true
-                lock_reason="app_running"  # PlayCover自体が起動中
+                lock_reason="app_running"  # PlayCover自体が動作中
             elif [[ "$any_app_running" == "true" ]]; then
                 is_locked=true
-                lock_reason="app_storage"  # アプリ本体(.app)が使用中
+                lock_reason="app_storage"  # 配下のアプリが動作中（アプリ本体.appを保管中）
             fi
         else
             if is_app_running "$bundle_id"; then
                 is_locked=true
-                lock_reason="app_running"  # アプリ自体が起動中
+                lock_reason="app_running"  # アプリ自体が動作中
             fi
         fi
         
@@ -1949,9 +1949,9 @@ individual_volume_control() {
         if $is_locked; then
             # Locked: show with lock icon, no number
             if [[ "$lock_reason" == "app_running" ]]; then
-                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ起動中${NC}"
+                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ動作中${NC}"
             elif [[ "$lock_reason" == "app_storage" ]]; then
-                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 📦 アプリ本体を保管中${NC}"
+                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🚬 下記アプリの終了待機中${NC}"
             fi
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
