@@ -317,6 +317,112 @@ check_volume_exists_or_error() {
     return 0
 }
 
+# Unmount volume with unified error handling
+# Usage: unmount_volume <device|mount_point> [silent|verbose] [force]
+# Returns: 0 on success, 1 on failure
+unmount_volume() {
+    local target="$1"
+    local mode="${2:-silent}"   # silent, verbose
+    local force="${3:-}"         # force (optional)
+    
+    local force_option=""
+    if [[ "$force" == "force" ]]; then
+        force_option="force"
+    fi
+    
+    if [[ "$mode" == "verbose" ]]; then
+        if [[ -n "$force_option" ]]; then
+            print_info "強制アンマウント中..."
+        else
+            print_info "アンマウント中..."
+        fi
+    fi
+    
+    if /usr/bin/sudo /usr/sbin/diskutil unmount $force_option "$target" >/dev/null 2>&1; then
+        if [[ "$mode" == "verbose" ]]; then
+            print_success "アンマウント成功"
+        fi
+        return 0
+    else
+        if [[ "$mode" == "verbose" ]]; then
+            if [[ -z "$force_option" ]]; then
+                print_error "アンマウント失敗"
+            else
+                print_error "強制アンマウント失敗"
+            fi
+        fi
+        return 1
+    fi
+}
+
+# Unmount with automatic force fallback (try normal, then force if failed)
+# Usage: unmount_with_fallback <device|mount_point> [silent|verbose]
+# Returns: 0 on success, 1 on failure
+unmount_with_fallback() {
+    local target="$1"
+    local mode="${2:-silent}"   # silent, verbose
+    
+    # Try normal unmount first
+    if unmount_volume "$target" "$mode"; then
+        return 0
+    fi
+    
+    # If normal unmount failed, try force unmount
+    if [[ "$mode" == "verbose" ]]; then
+        print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+    fi
+    
+    if unmount_volume "$target" "$mode" "force"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Mount volume with unified error handling
+# Usage: mount_volume <device|volume_name> <mount_point> [nobrowse] [silent|verbose]
+# Returns: 0 on success, 1 on failure
+mount_volume() {
+    local device="$1"
+    local mount_point="$2"
+    local nobrowse="${3:-}"     # nobrowse (optional)
+    local mode="${4:-silent}"   # silent, verbose
+    
+    if [[ "$mode" == "verbose" ]]; then
+        print_info "マウント中..."
+    fi
+    
+    # Create mount point if not exists
+    if [[ ! -d "$mount_point" ]]; then
+        /usr/bin/sudo /bin/mkdir -p "$mount_point" 2>/dev/null
+    fi
+    
+    # Mount with or without nobrowse option
+    if [[ "$nobrowse" == "nobrowse" ]]; then
+        # First mount with diskutil, then remount with nobrowse
+        if /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$mount_point" "$device" >/dev/null 2>&1; then
+            /usr/bin/sudo /sbin/mount -u -o nobrowse "$mount_point" >/dev/null 2>&1
+        else
+            if [[ "$mode" == "verbose" ]]; then
+                print_error "マウント失敗"
+            fi
+            return 1
+        fi
+    else
+        if ! /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$mount_point" "$device" >/dev/null 2>&1; then
+            if [[ "$mode" == "verbose" ]]; then
+                print_error "マウント失敗"
+            fi
+            return 1
+        fi
+    fi
+    
+    if [[ "$mode" == "verbose" ]]; then
+        print_success "マウント成功"
+    fi
+    return 0
+}
+
 is_playcover_running() {
     pgrep -x "PlayCover" >/dev/null 2>&1
 }
@@ -647,11 +753,8 @@ mount_volume() {
     # If mounted elsewhere, unmount first
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
         print_info "別の場所にマウントされています: $current_mount"
-        print_info "アンマウント中..."
-        
         local device=$(get_volume_device "$volume_name" "$diskutil_cache")
-        if ! /usr/bin/sudo /usr/sbin/diskutil unmount "$device" 2>/dev/null; then
-            print_error "アンマウントに失敗しました"
+        if ! unmount_volume "$device" "verbose"; then
             return 1
         fi
     fi
@@ -1133,7 +1236,7 @@ check_playcover_volume_mount() {
     local current_mount=$(/usr/sbin/diskutil info "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
     
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
-        if ! /usr/bin/sudo /usr/sbin/diskutil unmount force "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null; then
+        if ! unmount_volume "$PLAYCOVER_VOLUME_DEVICE" "silent" "force"; then
             print_error "ボリュームのアンマウントに失敗しました"
             exit_with_cleanup 1 "ボリュームアンマウントエラー"
         fi
@@ -3083,17 +3186,11 @@ switch_storage_location() {
         echo ""
         print_warning "この操作には時間がかかる場合があります"
         echo ""
-        echo -n "${BOLD}${YELLOW}続行しますか？ ${LIGHT_GRAY}(Y/n):${NC} "
-        read confirm
         
-        # Default to Yes if empty
-        confirm=${confirm:-Y}
-        
-        if [[ ! "$confirm" =~ ^[Yy] ]]; then
+        if ! prompt_confirmation "${BOLD}${YELLOW}続行しますか？${NC}" "Y"; then
             print_info "$MSG_CANCELED"
-            wait_for_enter
+            wait_for_enter "Enterキーで続行..."
             continue
-            return
         fi
         
         # Authenticate /usr/bin/sudo only when actually needed (before mount/copy operations)
@@ -3209,8 +3306,8 @@ switch_storage_location() {
             
             # Check disk space before migration
             print_info "転送前の容量チェック中..."
-            local source_size_bytes=$(/usr/bin/du -sk "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
-            if [[ -z "$source_size_bytes" ]]; then
+            local source_size_bytes=$(get_container_size_bytes "$source_path")
+            if [[ "$source_size_bytes" -eq 0 ]]; then
                 print_error "コピー元のサイズを取得できませんでした"
                 wait_for_enter
                 continue
@@ -3339,7 +3436,7 @@ switch_storage_location() {
             # Debug: Show source path and content
             print_info "コピー元: ${source_path}"
             local file_count=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-            local total_size=$(/usr/bin/du -sh "$source_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+            local total_size=$(get_container_size "$source_path")
             print_info "  ファイル数: ${file_count}"
             print_info "  データサイズ: ${total_size}"
             
@@ -3368,15 +3465,13 @@ switch_storage_location() {
                 print_success "データのコピーが完了しました"
                 
                 local copied_count=$(/usr/bin/find "$temp_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-                local copied_size=$(/usr/bin/du -sh "$temp_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
+                local copied_size=$(get_container_size "$temp_mount")
                 print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
             else
                 echo ""
                 print_error "データのコピーに失敗しました"
                 print_info "一時マウントをクリーンアップ中..."
-                /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null || {
-                    /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount" 2>/dev/null || true
-                }
+                unmount_with_fallback "$temp_mount" "silent" || true
                 /bin/sleep 1  # Wait for unmount to complete
                 cleanup_temp_dir "$temp_mount" true
                 wait_for_enter "Enterキーで続行..."
@@ -3385,10 +3480,7 @@ switch_storage_location() {
             
             # Unmount temporary mount
             print_info "一時マウントをアンマウント中..."
-            /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" || {
-                print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
-                /usr/bin/sudo /usr/sbin/diskutil unmount force "$temp_mount"
-            }
+            unmount_with_fallback "$temp_mount" "verbose"
             /bin/sleep 1  # Wait for unmount to complete
             cleanup_temp_dir "$temp_mount" true
             
@@ -3446,7 +3538,8 @@ switch_storage_location() {
                 check_mount_point="$temp_check_mount"
             fi
             
-            local source_size_bytes=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
+            local source_size_kb=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
+            local source_size_bytes=$((source_size_kb))
             
             # Unmount temporary check /sbin/mount if created
             if [[ -n "$temp_check_mount" ]]; then
@@ -3637,9 +3730,7 @@ switch_storage_location() {
                 # Cleanup: Unmount first, then clean up directories
                 if [[ "$temp_mount_created" == true ]]; then
                     print_info "一時マウントをクリーンアップ中..."
-                    /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
-                        /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
-                    }
+                    unmount_with_fallback "$source_mount" "silent" || true
                     /bin/sleep 1  # Wait for unmount to complete
                     /usr/bin/sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
                 fi
@@ -3900,13 +3991,8 @@ install_auto_mount() {
     if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
         print_warning "自動マウント機能は既にインストールされています"
         echo ""
-        echo -n "再インストールしますか？ (Y/n): "
-        read confirm
         
-        # Default to Yes if empty
-        confirm=${confirm:-Y}
-        
-        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        if ! prompt_confirmation "再インストールしますか？" "Y"; then
             return
         fi
         
@@ -3987,19 +4073,13 @@ uninstall_auto_mount() {
     
     if [[ ! -f "$launch_agent_path" ]] && [[ ! -f "$script_path" ]]; then
         print_warning "自動マウント機能はインストールされていません"
-        wait_for_enter
+        wait_for_enter "Enterキーで続行..."
         return
     fi
     
-    echo -n "${RED}自動マウント機能をアンインストールしますか？ (Y/n):${NC} "
-    read confirm
-    
-    # Default to Yes if empty
-    confirm=${confirm:-Y}
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    if ! prompt_confirmation "${RED}自動マウント機能をアンインストールしますか？${NC}" "Y"; then
         print_info "アンインストールをキャンセルしました"
-        wait_for_enter
+        wait_for_enter "Enterキーで続行..."
         return
     fi
     
@@ -5085,20 +5165,14 @@ confirm_software_installations() {
     done
     echo ""
     
-    echo -n "インストールを続行しますか? (Y/n): "
-    read response
+    if ! prompt_confirmation "インストールを続行しますか?" "Y"; then
+        print_info "ユーザーによりインストールがキャンセルされました"
+        /bin/sleep 1
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+    fi
     
-    case "$response" in
-        [nN]|[nN][oO])
-            print_info "ユーザーによりインストールがキャンセルされました"
-            /bin/sleep 1
-            /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
-            ;;
-        *)
-            print_success "インストールを続行します"
-            echo ""
-            ;;
-    esac
+    print_success "インストールを続行します"
+    echo ""
 }
 
 create_playcover_main_volume() {
@@ -5167,13 +5241,10 @@ mount_playcover_main_volume() {
     
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
         print_info "ボリュームが別の場所にマウントされています: ${current_mount}"
-        print_info "アンマウント中..."
-        if ! /usr/bin/sudo /usr/sbin/diskutil unmount force "$volume_device" 2>/dev/null; then
-            print_error "ボリュームのアンマウントに失敗しました"
+        if ! unmount_volume "$volume_device" "verbose" "force"; then
             wait_for_enter
             exit 1
         fi
-        print_success "アンマウントしました"
     fi
     
     local has_internal_data=false
@@ -5532,22 +5603,14 @@ run_initial_setup() {
     echo ""
     
     echo -n "${ORANGE}初回セットアップを開始しますか？ (y/N):${NC} "
-    read response
+    if ! prompt_confirmation "" "N"; then
+        print_info "セットアップをキャンセルしました"
+        /bin/sleep 1
+        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+    fi
     
-    # Default to No if empty
-    response=${response:-N}
-    
-    case "$response" in
-        [yY]|[yY][eE][sS])
-            print_success "セットアップを開始します"
-            echo ""
-            ;;
-        *)
-            print_info "セットアップをキャンセルしました"
-            /bin/sleep 1
-            /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
-            ;;
-    esac
+    print_success "セットアップを開始します"
+    echo ""
     
     # Run integrated initial setup
     check_architecture
