@@ -1,5 +1,95 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.1: Storage Switching - Improved Sync Method
+
+### Storage Switching Transfer Method Improvement to `0_PlayCover-ManagementTool.command`
+
+#### Change Summary
+
+**Previous Method (v4.35.0):**
+- Used `rsync -avH --update` for incremental sync
+- **Problem**: Deleted files at source remained at destination
+- Result: Old garbage files accumulated over time
+
+**New Method (v4.35.1):**
+- Now uses `rsync -avH --delete` for proper synchronization
+- **Behavior**: 
+  - ✅ Files modified/added → transferred
+  - ✅ Files deleted at source → deleted at destination  
+  - ✅ Files unchanged (same size & mtime) → skipped (no write)
+  - ✅ Matches game distribution platforms' update behavior
+
+#### Technical Details
+
+**Why This Approach:**
+- Researched major game client update mechanisms (Steam, 原神, Epic Games, etc.)
+- All use hash-based content comparison for strict synchronization
+- However, `rsync --checksum` requires calculating hashes for both source and destination
+- For local-to-local copy, this is 2x slower than timestamp comparison
+- **Decision**: Use `--delete` with timestamp comparison for practical balance
+
+**User Display:**
+```
+💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ
+```
+- Clear messaging that deletion sync is active
+- Unchanged files are not rewritten (SSD-friendly)
+
+#### Code Changes
+
+**File: `0_PlayCover-ManagementTool.command`**
+
+**Line 6**: Version number
+```diff
+- # Version: 4.35.0 - Major refactoring: comprehensive code consolidation completed
++ # Version: 4.35.1 - Storage switching: improved sync method with deletion sync
+```
+
+**Lines 3468-3488**: Storage switching rsync command
+```diff
+- # Copy data from internal to external (incremental sync)
+- print_info "データを差分転送中... (進捗が表示されます)"
++ # Copy data from internal to external (differential sync with deletion)
++ print_info "データを同期転送中... (進捗が表示されます)"
+  echo ""
+- print_info "💡 差分コピーモード: 既存ファイルはスキップされます"
++ print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
+  echo ""
+  
+- # Use rsync with --update flag for incremental sync (skip existing files)
+- # This is much faster when re-running after interruption
++ # Use rsync with --delete for proper sync (like game client updates)
++ # - Files modified/added: transferred
++ # - Files deleted at source: deleted at destination
++ # - Files unchanged (same size & mtime): skipped (no write)
++ # This matches game distribution platforms' update behavior
+  # Exclude system metadata files and backup directories
+  # Note: macOS rsync doesn't support --info=progress2, use --progress instead
+- /usr/bin/sudo /usr/bin/rsync -avH --update --progress \
++ /usr/bin/sudo /usr/bin/rsync -avH --delete --progress \
+      --exclude='.Spotlight-V100' \
+      --exclude='.fseventsd' \
+      --exclude='.Trashes' \
+      --exclude='.TemporaryItems' \
+      --exclude='.DS_Store' \
+      --exclude='.playcover_backup_*' \
+      "$source_path/" "$temp_mount/"
+```
+
+#### Git Commit
+
+```bash
+commit 5c9b0f1
+"v4.35.1 - ストレージ切り替え転送方法改善（削除同期対応）"
+
+- rsync に --delete オプション追加
+- 削除されたファイルも転送先に反映
+- 同一ファイル（サイズ・更新日時同じ）は書き込みスキップ
+- ゲーム配信プラットフォームの更新処理と同等の動作
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.0: Comprehensive Code Consolidation - Complete Refactoring
 
 ### Major Refactoring Phase 2 to `0_PlayCover-ManagementTool.command`

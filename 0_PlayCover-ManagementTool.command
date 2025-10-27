@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.35.0 - Major refactoring: comprehensive code consolidation completed
+# Version: 4.35.1 - Storage switching: improved sync method with deletion sync
 #######################################################
 
 #######################################################
@@ -3465,17 +3465,20 @@ switch_storage_location() {
             print_info "  ファイル数: ${file_count}"
             print_info "  データサイズ: ${total_size}"
             
-            # Copy data from internal to external (incremental sync)
-            print_info "データを差分転送中... (進捗が表示されます)"
+            # Copy data from internal to external (differential sync with deletion)
+            print_info "データを同期転送中... (進捗が表示されます)"
             echo ""
-            print_info "💡 差分コピーモード: 既存ファイルはスキップされます"
+            print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
             echo ""
             
-            # Use rsync with --update flag for incremental sync (skip existing files)
-            # This is much faster when re-running after interruption
+            # Use rsync with --delete for proper sync (like game client updates)
+            # - Files modified/added: transferred
+            # - Files deleted at source: deleted at destination
+            # - Files unchanged (same size & mtime): skipped (no write)
+            # This matches game distribution platforms' update behavior
             # Exclude system metadata files and backup directories
             # Note: macOS rsync doesn't support --info=progress2, use --progress instead
-            /usr/bin/sudo /usr/bin/rsync -avH --update --progress \
+            /usr/bin/sudo /usr/bin/rsync -avH --delete --progress \
                 --exclude='.Spotlight-V100' \
                 --exclude='.fseventsd' \
                 --exclude='.Trashes' \
