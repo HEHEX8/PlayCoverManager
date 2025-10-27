@@ -829,7 +829,7 @@ mount_volume() {
                     print_info "データをコピー中..."
                     /usr/bin/sudo /usr/bin/rsync -aH --progress "$target_path/" "$temp_migrate/" 2>/dev/null
                     local rsync_exit=$?
-                    /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_migrate" >/dev/null 2>&1
+                    unmount_volume "$temp_migrate" "silent"
                     cleanup_temp_dir "$temp_migrate" true
                     
                     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
@@ -868,7 +868,8 @@ mount_volume() {
     fi
 }
 
-unmount_volume() {
+# High-level unmount function: unmount app volume with optional app quit
+unmount_app_volume() {
     local volume_name=$1
     local bundle_id=$2  # Optional: if provided, quit the app first
     local diskutil_cache="${3:-}"  # Optional: pre-cached /usr/sbin/diskutil list output
@@ -897,7 +898,7 @@ unmount_volume() {
     
     local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
-    if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+    if unmount_volume "$device" "silent"; then
         print_success "アンマウント成功"
         return 0
     else
@@ -2022,7 +2023,7 @@ individual_volume_control() {
             quit_app_if_running "$bundle_id"
             
             local device=$(get_volume_device "$volume_name")
-            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            if unmount_volume "$device" "silent"; then
                 # Success - silently return to menu
                 individual_volume_control
                 return
@@ -2049,7 +2050,7 @@ individual_volume_control() {
             local device=$(get_volume_device "$volume_name")
             
             # Unmount from wrong location
-            if ! /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            if ! unmount_volume "$device" "silent"; then
                 clear
                 print_header "${display_name} の操作"
                 echo ""
@@ -2192,8 +2193,8 @@ batch_mount_all() {
             if [[ -n "$pc_current_mount" ]] && [[ "$pc_current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
                 echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
                 local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-                if /usr/bin/sudo /usr/sbin/diskutil unmount "$pc_device" >/dev/null 2>&1; then
-                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                if unmount_volume "$pc_device" "silent"; then
+                    if mount_volume "$pc_device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
                         ((success_count++))
                     else
@@ -2229,8 +2230,8 @@ batch_mount_all() {
             if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
                 echo "     ${ORANGE}⚠️  マウント位置が異なる為修正します${NC}"
                 local device=$(get_volume_device "$volume_name")
-                if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
-                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                if unmount_volume "$device" "silent"; then
+                    if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                         ((success_count++))
                     else
@@ -2366,7 +2367,7 @@ batch_unmount_all() {
             fi
             
             local device=$(get_volume_device "$volume_name")
-            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+            if unmount_volume "$device" "silent"; then
                 echo "     ${GREEN}✅ アンマウント成功${NC}"
                 ((success_count++))
             else
@@ -2511,7 +2512,7 @@ eject_disk() {
                         quit_app_if_running "$bundle_id"
                     fi
                     
-                    if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                    if unmount_volume "$device" "silent"; then
                         echo "     ${GREEN}✅ アンマウント成功${NC}"
                         ((success_count++))
                     else
@@ -2756,7 +2757,7 @@ nuclear_cleanup() {
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             
             echo "  アンマウント中: ${display} (${device})"
-            if /usr/bin/sudo /usr/sbin/diskutil unmount force "$device" >/dev/null 2>&1; then
+            if unmount_volume "$device" "silent" "force"; then
                 ((unmount_count++))
                 print_success "  ✅ 完了"
             else
@@ -3242,7 +3243,7 @@ switch_storage_location() {
                     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
                         print_info "外部ボリュームが誤った位置にマウントされています: ${current_mount}"
                         print_info "正しい位置に再マウントするため、一度アンマウントします"
-                        unmount_volume "$volume_name" "$bundle_id" || true
+                        unmount_app_volume "$volume_name" "$bundle_id" || true
                         /bin/sleep 1
                     fi
                     
@@ -3370,7 +3371,7 @@ switch_storage_location() {
             # Cleanup: Unmount after capacity check for clean state
             if [[ "$mount_cleanup_needed" == true ]]; then
                 print_info "容量チェック完了、一時マウントをクリーンアップ中..."
-                /usr/bin/sudo /usr/sbin/diskutil unmount "$existing_mount" >/dev/null 2>&1
+                unmount_volume "$existing_mount" "silent"
                 /bin/sleep 1
             fi
             cleanup_temp_dir "$temp_check_mount" true
@@ -3415,7 +3416,7 @@ switch_storage_location() {
             local current_mount=$(get_mount_point "$volume_name")
             if [[ -n "$current_mount" ]]; then
                 print_info "既存のマウントをアンマウント中..."
-                unmount_volume "$volume_name" "$bundle_id" || true
+                unmount_app_volume "$volume_name" "$bundle_id" || true
                 /bin/sleep 1
             fi
             
@@ -3543,8 +3544,8 @@ switch_storage_location() {
             
             # Unmount temporary check /sbin/mount if created
             if [[ -n "$temp_check_mount" ]]; then
-                /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_check_mount" >/dev/null 2>&1
-                /usr/bin/sudo /bin/rm -rf "$temp_check_mount"
+                unmount_volume "$temp_check_mount" "silent"
+                cleanup_temp_dir "$temp_check_mount" true
             fi
             
             if [[ -z "$source_size_bytes" ]]; then
@@ -3626,19 +3627,12 @@ switch_storage_location() {
                 
                 local volume_device=$(get_volume_device "$volume_name")
                 
-                # Try normal unmount first
-                local umount_output=$(sudo /usr/sbin/diskutil unmount "$target_path" 2>&1)
-                local umount_exit=$?
-                
-                if [[ $umount_exit -ne 0 ]]; then
-                    print_warning "通常のアンマウントに失敗しました"
-                    echo "理由: $umount_output"
-                    echo ""
-                    print_info "強制アンマウントを試みます..."
-                    
-                    # Try force unmount
-                    umount_output=$(sudo /usr/sbin/diskutil unmount force "$target_path" 2>&1)
-                    umount_exit=$?
+                # Try unmount with automatic fallback
+                if ! unmount_with_fallback "$target_path" "verbose"; then
+                    local umount_exit=1
+                else
+                    local umount_exit=0
+                fi
                     
                     if [[ $umount_exit -ne 0 ]]; then
                         print_error "強制アンマウントも失敗しました"
@@ -3746,14 +3740,12 @@ switch_storage_location() {
             # Unmount volume
             if [[ "$temp_mount_created" == true ]]; then
                 print_info "一時マウントをクリーンアップ中..."
-                /usr/bin/sudo /usr/sbin/diskutil unmount "$source_mount" 2>/dev/null || {
-                    /usr/bin/sudo /usr/sbin/diskutil unmount force "$source_mount" 2>/dev/null || true
-                }
+                unmount_with_fallback "$source_mount" "silent" || true
                 /bin/sleep 1  # Wait for unmount to complete
-                /usr/bin/sudo /bin/rm -rf "$source_mount"
+                cleanup_temp_dir "$source_mount" true
             else
                 print_info "外部ボリュームをアンマウント中..."
-                unmount_volume "$volume_name" "$bundle_id" || true
+                unmount_app_volume "$volume_name" "$bundle_id" || true
             fi
             
             echo ""
@@ -4733,7 +4725,7 @@ uninstall_workflow() {
     # Step 7: Unmount volume if mounted (silent)
     local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
     if /sbin/mount | grep -q "$volume_mount_point"; then
-        /usr/sbin/diskutil unmount "$volume_mount_point" >/dev/null 2>&1
+        unmount_volume "$volume_mount_point" "silent"
     fi
     
     # Step 8: Delete APFS volume
@@ -4911,7 +4903,7 @@ uninstall_all_apps() {
         # Step 6: Unmount and delete APFS volume
         local volume_mount_point="${PLAYCOVER_CONTAINER}/${volume_name}"
         if /sbin/mount | grep -q "$volume_mount_point"; then
-            /usr/sbin/diskutil unmount "$volume_mount_point" >/dev/null 2>&1
+            unmount_volume "$volume_mount_point" "silent"
         fi
         
         # Find and delete volume
@@ -5295,8 +5287,8 @@ mount_playcover_main_volume() {
         local rsync_status=$?
         if [[ $rsync_status -ne 0 ]]; then
             print_error "データのコピーに失敗しました (終了コード: $rsync_status)"
-            /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount" 2>/dev/null
-            rmdir "$temp_mount" 2>/dev/null
+            unmount_volume "$temp_mount" "silent"
+            cleanup_temp_dir "$temp_mount" true
             wait_for_enter
             exit 1
         fi
@@ -5304,7 +5296,7 @@ mount_playcover_main_volume() {
         print_success "コピーが完了しました"
         
         # Unmount temporary mount
-        /usr/bin/sudo /usr/sbin/diskutil unmount "$temp_mount"
+        unmount_volume "$temp_mount" "silent"
         rmdir "$temp_mount"
         
         # Backup and remove internal container
