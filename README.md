@@ -10,7 +10,7 @@ PlayCoverを外部ストレージで運用するための**オールインワン
 ## 📦 メインツール
 
 ### `0_PlayCover-ManagementTool.command`
-**PlayCover統合管理ツール（v4.33.5）**
+**PlayCover統合管理ツール（v4.33.6）**
 
 すべての機能を1つのスクリプトに統合した完全版です。
 

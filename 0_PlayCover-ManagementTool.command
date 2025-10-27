@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.5 - Improved wrong mount location handling with auto-remount
+# Version: 4.33.6 - Fixed false lock status after unmounting correctly-mounted volumes
 #######################################################
 
 #######################################################
@@ -1684,7 +1684,7 @@ individual_volume_control() {
                 fi
             else
                 # Volume is not mounted - check storage mode
-                local storage_mode=$(get_storage_mode "$target_path")
+                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                 
                 case "$storage_mode" in
                     "none")

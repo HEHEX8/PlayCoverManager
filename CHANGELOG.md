@@ -1,5 +1,161 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.6: Fixed False Lock Status After Unmounting Correctly-Mounted Volumes
+
+### Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Unmounting Correctly-Mounted Volume Shows False "Locked" Status
+
+**User Report:**
+```
+[Before unmount]
+3. 原神
+    🟢 マウント済: /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+
+User selects "3" to unmount (toggle behavior)
+
+[After unmount]
+🔒 ロック中 原神 | 🏠 内蔵ストレージモード
+    ⚪️ 未マウント
+
+Problem: Volume is not locked, but appears as locked!
+```
+
+**Terminal Evidence:**
+```bash
+ls -a /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+.  ..  .com.apple.containermanagerd.metadata.plist  .playcover_internal_storage_flag
+```
+
+Only flag file remains after unmount, causing misdetection.
+
+#### Root Cause Analysis (Line 1687)
+
+**Problem:**
+```zsh
+# Individual volume control display loop
+local storage_mode=$(get_storage_mode "$target_path")
+                                                      ^^^^^^^^^
+                                                      Missing volume_name parameter!
+```
+
+**Impact:**
+1. After unmount, only flag file remains in container directory
+2. Display loop calls `get_storage_mode()` without `volume_name`
+3. Function cannot check external volume existence (priority check skipped)
+4. Function finds `.playcover_internal_storage_flag` file
+5. Returns `internal_intentional` mode
+6. Display shows as "🔒 ロック中" (locked) - FALSE POSITIVE
+
+#### Fix Applied (Line 1687)
+
+**Before:**
+```zsh
+local storage_mode=$(get_storage_mode "$target_path")
+```
+
+**After:**
+```zsh
+local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+```
+
+**Result:**
+- Function can now check external volume existence first (priority check)
+- If volume exists externally but not mounted: Returns `none` mode
+- Display correctly shows "⚪️ 未マウント" (unmounted)
+- No more false "locked" status
+
+#### Technical Details
+
+**`get_storage_mode()` Function Logic (Lines 945-987):**
+```zsh
+get_storage_mode() {
+    local container_path=$1
+    local volume_name=$2  # ← Required for external volume check
+    
+    # PRIORITY 1: Check external volume mount status FIRST
+    if [[ -n "$volume_name" ]]; then
+        if volume_exists "$volume_name"; then
+            # Volume exists externally
+            local current_mount=$(get_mount_point "$volume_name")
+            
+            if [[ -n "$current_mount" ]]; then
+                if [[ "$current_mount" == "$container_path" ]]; then
+                    echo "external"  # Correctly mounted
+                else
+                    echo "external_wrong_location"  # Wrong location
+                fi
+                return 0
+            else
+                # Volume exists but not mounted
+                echo "none"  # ← Should return this after unmount
+                return 0
+            fi
+        fi
+    fi
+    
+    # PRIORITY 2: Check internal storage (only if external check fails)
+    local storage_type=$(get_storage_type "$container_path")
+    
+    case "$storage_type" in
+        "internal")
+            if has_internal_storage_flag "$container_path"; then
+                echo "internal_intentional"  # ← Was incorrectly returned
+            else
+                echo "internal_contaminated"
+            fi
+            ;;
+        "none")
+            echo "none"
+            ;;
+    esac
+}
+```
+
+**Key Points:**
+- Without `volume_name` parameter, PRIORITY 1 check is skipped
+- Function falls through to PRIORITY 2 (internal storage check)
+- Finds flag file and returns wrong mode
+- With parameter, PRIORITY 1 detects external volume and returns `none`
+
+#### Files Modified
+
+1. **0_PlayCover-ManagementTool.command**
+   - Line 6: Version updated to 4.33.6
+   - Line 1687: Added `"$volume_name"` parameter to `get_storage_mode()` call
+
+2. **README.md**
+   - Line 13: Version updated to v4.33.6
+
+3. **CHANGELOG.md**
+   - Added v4.33.6 entry with detailed bug analysis and fix documentation
+
+#### Verification
+
+**Test Steps:**
+1. Mount a volume correctly (🟢 マウント済)
+2. Select volume to unmount (toggle behavior)
+3. Check display status
+
+**Expected Result:**
+```
+Before:
+3. 原神
+    🟢 マウント済: /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+
+After:
+3. 原神
+    ⚪️ 未マウント
+```
+
+**No More False Lock Status:**
+- ✅ Volume correctly shows as unmounted
+- ✅ No "🔒 ロック中" status
+- ✅ No "🏠 内蔵ストレージモード" label
+- ✅ Can be mounted again by selecting same number
+
+---
+
 ## 2025-01-28 - Version 4.33.5: Improved Wrong Mount Location Handling with Auto-Remount
 
 ### UI/UX Improvements to `0_PlayCover-ManagementTool.command`
