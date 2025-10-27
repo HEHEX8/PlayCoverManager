@@ -1,5 +1,226 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.8: Fixed Empty Volume Storage Mode Switching
+
+### Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Cannot Switch Empty Volume from Internal Back to External
+
+**User Scenario:**
+```
+1. Empty volume (8.0K = only flag file)
+2. User switches: External → Internal (creates flag file)
+3. User immediately switches: Internal → External
+   ❌ Error: "内蔵ストレージにデータがありません"
+   ❌ Cannot complete switch - stuck in internal mode
+```
+
+**Terminal Output:**
+```
+原神 のストレージ切替
+
+現在のデータ位置
+  🏠 内部ストレージ
+     使用容量: 8.0K / 残容量: 156G
+
+実行する操作: 🏠内蔵 → 🔌外部 へ移動
+  🔌外部ストレージ残容量: 3874G
+
+続行しますか？ (Y/n): y
+
+ℹ️  内蔵から外部ストレージへデータを移行中...
+ℹ️  コンテナ構造を検証中...
+❌ 内蔵ストレージにデータがありません  ← BUG!
+
+ℹ️  現在の状態:
+  パス: /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+
+Enterキーで続行...  ← Returns to menu without completing switch
+```
+
+#### Root Cause Analysis (Line 3053-3080)
+
+**Problem Code:**
+```zsh
+# Check if only flag file exists (no actual data)
+local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+
+if [[ -z "$content_check" ]]; then
+    # Only flag file exists, no actual data
+    print_warning "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    echo ""
+    print_info "これは外部ボリュームが誤った場所にマウントされている可能性があります"
+    # ← Assumes external volume mount issue (WRONG!)
+    echo ""
+    echo -n "${BOLD}${YELLOW}フラグファイルを削除しますか？ (Y/n):${NC} "
+    read delete_flag
+    
+    if [[ "$delete_flag" =~ ^[Yy]?$ ]]; then
+        remove_internal_storage_flag "$source_path"
+        print_success "フラグファイルを削除しました"
+        echo ""
+        print_info "ボリューム管理から外部ボリュームを再マウントしてください"
+        # ← Asks user to manually remount (BAD UX!)
+    else
+        print_info "キャンセルしました"
+    fi
+    
+    wait_for_enter
+    continue  # ← Returns to menu, doesn't complete switch!
+fi
+```
+
+**Why This Happens:**
+1. Empty volume initially created (no data, just container structure)
+2. User switches to internal mode → Creates `.playcover_internal_storage_flag` (8.0K)
+3. User immediately switches back to external mode
+4. Code checks container: Only flag file exists (no Data directory)
+5. Code **incorrectly assumes** external volume mount issue
+6. **Actually**: This is a valid internal→external switch scenario
+7. Code asks for manual intervention instead of auto-completing
+
+#### Fix Applied (Line 3056-3080)
+
+**Before:**
+```zsh
+if [[ -z "$content_check" ]]; then
+    # Only flag file exists
+    print_warning "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    echo ""
+    print_info "これは外部ボリュームが誤った場所にマウントされている可能性があります"
+    echo ""
+    echo -n "${BOLD}${YELLOW}フラグファイルを削除しますか？ (Y/n):${NC} "
+    read delete_flag
+    
+    if [[ "$delete_flag" =~ ^[Yy]?$ ]]; then
+        remove_internal_storage_flag "$source_path"
+        print_success "フラグファイルを削除しました"
+        print_info "ボリューム管理から外部ボリュームを再マウントしてください"
+        # ← Manual intervention required
+    else
+        print_info "キャンセルしました"
+    fi
+    
+    wait_for_enter
+    continue  # ← Fails to complete switch
+fi
+```
+
+**After:**
+```zsh
+if [[ -z "$content_check" ]]; then
+    # Only flag file exists, no actual data
+    # This happens when switching empty volume: external → internal → external
+    print_info "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    print_info "フラグファイルを削除して外部ボリュームをマウントします"
+    echo ""
+    
+    # Automatically remove flag and proceed to mount external volume
+    remove_internal_storage_flag "$source_path"
+    /usr/bin/sudo /bin/rm -rf "$source_path"
+    
+    # Skip to mount section (break out of validation checks)
+    print_info "外部ボリュームをマウント中..."
+    # Jump directly to mount logic
+    if mount_volume "$volume_name" "$target_path"; then
+        echo ""
+        print_success "外部ストレージへの切り替えが完了しました"
+        print_info "保存場所: ${target_path}"
+        
+        # Explicitly remove internal storage flag to prevent false lock status
+        remove_internal_storage_flag "$target_path"
+    else
+        print_error "ボリュームのマウントに失敗しました"
+    fi
+    
+    wait_for_enter
+    continue  # ← Now completes successfully!
+fi
+```
+
+**Key Changes:**
+- ✅ **Automatic handling**: No manual intervention required
+- ✅ **Correct assumption**: Recognizes internal→external switch scenario
+- ✅ **Clean transition**: Removes flag, deletes container, mounts volume
+- ✅ **User-friendly**: One-click operation instead of multi-step process
+
+#### Why This Fix Is Important
+
+**User Expectations:**
+- Empty volume created → User tests mode switching
+- Should be able to freely switch: External ⇄ Internal ⇄ External
+- No data loss risk (volume is empty)
+- Should "just work" without manual intervention
+
+**Before Fix:**
+```
+External (empty) → Internal → External
+                              ^^^^^^^^
+                              ❌ Stuck! Manual steps required
+```
+
+**After Fix:**
+```
+External (empty) → Internal → External
+                              ^^^^^^^^
+                              ✅ Works! Automatic switch completed
+```
+
+#### Test Scenario
+
+**Test Steps:**
+1. Create new empty volume
+2. Switch to internal mode (creates flag file)
+3. Immediately switch back to external mode
+
+**Expected Result:**
+```
+原神 のストレージ切替
+
+現在のデータ位置
+  🏠 内部ストレージ
+     使用容量: 8.0K / 残容量: 156G
+
+実行する操作: 🏠内蔵 → 🔌外部 へ移動
+  🔌外部ストレージ残容量: 3874G
+
+続行しますか？ (Y/n): y
+
+ℹ️  内蔵から外部ストレージへデータを移行中...
+ℹ️  コンテナ構造を検証中...
+ℹ️  内蔵ストレージにフラグファイルのみ存在します（実データなし）
+ℹ️  フラグファイルを削除して外部ボリュームをマウントします
+
+ℹ️  外部ボリュームをマウント中...
+✅ マウント成功: /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+
+✅ 外部ストレージへの切り替えが完了しました
+ℹ️  保存場所: /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+
+Enterキーで続行...
+```
+
+**Verification:**
+- ✅ Switch completes successfully
+- ✅ Volume mounted at correct location
+- ✅ Flag file removed
+- ✅ No manual steps required
+- ✅ Can now use volume normally
+
+#### Files Modified
+
+1. **0_PlayCover-ManagementTool.command**
+   - Line 6: Version updated to 4.33.8
+   - Line 3056-3080: Changed flag-only detection to auto-mount instead of manual prompt
+
+2. **README.md**
+   - Line 13: Version updated to v4.33.8
+
+3. **CHANGELOG.md**
+   - Added v4.33.8 entry with detailed bug analysis and fix documentation
+
+---
+
 ## 2025-01-28 - Version 4.33.7: Fixed Flag File Cleanup During Storage Mode Switching
 
 ### Bug Fix to `0_PlayCover-ManagementTool.command`

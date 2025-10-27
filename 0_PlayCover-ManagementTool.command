@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.7 - Fixed flag file cleanup during storage mode switching
+# Version: 4.33.8 - Fixed empty volume storage mode switching
 #######################################################
 
 #######################################################
@@ -3055,24 +3055,27 @@ switch_storage_location() {
                 
                 if [[ -z "$content_check" ]]; then
                     # Only flag file exists, no actual data
-                    print_warning "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+                    # This happens when switching empty volume: external → internal → external
+                    print_info "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+                    print_info "フラグファイルを削除して外部ボリュームをマウントします"
                     echo ""
-                    print_info "これは外部ボリュームが誤った場所にマウントされている可能性があります"
-                    echo ""
-                    echo "${BOLD}推奨される操作:${NC}"
-                    echo "  ${LIGHT_GREEN}1.${NC} フラグファイルを削除して外部モードに戻す"
-                    echo "  ${LIGHT_GREEN}2.${NC} ボリューム管理から正しい位置に再マウント"
-                    echo ""
-                    echo -n "${BOLD}${YELLOW}フラグファイルを削除しますか？ (Y/n):${NC} "
-                    read delete_flag
                     
-                    if [[ "$delete_flag" =~ ^[Yy]?$ ]]; then
-                        remove_internal_storage_flag "$source_path"
-                        print_success "フラグファイルを削除しました"
+                    # Automatically remove flag and proceed to mount external volume
+                    remove_internal_storage_flag "$source_path"
+                    /usr/bin/sudo /bin/rm -rf "$source_path"
+                    
+                    # Skip to mount section (break out of validation checks)
+                    print_info "外部ボリュームをマウント中..."
+                    # Jump directly to mount logic at line 3311
+                    if mount_volume "$volume_name" "$target_path"; then
                         echo ""
-                        print_info "ボリューム管理から外部ボリュームを再マウントしてください"
+                        print_success "外部ストレージへの切り替えが完了しました"
+                        print_info "保存場所: ${target_path}"
+                        
+                        # Explicitly remove internal storage flag to prevent false lock status
+                        remove_internal_storage_flag "$target_path"
                     else
-                        print_info "キャンセルしました"
+                        print_error "ボリュームのマウントに失敗しました"
                     fi
                     
                     wait_for_enter
