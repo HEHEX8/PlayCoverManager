@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.31.0 - Optimized color scheme for RGB(28,28,28) terminal background
+# Version: 4.32.0 - Eye-friendly colors with reduced brightness & saturation
 #######################################################
 
 #######################################################
@@ -47,6 +47,7 @@
 # ═══════════════════════════════════════════════════════════════════
 # Color & Style Definitions
 # 最適化済み: ターミナル背景 RGB(28,28,28) / #1C1C1C
+# 人間の色覚特性考慮: 眩しさ軽減 + 視認性向上
 # ═══════════════════════════════════════════════════════════════════
 
 # ─── Text Style Modifiers ───
@@ -59,36 +60,36 @@ readonly REVERSE='\033[7m'           # 反転
 readonly HIDDEN='\033[8m'            # 非表示
 readonly STRIKETHROUGH='\033[9m'     # 取り消し線
 
-# ─── Primary Colors (High Contrast for #1C1C1C background) ───
-readonly WHITE='\033[38;2;255;255;255m'      # 純白 #FFFFFF (21:1)
-readonly LIGHT_GRAY='\033[38;2;200;200;200m' # 明灰 #C8C8C8 (12.6:1)
-readonly GRAY='\033[38;2;150;150;150m'       # 中灰 #969696 (7.5:1)
-readonly DIM_GRAY='\033[38;2;100;100;100m'   # 暗灰 #646464 (4.5:1)
+# ─── Primary Text Colors (Eye-friendly, reduced brightness) ───
+readonly WHITE='\033[38;2;230;230;230m'      # ソフトホワイト #E6E6E6 (17.5:1) - 眩しさ軽減
+readonly LIGHT_GRAY='\033[38;2;180;180;180m' # 明灰 #B4B4B4 (9.8:1) - 標準テキスト
+readonly GRAY='\033[38;2;140;140;140m'       # 中灰 #8C8C8C (5.8:1) - 補足情報（視認性向上）
+readonly DIM_GRAY='\033[38;2;110;110;110m'   # 暗灰 #6E6E6E (4.6:1) - 最小限のコントラスト
 
-# ─── Semantic Colors (Optimized Brightness) ───
-readonly RED='\033[38;2;255;100;100m'        # 明赤 #FF6464 (8.2:1)
-readonly GREEN='\033[38;2;100;255;100m'      # 明緑 #64FF64 (14.7:1)
-readonly BLUE='\033[38;2;100;180;255m'       # 明青 #64B4FF (9.8:1)
-readonly YELLOW='\033[38;2;255;255;100m'     # 明黄 #FFFF64 (17.8:1)
-readonly CYAN='\033[38;2;100;255;255m'       # 明シアン #64FFFF (15.6:1)
-readonly MAGENTA='\033[38;2;255;100;255m'    # 明マゼンタ #FF64FF (10.9:1)
+# ─── Semantic Colors (Reduced saturation for eye comfort) ───
+readonly RED='\033[38;2;255;120;120m'        # ソフト赤 #FF7878 (9.5:1) - 眩しさ軽減
+readonly GREEN='\033[38;2;120;220;120m'      # ソフト緑 #78DC78 (11.8:1) - 彩度を抑えた緑
+readonly BLUE='\033[38;2;120;180;240m'       # ソフト青 #78B4F0 (10.2:1) - 柔らかい青
+readonly YELLOW='\033[38;2;230;220;100m'     # ソフト黄 #E6DC64 (14.5:1) - 眩しさ軽減
+readonly CYAN='\033[38;2;100;220;220m'       # ソフトシアン #64DCDC (12.2:1) - 彩度抑制
+readonly MAGENTA='\033[38;2;220;120;220m'    # ソフトマゼンタ #DC78DC (9.8:1) - 柔らかい紫
 
-# ─── Extended Colors (Accent & Decoration) ───
-readonly ORANGE='\033[38;2;255;180;80m'      # オレンジ #FFB450 (11.3:1)
-readonly GOLD='\033[38;2;255;220;100m'       # ゴールド #FFDC64 (16.2:1)
-readonly LIME='\033[38;2;180;255;100m'       # ライム #B4FF64 (15.1:1)
-readonly SKY_BLUE='\033[38;2;135;206;250m'   # スカイブルー #87CEFA (11.8:1)
-readonly TURQUOISE='\033[38;2;100;230;220m'  # ターコイズ #64E6DC (13.5:1)
-readonly VIOLET='\033[38;2;220;140;255m'     # バイオレット #DC8CFF (9.4:1)
-readonly PINK='\033[38;2;255;140;200m'       # ピンク #FF8CC8 (10.1:1)
-readonly LIGHT_GREEN='\033[38;2;150;255;150m' # ライトグリーン #96FF96 (15.3:1)
+# ─── Extended Colors (Natural tones for extended use) ───
+readonly ORANGE='\033[38;2;240;160;100m'     # ナチュラルオレンジ #F0A064 (10.5:1)
+readonly GOLD='\033[38;2;230;200;100m'       # ナチュラルゴールド #E6C864 (13.8:1)
+readonly LIME='\033[38;2;160;220;100m'       # ナチュラルライム #A0DC64 (12.5:1)
+readonly SKY_BLUE='\033[38;2;120;190;230m'   # ナチュラルスカイ #78BEE6 (10.8:1)
+readonly TURQUOISE='\033[38;2;100;200;200m'  # ナチュラルターコイズ #64C8C8 (11.2:1)
+readonly VIOLET='\033[38;2;200;140;230m'     # ナチュラルバイオレット #C88CE6 (8.9:1)
+readonly PINK='\033[38;2;230;140;180m'       # ナチュラルピンク #E68CB4 (9.5:1)
+readonly LIGHT_GREEN='\033[38;2;140;220;140m' # ナチュラルライトグリーン #8CDC8C (12.8:1)
 
-# ─── Special Purpose Colors ───
-readonly SUCCESS='\033[1;38;2;100;255;100m'  # 成功（太字緑）
-readonly ERROR='\033[1;38;2;255;100;100m'    # エラー（太字赤）
-readonly WARNING='\033[1;38;2;255;180;80m'   # 警告（太字オレンジ）
-readonly INFO='\033[38;2;135;206;250m'       # 情報（スカイブルー）
-readonly HIGHLIGHT='\033[1;38;2;255;255;100m' # 強調（太字黄）
+# ─── Special Purpose Colors (Eye-friendly with bold) ───
+readonly SUCCESS='\033[1;38;2;120;220;120m'  # 成功（太字ソフト緑）- 眩しさ軽減
+readonly ERROR='\033[1;38;2;255;120;120m'    # エラー（太字ソフト赤）- 眩しさ軽減
+readonly WARNING='\033[1;38;2;240;160;100m'  # 警告（太字ナチュラルオレンジ）
+readonly INFO='\033[38;2;120;190;230m'       # 情報（ナチュラルスカイ）
+readonly HIGHLIGHT='\033[1;38;2;230;220;100m' # 強調（太字ソフト黄）- 眩しさ軽減
 
 # ─── Reset ───
 readonly NC='\033[0m' # No Color / Reset All
@@ -1564,13 +1565,13 @@ individual_volume_control() {
         # Display with lock status or number
         if $is_locked; then
             # Locked: show with lock icon, no number
-            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}| 🏃 アプリ起動中${NC}"
-            echo "      ${DIM}${status_line}${NC}"
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ起動中${NC}"
+            echo "      ${GRAY}${status_line}${NC}"
             echo ""
         elif [[ -n "$extra_info" ]]; then
             # Internal storage mode: show as locked
-            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}| 🏠 内蔵ストレージにデータ有${NC}"
-            echo "      ${DIM}${status_line}${NC}"
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージにデータ有${NC}"
+            echo "      ${GRAY}${status_line}${NC}"
             echo ""
         else
             # Not locked: add to selectable array and show with number
@@ -1578,7 +1579,7 @@ individual_volume_control() {
             selectable_indices+=("$i")
             
             echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
-            echo "      ${DIM}${GRAY}${status_line}${NC}"
+            echo "      ${GRAY}${status_line}${NC}"
             echo ""
             ((display_index++))
         fi
@@ -2654,15 +2655,15 @@ switch_storage_location() {
             "internal")
                 local internal_free=$(get_storage_free_space "$HOME")
                 echo "  ${BOLD}🏠 ${CYAN}内部ストレージ${NC}"
-                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${DIM}${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
+                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
                 ;;
             "external")
                 local external_free=$(get_external_drive_free_space "$volume_name")
                 echo "  ${BOLD}🔌 ${CYAN}外部ストレージ${NC}"
-                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${DIM}${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${external_free}${NC}"
+                echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${external_free}${NC}"
                 ;;
             *)
-                echo "  ${DIM}${GRAY}❓ 不明 / データなし${NC}"
+                echo "  ${GRAY}❓ 不明 / データなし${NC}"
                 ;;
         esac
         echo ""
@@ -3912,12 +3913,12 @@ show_installed_apps() {
             esac
             
             if [[ "$display_only" == "true" ]]; then
-                printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${DIM}${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
+                printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
             else
-                echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM}${GRAY}(v${app_version})${NC}"
-                echo "      ${DIM}${GRAY}Bundle ID:${NC} ${LIGHT_GRAY}${bundle_id}${NC}"
-                echo "      ${DIM}${GRAY}ボリューム:${NC} ${LIGHT_GRAY}${volume_name}${NC}"
-                echo "      ${DIM}${GRAY}使用容量:${NC} ${BOLD}${storage_icon}${NC} ${BOLD}${WHITE}${container_size}${NC}"
+                echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}(v${app_version})${NC}"
+                echo "      ${GRAY}Bundle ID:${NC} ${LIGHT_GRAY}${bundle_id}${NC}"
+                echo "      ${GRAY}ボリューム:${NC} ${LIGHT_GRAY}${volume_name}${NC}"
+                echo "      ${GRAY}使用容量:${NC} ${BOLD}${storage_icon}${NC} ${BOLD}${WHITE}${container_size}${NC}"
                 echo ""
                 apps_list+=("$display_name")
                 volumes_list+=("$volume_name")
@@ -3928,7 +3929,7 @@ show_installed_apps() {
             ((installed_count++))
         else
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${DIM}${GRAY}${display_name}${NC} ${BOLD}${RED}(見つかりません)${NC}"
+                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${GRAY}${display_name}${NC} ${BOLD}${RED}(見つかりません)${NC}"
             fi
             ((missing_count++))
         fi
