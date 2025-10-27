@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.32.0 - Eye-friendly colors with reduced brightness & saturation
+# Version: 4.33.0 - Internal storage flag system for contamination detection
 #######################################################
 
 #######################################################
@@ -103,6 +103,7 @@ readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
+readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
 
 # Detect Homebrew path (Apple Silicon vs Intel)
 if [[ -x "/opt/homebrew/bin/brew" ]]; then
@@ -563,14 +564,53 @@ mount_volume() {
             
             if [[ -n "$content_check" ]] && [[ "$force" != "true" ]]; then
                 # Directory has actual content (not just metadata) = internal storage data exists
-                print_warning "⚠️  内蔵ストレージにデータが存在します"
+                
+                # Check storage mode (intentional vs contaminated)
+                local storage_mode=$(get_storage_mode "$target_path")
+                
+                if [[ "$storage_mode" == "internal_intentional" ]]; then
+                    # Intentional internal storage - should not mount
+                    print_error "このアプリは意図的に内蔵ストレージモードに設定されています"
+                    print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+                    return 1
+                fi
+                
+                # Contaminated data detected - ask user what to do
+                print_warning "⚠️  内蔵ストレージに意図しないデータが検出されました"
                 print_info "検出されたデータ:"
                 echo "$content_check" | while read -r line; do
                     echo "  - $line"
                 done
                 echo ""
-                print_info "内部データを外部ボリュームに統合します..."
+                echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
+                echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
+                echo "  ${BOLD}${BLUE}2.${NC} 内部データを外部に統合（データを保持）"
+                echo "  ${BOLD}${RED}3.${NC} キャンセル（マウントしない）"
                 echo ""
+                echo -n "${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
+                read cleanup_choice
+                
+                # Default to option 1 if empty
+                cleanup_choice=${cleanup_choice:-1}
+                
+                case "$cleanup_choice" in
+                    1)
+                        print_info "外部ボリュームを優先します（内蔵データを削除）"
+                        print_info "内部ストレージをクリア中..."
+                        /usr/bin/sudo /bin/rm -rf "$target_path"
+                        # Continue to mount below
+                        ;;
+                    2)
+                        print_info "内部データを外部ボリュームに統合します..."
+                        echo ""
+                        ;;
+                    *)
+                        print_info "キャンセルしました"
+                        return 1
+                        ;;
+                esac
+                
+                if [[ "$cleanup_choice" == "2" ]]; then
                 
                 # Create temporary /sbin/mount point
                 local temp_migrate="/tmp/playcover_migrate_$$"
@@ -598,6 +638,7 @@ mount_volume() {
                     /usr/bin/sudo /bin/rm -rf "$temp_migrate"
                     return 1
                 fi
+                fi  # End of if [[ "$cleanup_choice" == "2" ]]
             fi
         fi
     else
@@ -851,6 +892,79 @@ get_storage_type() {
             echo "external"
         fi
     fi
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# Internal Storage Flag Management
+# ═══════════════════════════════════════════════════════════════════
+
+# Check if internal storage flag exists
+has_internal_storage_flag() {
+    local container_path=$1
+    
+    if [[ -f "${container_path}/${INTERNAL_STORAGE_FLAG}" ]]; then
+        return 0  # Flag exists
+    else
+        return 1  # Flag does not exist
+    fi
+}
+
+# Create internal storage flag (when switching to internal)
+create_internal_storage_flag() {
+    local container_path=$1
+    
+    # Create flag file with timestamp
+    echo "Switched to internal storage at: $(date)" > "${container_path}/${INTERNAL_STORAGE_FLAG}"
+    
+    if [[ $? -eq 0 ]]; then
+        return 0
+    else
+        print_error "内蔵ストレージフラグの作成に失敗しました"
+        return 1
+    fi
+}
+
+# Remove internal storage flag (when switching back to external)
+remove_internal_storage_flag() {
+    local container_path=$1
+    
+    if [[ -f "${container_path}/${INTERNAL_STORAGE_FLAG}" ]]; then
+        /bin/rm -f "${container_path}/${INTERNAL_STORAGE_FLAG}"
+        
+        if [[ $? -eq 0 ]]; then
+            return 0
+        else
+            print_error "内蔵ストレージフラグの削除に失敗しました"
+            return 1
+        fi
+    fi
+    
+    return 0  # Flag doesn't exist, nothing to remove
+}
+
+# Get storage mode (intentional internal vs contamination)
+get_storage_mode() {
+    local container_path=$1
+    local storage_type=$(get_storage_type "$container_path")
+    
+    case "$storage_type" in
+        "external")
+            echo "external"
+            ;;
+        "internal")
+            if has_internal_storage_flag "$container_path"; then
+                echo "internal_intentional"  # Intentionally switched to internal
+            else
+                echo "internal_contaminated"  # Unintended contamination
+            fi
+            ;;
+        "none")
+            echo "none"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
 }
 
 #######################################################
@@ -1548,17 +1662,27 @@ individual_volume_control() {
                     status_line="⚠️  マウント位置異常: ${actual_mount}"
                 fi
             else
-                # Volume is not mounted - check for internal storage
-                status_line="⚪️ 未マウント"
+                # Volume is not mounted - check storage mode
+                local storage_mode=$(get_storage_mode "$target_path")
                 
-                # Quick check: only if path exists and not a /sbin/mount point
-                if [[ -d "$target_path" ]] && ! echo "$mount_cache" | /usr/bin/grep -q " on ${target_path} "; then
-                    # Check if directory has actual content (exclude macOS metadata)
-                    local has_content=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/head -1)
-                    if [[ -n "$has_content" ]]; then
-                        extra_info=" | 🏠 内蔵ストレージにデータ有"
-                    fi
-                fi
+                case "$storage_mode" in
+                    "none")
+                        status_line="⚪️ 未マウント"
+                        ;;
+                    "internal_intentional")
+                        # Intentionally switched to internal storage
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_intentional"
+                        ;;
+                    "internal_contaminated")
+                        # Unintended internal data contamination
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_contaminated"
+                        ;;
+                    *)
+                        status_line="⚪️ 未マウント"
+                        ;;
+                esac
             fi
         fi
         
@@ -1568,11 +1692,20 @@ individual_volume_control() {
             echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ起動中${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
-        elif [[ -n "$extra_info" ]]; then
-            # Internal storage mode: show as locked
-            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージにデータ有${NC}"
+        elif [[ "$extra_info" == "internal_intentional" ]]; then
+            # Intentional internal storage mode: show as locked
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージモード${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
+        elif [[ "$extra_info" == "internal_contaminated" ]]; then
+            # Contaminated: show as warning (selectable)
+            selectable_array+=("${mappings_array[$i]}")
+            selectable_indices+=("$i")
+            
+            echo "  ${BOLD}${YELLOW}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+            echo "      ${GRAY}${status_line} ${ORANGE}| マウント時に処理方法を確認します${NC}"
+            echo ""
+            ((display_index++))
         else
             # Not locked: add to selectable array and show with number
             selectable_array+=("${mappings_array[$i]}")
@@ -3029,6 +3162,9 @@ switch_storage_location() {
                 echo ""
                 print_success "外部ストレージへの切り替えが完了しました"
                 print_info "保存場所: ${target_path}"
+                
+                # Remove internal storage flag (no longer in internal mode)
+                # Note: Flag doesn't exist on external mount, but safe to try removal
             else
                 print_error "ボリュームのマウントに失敗しました"
             fi
@@ -3290,6 +3426,11 @@ switch_storage_location() {
             echo ""
             print_success "内蔵ストレージへの切り替えが完了しました"
             print_info "保存場所: ${target_path}"
+            
+            # Create internal storage flag to mark this as intentional
+            if create_internal_storage_flag "$target_path"; then
+                print_info "内蔵ストレージモードフラグを作成しました"
+            fi
         fi
         
         wait_for_enter
