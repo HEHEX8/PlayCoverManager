@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.28.0 - UI improvements and capacity checks
+# Version: 4.29.0 - App management UI and emoji consistency
 #######################################################
 
 #######################################################
@@ -117,19 +117,19 @@ print_header() {
 }
 
 print_success() {
-    echo "${GREEN}✓ $1${NC}"
+    echo "${GREEN}✅ $1${NC}"
 }
 
 print_error() {
-    echo "${RED}✗ $1${NC}"
+    echo "${RED}❌ $1${NC}"
 }
 
 print_warning() {
-    echo "${YELLOW}⚠ $1${NC}"
+    echo "${YELLOW}⚠️ $1${NC}"
 }
 
 print_info() {
-    echo "${BLUE}ℹ $1${NC}"
+    echo "${BLUE}ℹ️ $1${NC}"
 }
 
 print_batch_progress() {
@@ -1332,7 +1332,7 @@ install_ipa_to_playcover() {
         
         # Show progress indicator with detailed status (v5.0.1 - Unified)
         if [[ $settings_update_count -ge 2 ]]; then
-            echo -n "✓"  # Complete (shouldn't reach here)
+            echo -n "✅"  # Complete (shouldn't reach here)
         elif [[ $settings_update_count -eq 1 ]]; then
             echo -n "◇"  # 1st update (waiting for 2nd)
         elif [[ $last_settings_mtime -gt 0 ]]; then
@@ -2168,7 +2168,7 @@ nuclear_cleanup() {
         fi
         ((total_items++))
     else
-        echo "  ${GREEN}✓${NC}  インストールされていません"
+        echo "  ${GREEN}✅${NC}  インストールされていません"
     fi
     echo ""
     
@@ -2194,7 +2194,7 @@ nuclear_cleanup() {
         echo "  ${RED}🗑${NC}  playcover-map.txt"
         ((total_items++))
     else
-        echo "  ${GREEN}✓${NC}  存在しません（削除不要）"
+        echo "  ${GREEN}✅${NC}  存在しません（削除不要）"
     fi
     echo ""
     
@@ -2274,9 +2274,9 @@ nuclear_cleanup() {
             echo "  アンマウント中: ${display} (${device})"
             if /usr/bin/sudo /usr/sbin/diskutil unmount force "$device" >/dev/null 2>&1; then
                 ((unmount_count++))
-                print_success "  ✓ 完了"
+                print_success "  ✅ 完了"
             else
-                print_warning "  ⚠ 失敗（既にアンマウント済み）"
+                print_warning "  ⚠️ 失敗（既にアンマウント済み）"
             fi
         done
     else
@@ -2304,10 +2304,10 @@ nuclear_cleanup() {
             echo "  削除中: ${display} (${device})"
             
             if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
-                print_success "  ✓ 削除完了"
+                print_success "  ✅ 削除完了"
                 ((volume_count++))
             else
-                print_warning "  ⚠ 削除失敗（マウント済みまたは保護されています）"
+                print_warning "  ⚠️ 削除失敗（マウント済みまたは保護されています）"
             fi
         done
     else
@@ -2329,9 +2329,9 @@ nuclear_cleanup() {
         if [[ "$playcover_homebrew" == true ]]; then
             echo "  アンインストール中: PlayCover (Homebrew Cask)"
             if "$BREW_PATH" uninstall --cask playcover-community >/dev/null 2>&1; then
-                print_success "  ✓ Homebrewからアンインストール完了"
+                print_success "  ✅ Homebrewからアンインストール完了"
             else
-                print_warning "  ⚠ Homebrewアンインストール失敗"
+                print_warning "  ⚠️ Homebrewアンインストール失敗"
             fi
         else
             echo "  削除中: /Applications/PlayCover.app（手動インストール版）"
@@ -2340,9 +2340,9 @@ nuclear_cleanup() {
         # Clean up manual installation remnants
         if [[ -d "/Applications/PlayCover.app" ]]; then
             if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
-                print_success "  ✓ 削除完了"
+                print_success "  ✅ 削除完了"
             else
-                print_warning "  ⚠ 削除失敗"
+                print_warning "  ⚠️ 削除失敗"
             fi
         fi
     else
@@ -2367,10 +2367,10 @@ nuclear_cleanup() {
             
             echo "  削除中: ${display}"
             if /usr/bin/sudo /bin/rm -rf "$container_path" 2>/dev/null; then
-                print_success "  ✓ 削除完了"
+                print_success "  ✅ 削除完了"
                 ((container_count++))
             else
-                print_warning "  ⚠ 削除失敗"
+                print_warning "  ⚠️ 削除失敗"
             fi
         done
     else
@@ -2391,9 +2391,9 @@ nuclear_cleanup() {
     if [[ "$mapping_exists" == true ]]; then
         echo "  削除中: playcover-map.txt"
         if /bin/rm -f "$MAPPING_FILE" 2>/dev/null; then
-            print_success "  ✓ 削除完了"
+            print_success "  ✅ 削除完了"
         else
-            print_warning "  ⚠ 削除失敗"
+            print_warning "  ⚠️ 削除失敗"
         fi
         
         # Delete lock file if exists
@@ -3382,7 +3382,7 @@ show_auto_mount_menu() {
         echo ""
         if [[ "$is_installed" == true ]]; then
             if [[ "$is_loaded" == true ]]; then
-                print_success "自動マウント機能: 有効 ✓"
+                print_success "自動マウント機能: 有効 ✅"
             else
                 print_warning "自動マウント機能: インストール済み（未読み込み）"
             fi
@@ -3604,7 +3604,7 @@ check_auto_mount_status() {
     echo ""
     
     if launchctl list | grep -q "com.playcover.automount"; then
-        print_success "LaunchAgent: 読み込み済み ✓"
+        print_success "LaunchAgent: 読み込み済み ✅"
         
         # Get PID if available
         local agent_info=$(launchctl list | grep "com.playcover.automount")
@@ -3821,22 +3821,22 @@ show_installed_apps() {
             
             case "$storage_type" in
                 "external")
-                    storage_icon="🔌"
+                    storage_icon="🔌 外部"
                     ;;
                 "internal")
-                    storage_icon="🏠"
+                    storage_icon="🏠 内部"
                     ;;
                 "none")
-                    storage_icon="⚠️ "
+                    storage_icon="⚠️  データ無し"
                     container_size="0B"
                     ;;
                 *)
-                    storage_icon="？"
+                    storage_icon="？ 不明"
                     ;;
             esac
             
             if [[ "$display_only" == "true" ]]; then
-                printf " ・ %s %6s (v%s) %s\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
+                printf " 位置: %s | %s (v%s) %s\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
             else
                 echo "  ${CYAN}${index}.${NC} ${GREEN}${display_name}${NC} ${BLUE}(v${app_version})${NC}"
                 echo "      Bundle ID: ${bundle_id}"
@@ -3852,7 +3852,7 @@ show_installed_apps() {
             ((installed_count++))
         else
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${RED}✗${NC} ${display_name} ${RED}(見つかりません)${NC}"
+                echo "  ${RED}❌${NC} ${display_name} ${RED}(見つかりません)${NC}"
             fi
             ((missing_count++))
         fi
@@ -3949,11 +3949,16 @@ app_management_menu() {
         echo "${BLUE}アプリ管理${NC}"
         echo ""
         show_installed_apps
-        echo "  ${GREEN}1.${NC} アプリをインストール"
-        echo "  ${RED}2.${NC} アプリをアンインストール"
-        echo "  ${CYAN}0.${NC} メインメニューに戻る"
         echo ""
-        echo -n "${YELLOW}選択:${NC} "
+        print_separator
+        echo ""
+        echo ""
+        echo "操作を選択してください"
+        echo "  1. アプリをインストール"
+        echo "  2. アプリをアンインストール"
+        echo "  0. メインメニューに戻る"
+        echo ""
+        echo -n "選択: "
         read choice
         
         case "$choice" in
@@ -4015,7 +4020,7 @@ install_workflow() {
         echo ""
         print_success "インストール成功: ${#INSTALL_SUCCESS} 個"
         for app in "${(@)INSTALL_SUCCESS}"; do
-            echo "  ✓ $app"
+            echo "  ✅ $app"
         done
     fi
     
