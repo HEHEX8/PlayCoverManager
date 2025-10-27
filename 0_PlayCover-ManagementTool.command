@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.8 - Fixed empty volume storage mode switching
+# Version: 4.33.9 - Fixed empty volume wrong mount location handling
 #######################################################
 
 #######################################################
@@ -3060,13 +3060,21 @@ switch_storage_location() {
                     print_info "フラグファイルを削除して外部ボリュームをマウントします"
                     echo ""
                     
-                    # Automatically remove flag and proceed to mount external volume
+                    # Check if external volume is mounted at wrong location
+                    local current_mount=$(get_mount_point "$volume_name")
+                    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+                        print_info "外部ボリュームが誤った位置にマウントされています: ${current_mount}"
+                        print_info "正しい位置に再マウントするため、一度アンマウントします"
+                        unmount_volume "$volume_name" "$bundle_id" || true
+                        /bin/sleep 1
+                    fi
+                    
+                    # Remove internal flag and directory
                     remove_internal_storage_flag "$source_path"
                     /usr/bin/sudo /bin/rm -rf "$source_path"
                     
-                    # Skip to mount section (break out of validation checks)
-                    print_info "外部ボリュームをマウント中..."
-                    # Jump directly to mount logic at line 3311
+                    # Now mount to correct location
+                    print_info "外部ボリュームを正しい位置にマウント中..."
                     if mount_volume "$volume_name" "$target_path"; then
                         echo ""
                         print_success "外部ストレージへの切り替えが完了しました"

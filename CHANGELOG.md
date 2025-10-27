@@ -1,5 +1,121 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.9: Fixed Empty Volume Wrong Mount Location Handling
+
+### Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: v4.33.8 Fix Didn't Handle Wrong Mount Location
+
+**User Evidence (v4.33.8 failure):**
+```bash
+# Internal storage has only flag file
+$ ls -a /Users/hehex/Library/Containers/com.miHoYo.GenshinImpact
+.  ..  .com.apple.containermanagerd.metadata.plist  .playcover_internal_storage_flag
+
+# External volume mounted at WRONG location
+$ ls -a /Volumes/GenshinImpact
+.  ..  .fseventsd  .Spotlight-V100  .com.apple.containermanagerd.metadata.plist
+```
+
+**Problem with v4.33.8 Fix:**
+- Code assumed external volume was not mounted
+- Actually, external volume WAS mounted but at wrong location (`/Volumes/GenshinImpact`)
+- Should be mounted at container path (`/Users/hehex/Library/Containers/com.miHoYo.GenshinImpact`)
+- `mount_volume()` fails because volume already mounted elsewhere
+- Need to unmount from wrong location FIRST
+
+#### Root Cause (Line 3056-3082 in v4.33.8)
+
+**Incomplete Code:**
+```zsh
+if [[ -z "$content_check" ]]; then
+    print_info "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    print_info "フラグファイルを削除して外部ボリュームをマウントします"
+    
+    # Automatically remove flag and proceed to mount external volume
+    remove_internal_storage_flag "$source_path"
+    /usr/bin/sudo /bin/rm -rf "$source_path"
+    
+    # Skip to mount section
+    print_info "外部ボリュームをマウント中..."
+    if mount_volume "$volume_name" "$target_path"; then  # ← FAILS!
+        # mount_volume() detects volume already mounted elsewhere
+        # Tries to unmount but mount still fails
+```
+
+**Why `mount_volume()` Fails:**
+1. External volume mounted at `/Volumes/GenshinImpact` (wrong location)
+2. `mount_volume()` checks if already mounted → YES
+3. Tries to unmount first → May succeed
+4. But mount to correct location fails due to timing or state issues
+5. **Missing**: Explicit check for wrong mount location BEFORE attempting mount
+
+#### Solution (Line 3056-3086)
+
+**Enhanced Code with Wrong Location Detection:**
+```zsh
+if [[ -z "$content_check" ]]; then
+    print_info "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    print_info "フラグファイルを削除して外部ボリュームをマウントします"
+    echo ""
+    
+    # Check if external volume is mounted at wrong location
+    local current_mount=$(get_mount_point "$volume_name")
+    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+        print_info "外部ボリュームが誤った位置にマウントされています: ${current_mount}"
+        print_info "正しい位置に再マウントするため、一度アンマウントします"
+        unmount_volume "$volume_name" "$bundle_id" || true
+        /bin/sleep 1
+    fi
+    
+    # Remove internal flag and directory
+    remove_internal_storage_flag "$source_path"
+    /usr/bin/sudo /bin/rm -rf "$source_path"
+    
+    # Now mount to correct location
+    print_info "外部ボリュームを正しい位置にマウント中..."
+    if mount_volume "$volume_name" "$target_path"; then
+        echo ""
+        print_success "外部ストレージへの切り替えが完了しました"
+```
+
+#### Changes Made
+
+1. **Wrong Location Detection (Line 3063-3069)**
+   - Check if external volume mounted elsewhere using `get_mount_point()`
+   - If mounted at wrong location, explicitly unmount first
+   - Wait 1 second for clean unmount state
+
+2. **Improved Messages (Line 3064-3065)**
+   - Show current wrong mount point
+   - Explain re-mount process clearly
+
+3. **Proper Cleanup Order**
+   - First: Unmount from wrong location (if needed)
+   - Second: Remove internal flag and directory
+   - Third: Mount to correct location
+
+#### Test Scenario
+
+**Empty Volume Switch Sequence:**
+```
+1. Initial: Empty volume mounted at /Volumes/GenshinImpact
+2. Switch External→Internal: Creates flag file only
+3. Switch Internal→External:
+   ✓ Detects only flag file exists
+   ✓ Checks external volume mount: Found at /Volumes/GenshinImpact (wrong!)
+   ✓ Unmounts from wrong location
+   ✓ Removes internal flag and directory
+   ✓ Mounts to correct location: ~/Library/Containers/com.miHoYo.GenshinImpact
+   ✓ Success!
+```
+
+#### Related Changes
+- Updated script version to 4.33.9
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.8: Fixed Empty Volume Storage Mode Switching
 
 ### Bug Fix to `0_PlayCover-ManagementTool.command`
