@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.2 - Enhanced storage switch UI with mode detection
+# Version: 4.33.3 - Fixed batch mount error message for locked volumes
 #######################################################
 
 #######################################################
@@ -1932,6 +1932,7 @@ batch_mount_all() {
     
     local success_count=0
     local fail_count=0
+    local locked_count=0
     local index=1
     
     for ((i=1; i<=${#mappings_array}; i++)); do
@@ -2002,18 +2003,23 @@ batch_mount_all() {
                     echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
                     ((fail_count++))
                 else
-                    if [[ -e "$target_path" ]]; then
-                        local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
-                        if [[ -z "$mount_check" ]]; then
-                            local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
-                            if [[ -n "$content_check" ]]; then
-                                echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
-                                ((fail_count++))
-                                echo ""
-                                ((index++))
-                                continue
-                            fi
-                        fi
+                    # Check storage mode before attempting mount
+                    local storage_mode=$(get_storage_mode "$target_path")
+                    
+                    if [[ "$storage_mode" == "internal_intentional" ]]; then
+                        # Intentional internal storage - show locked message
+                        echo "     ${ORANGE}⚠️  このボリュームはロックされています${NC}"
+                        ((locked_count++))
+                        echo ""
+                        ((index++))
+                        continue
+                    elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+                        # Contaminated internal storage - show error message
+                        echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+                        ((fail_count++))
+                        echo ""
+                        ((index++))
+                        continue
                     fi
                     
                     local device=$(get_volume_device "$volume_name")
@@ -2034,11 +2040,11 @@ batch_mount_all() {
     
     print_separator
     echo ""
-    echo "${SKY_BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count}${NC}"
+    echo "${SKY_BLUE}ℹ️  成功: ${success_count} / 失敗: ${fail_count} / ロック中: ${locked_count}${NC}"
     
-    if [[ $fail_count -eq 0 ]]; then
+    if [[ $fail_count -eq 0 ]] && [[ $locked_count -eq 0 ]]; then
         echo "${GREEN}✅ 全ボリュームのマウント完了${NC}"
-    elif [[ $success_count -eq 0 ]]; then
+    elif [[ $success_count -eq 0 ]] && [[ $locked_count -eq 0 ]]; then
         echo "${RED}❌ マウント失敗: 全てのボリュームがマウントできませんでした${NC}"
         echo ""
         echo "${ORANGE}対処法:${NC}"
@@ -2046,7 +2052,12 @@ batch_mount_all() {
         echo "  2. ボリュームが作成されているか確認（メニュー9）"
         echo "  3. 既存のマウント状態を確認（メニュー5）"
     else
-        echo "${ORANGE}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+        if [[ $locked_count -gt 0 ]]; then
+            echo "${ORANGE}ℹ️  ${locked_count}個のボリュームが内蔵ストレージモードでロックされています${NC}"
+        fi
+        if [[ $fail_count -gt 0 ]]; then
+            echo "${ORANGE}⚠️  一部マウントに失敗したボリュームがあります${NC}"
+        fi
     fi
     wait_for_enter
 }

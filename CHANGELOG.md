@@ -1,5 +1,215 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.3: Fixed Batch Mount Error Message for Locked Volumes
+
+### Critical Changes to `0_PlayCover-ManagementTool.command`
+
+#### 1. Fixed Batch Mount Error Message for Intentional Internal Storage Mode
+
+**Problem:**
+When using "Batch Mount All Volumes" (`batch_mount_all()`), volumes in intentional internal storage mode showed incorrect error message:
+```
+❌ マウント失敗: 内蔵ストレージにデータが存在します
+```
+
+**Root Cause:**
+The function was checking for internal data presence but didn't distinguish between:
+- `internal_intentional`: User explicitly switched to internal mode (flag file exists)
+- `internal_contaminated`: Unintended internal data (flag file doesn't exist)
+
+**Solution (Lines 1930-2037):**
+```zsh
+# Check storage mode before attempting mount
+local storage_mode=$(get_storage_mode "$target_path")
+
+if [[ "$storage_mode" == "internal_intentional" ]]; then
+    # Intentional internal storage - show locked message
+    echo "     ${ORANGE}⚠️  このボリュームはロックされています${NC}"
+    ((locked_count++))
+    echo ""
+    ((index++))
+    continue
+elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+    # Contaminated internal storage - show error message
+    echo "     ${RED}❌ マウント失敗: 内蔵ストレージにデータが存在します${NC}"
+    ((fail_count++))
+    echo ""
+    ((index++))
+    continue
+fi
+```
+
+**Impact:**
+- ✅ Intentional internal mode: Shows "⚠️ このボリュームはロックされています" (locked, not failed)
+- ✅ Contamination: Shows "❌ マウント失敗: 内蔵ストレージにデータが存在します" (error)
+- ✅ Consistent with individual volume control behavior (fixed in v4.33.1)
+
+#### 2. Added Locked Volume Counter
+
+**Enhancement:**
+Added `locked_count` variable to distinguish locked volumes from failures in batch operations.
+
+**Before:**
+```zsh
+local success_count=0
+local fail_count=0
+
+# ... processing ...
+
+echo "ℹ️  成功: ${success_count} / 失敗: ${fail_count}"
+```
+
+**After:**
+```zsh
+local success_count=0
+local fail_count=0
+local locked_count=0
+
+# ... processing ...
+
+echo "ℹ️  成功: ${success_count} / 失敗: ${fail_count} / ロック中: ${locked_count}"
+
+if [[ $locked_count -gt 0 ]]; then
+    echo "ℹ️  ${locked_count}個のボリュームが内蔵ストレージモードでロックされています"
+fi
+```
+
+**Impact:**
+- Locked volumes are not counted as failures
+- Clear information about intentionally locked volumes
+- Better user understanding of operation results
+
+#### 3. Consistency Across All Operations
+
+**Before v4.33.x:**
+- Individual volume control: Used old contamination detection logic
+- Batch mount: Used simple file presence check
+- Storage switch: Didn't show mode information
+
+**After v4.33.3:**
+- ✅ All operations use `get_storage_mode()` for consistent detection
+- ✅ Flag system (`INTERNAL_STORAGE_FLAG`) works everywhere
+- ✅ Clear distinction between intentional and contaminated data
+- ✅ Consistent error messages across all features
+
+---
+
+## 2025-01-27 - Version 4.33.2: Enhanced Storage Switch UI with Mode Detection
+
+### UI Improvements to Storage Switch Display
+
+#### Clear Storage Mode Indicators (Lines 2699-2768)
+
+**Enhanced:**
+```zsh
+case "$storage_mode" in
+    "external")
+        location_text="${BOLD}${BLUE}🔌 外部ストレージモード${NC}"
+        ;;
+    "internal_intentional")
+        location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
+        ;;
+    "internal_contaminated")
+        location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+        ;;
+    "none")
+        location_text="${GRAY}⚠️ データ無し${NC}"
+        ;;
+esac
+```
+
+**Impact:**
+- Clear visual distinction between storage modes
+- Color-coded for quick identification
+- Mode labels with emoji for better UX
+
+---
+
+## 2025-01-27 - Version 4.33.1: Fixed Individual Volume Control Storage Mode Detection
+
+### Critical Fix to Individual Volume Operations
+
+#### Fixed Storage Mode Detection Logic (Lines 1822-1863)
+
+**Problem:**
+Individual volume control didn't properly check the internal storage flag, treating all internal data the same way.
+
+**Solution:**
+```zsh
+local storage_mode=$(get_storage_mode "$target_path")
+
+if [[ "$storage_mode" == "internal_intentional" ]]; then
+    # Refuse to mount, guide to storage switch
+    print_error "このアプリは意図的に内蔵ストレージモードに設定されています"
+    print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+    # Ask for cleanup method
+    print_warning "⚠️  内蔵ストレージに意図しないデータが検出されました"
+    # Show cleanup options...
+fi
+```
+
+**Impact:**
+- Prevents accidental mounting over intentional internal data
+- Proper guidance for users with locked volumes
+- Data protection for intentional internal storage mode
+
+---
+
+## 2025-01-27 - Version 4.33.0: Internal Storage Flag System for Contamination Detection
+
+### Flag System Implementation
+
+#### New Flag File: `.playcover_internal_storage_flag`
+
+**Purpose:**
+Distinguish between:
+1. **Intentional internal storage**: User switched to internal via storage switch feature
+2. **Unintended contamination**: PlayCover launched without volume mounted, creating internal data
+
+#### Flag Management Functions (Lines 857-925)
+
+**New Functions:**
+```zsh
+has_internal_storage_flag()      # Check if flag exists
+create_internal_storage_flag()   # Create flag when switching to internal
+remove_internal_storage_flag()   # Remove flag when switching back to external
+get_storage_mode()               # Determine storage mode with flag check
+```
+
+**Storage Modes:**
+- `external`: Normal external storage mode
+- `internal_intentional`: Intentional internal mode (flag exists)
+- `internal_contaminated`: Unintended internal data (flag doesn't exist)
+- `none`: No data in container
+
+#### Storage Switch Integration (Lines 2819-3058)
+
+**Automatic Flag Management:**
+```zsh
+# When switching to internal
+create_internal_storage_flag "$container_path"
+
+# When switching back to external  
+remove_internal_storage_flag "$container_path"
+```
+
+#### Mount Protection for Intentional Internal Mode
+
+**Individual Volume Control:**
+- Refuses to mount external volume over intentional internal data
+- Shows guidance message to use storage switch first
+- Prevents data conflicts and confusion
+
+**Contamination Handling:**
+- Detects unintended internal data (no flag)
+- Offers cleanup options:
+  1. Prioritize external (delete internal) - **Recommended**
+  2. Cancel (don't mount)
+- Default option: Delete internal data and mount external
+
+---
+
 ## 2025-01-15 - Version 4.7.0: Enhanced Volume Management with App Termination
 
 ### Critical Changes to `playcover-complete-manager.command`
