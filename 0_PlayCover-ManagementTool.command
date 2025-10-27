@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.0 - Internal storage flag system for contamination detection
+# Version: 4.33.1 - Fixed individual volume control contamination handling
 #######################################################
 
 #######################################################
@@ -1819,29 +1819,53 @@ individual_volume_control() {
             return
         fi
         
-        # Check for internal storage conflict (same logic as mount_volume)
-        if [[ -e "$target_path" ]]; then
-            local mount_check=$(/sbin/mount | /usr/bin/grep " on ${target_path} ")
+        # Check storage mode before mounting
+        local storage_mode=$(get_storage_mode "$target_path")
+        
+        if [[ "$storage_mode" == "internal_intentional" ]]; then
+            # Intentional internal storage - refuse to mount
+            clear
+            print_header "${display_name} の操作"
+            echo ""
+            print_error "このアプリは意図的に内蔵ストレージモードに設定されています"
+            print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+            echo ""
+            wait_for_enter
+            individual_volume_control
+            return
+        elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+            # Contaminated data - ask user for cleanup method
+            clear
+            print_header "${display_name} の操作"
+            echo ""
+            print_warning "⚠️  内蔵ストレージに意図しないデータが検出されました"
+            echo ""
+            echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
+            echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
+            echo "  ${BOLD}${BLUE}2.${NC} キャンセル（マウントしない）"
+            echo ""
+            echo -n "${BOLD}${YELLOW}選択 (1-2) [デフォルト: 1]:${NC} "
+            read cleanup_choice
             
-            if [[ -z "$mount_check" ]]; then
-                # Directory exists but is NOT a /sbin/mount point
-                # Check if it contains actual data (ignore macOS metadata)
-                local content_check=$(/bin/ls -A1 "$target_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
-                
-                if [[ -n "$content_check" ]]; then
-                    # Directory has actual content = internal storage data exists
-                    clear
-                    print_header "${display_name} の操作"
+            # Default to option 1 if empty
+            cleanup_choice=${cleanup_choice:-1}
+            
+            case "$cleanup_choice" in
+                1)
+                    print_info "外部ボリュームを優先します（内蔵データを削除）"
+                    print_info "内部ストレージをクリア中..."
+                    /usr/bin/sudo /bin/rm -rf "$target_path"
                     echo ""
-                    print_error "内蔵ストレージにデータが存在します"
-                    print_warning "先に内蔵データを削除またはバックアップしてください"
+                    # Continue to mount below
+                    ;;
+                *)
+                    print_info "キャンセルしました"
                     echo ""
-                    echo -n "Enterキーで続行..."
-                    read
+                    wait_for_enter
                     individual_volume_control
                     return
-                fi
-            fi
+                    ;;
+            esac
         fi
         
         # Ensure PlayCover volume is mounted first (dependency requirement)
@@ -1857,9 +1881,8 @@ individual_volume_control() {
             fi
         fi
         
-        # Try to mount
-        local device=$(get_volume_device "$volume_name")
-        if /usr/bin/sudo /usr/sbin/diskutil /sbin/mount -mountPoint "$target_path" "$device" >/dev/null 2>&1; then
+        # Try to mount using mount_volume function (includes nobrowse, proper error handling)
+        if mount_volume "$volume_name" "$target_path" "false" >/dev/null 2>&1; then
             # Success - silently return to menu
             individual_volume_control
             return
