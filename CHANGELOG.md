@@ -1,5 +1,176 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.4: Fixed Storage Mode Detection for Wrong Mount Location
+
+### Critical Bug Fix to `0_PlayCover-ManagementTool.command`
+
+#### 1. Root Cause: Misdetection When External Volume Mounted at Wrong Location
+
+**Problem Scenario:**
+```
+1. User has external volume mounted at wrong location (/Volumes/GenshinImpact)
+2. Only flag file exists in internal storage (8.0K)
+3. get_storage_mode() only checks internal path
+4. Returns "internal_intentional" (wrong!)
+5. Storage switch tries to copy non-existent data → Error
+```
+
+**User Experience:**
+```
+ストレージ切替画面:
+  位置: 🏠 内部ストレージモード  ← Wrong! Actually external at wrong location
+  使用容量: 8.0K                  ← Only flag file
+
+実行時エラー:
+  ❌ 内蔵ストレージにデータがありません
+  考えられる原因:
+    - 外部ボリュームがまだマウントされている  ← This is the actual cause!
+```
+
+#### 2. Solution: Priority Check for External Volume Mount Status
+
+**Enhanced `get_storage_mode()` Function (Lines 945-987):**
+```zsh
+get_storage_mode() {
+    local container_path=$1
+    local volume_name=$2  # NEW: Accept volume name for mount check
+    
+    # PRIORITY 1: Check external volume mount status FIRST
+    if [[ -n "$volume_name" ]]; then
+        if volume_exists "$volume_name"; then
+            local current_mount=$(get_mount_point "$volume_name")
+            
+            if [[ -n "$current_mount" ]]; then
+                # External volume IS mounted somewhere
+                if [[ "$current_mount" == "$container_path" ]]; then
+                    echo "external"  # Correctly mounted
+                else
+                    echo "external_wrong_location"  # NEW MODE: Wrong location
+                fi
+                return 0
+            fi
+        fi
+    fi
+    
+    # PRIORITY 2: Only check internal if external not mounted
+    local storage_type=$(get_storage_type "$container_path")
+    
+    case "$storage_type" in
+        "internal")
+            if has_internal_storage_flag "$container_path"; then
+                echo "internal_intentional"
+            else
+                echo "internal_contaminated"
+            fi
+            ;;
+        # ... other cases
+    esac
+}
+```
+
+**Key Changes:**
+- ✅ Accept optional `volume_name` parameter
+- ✅ Check external volume mount status FIRST
+- ✅ New mode: `external_wrong_location` for misplaced volumes
+- ✅ Only check internal storage if external not mounted
+
+#### 3. Storage Switch UI Enhancement (Lines 2744-2782)
+
+**Display for Wrong Mount Location:**
+```zsh
+case "$storage_mode" in
+    "external_wrong_location")
+        location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
+        local current_mount=$(get_mount_point "$volume_name")
+        usage_text="${GRAY}現在のマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
+        ;;
+    # ... other cases
+esac
+```
+
+**Now Shows:**
+```
+2. 原神
+    位置: ⚠️  マウント位置異常（外部）  ← Clear indication!
+    使用容量: 現在のマウント位置: /Volumes/GenshinImpact
+```
+
+#### 4. Storage Switch Execution Protection (Lines 2820-2870)
+
+**Before Attempting Switch, Check for Wrong Mount:**
+```zsh
+local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+
+if [[ "$storage_mode" == "external_wrong_location" ]]; then
+    print_error "外部ボリュームが誤った位置にマウントされています"
+    echo ""
+    local current_mount=$(get_mount_point "$volume_name")
+    echo "現在のマウント位置: ${current_mount}"
+    echo "正しいマウント位置: ${target_path}"
+    echo ""
+    print_info "推奨される操作:"
+    echo "  1. ボリューム管理 → 個別ボリューム操作 → 再マウント"
+    echo "  2. または、全ボリュームをマウント（自動修正）"
+    wait_for_enter
+    continue
+fi
+```
+
+#### 5. Flag-Only Detection (Lines 3004-3047)
+
+**Handle Case Where Only Flag File Exists:**
+```zsh
+# Check if only flag file exists (no actual data)
+local content_check=$(/bin/ls -A1 "$source_path" | grep -v "${INTERNAL_STORAGE_FLAG}")
+
+if [[ -z "$content_check" ]]; then
+    print_warning "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+    echo ""
+    print_info "これは外部ボリュームが誤った場所にマウントされている可能性があります"
+    echo ""
+    echo "推奨される操作:"
+    echo "  1. フラグファイルを削除して外部モードに戻す"
+    echo "  2. ボリューム管理から正しい位置に再マウント"
+    echo ""
+    echo -n "フラグファイルを削除しますか？ (Y/n): "
+    read delete_flag
+    
+    if [[ "$delete_flag" =~ ^[Yy]?$ ]]; then
+        remove_internal_storage_flag "$source_path"
+        print_success "フラグファイルを削除しました"
+        print_info "ボリューム管理から外部ボリュームを再マウントしてください"
+    fi
+    
+    wait_for_enter
+    continue
+fi
+```
+
+#### 6. Updated All Call Sites
+
+**Consistent volume_name parameter throughout:**
+- ✅ Storage switch UI (Line 2747): `get_storage_mode "$target_path" "$volume_name"`
+- ✅ Individual volume control (Line 1844): `get_storage_mode "$target_path" "$volume_name"`
+- ✅ Batch mount all (Line 2028): `get_storage_mode "$target_path" "$volume_name"`
+
+#### 7. Impact & Benefits
+
+**Before Fix:**
+- ❌ Wrong mount location misdetected as internal mode
+- ❌ Confusing "data doesn't exist" error
+- ❌ No guidance on how to fix
+- ❌ User forced to manually investigate
+
+**After Fix:**
+- ✅ Correct detection: `external_wrong_location`
+- ✅ Clear display: "⚠️  マウント位置異常（外部）"
+- ✅ Shows current wrong location
+- ✅ Provides actionable fix instructions
+- ✅ Offers flag file cleanup if only flag exists
+- ✅ Prevents storage switch when remount needed
+
+---
+
 ## 2025-01-28 - Version 4.33.3: Fixed Batch Mount Error Message for Locked Volumes
 
 ### Critical Changes to `0_PlayCover-ManagementTool.command`

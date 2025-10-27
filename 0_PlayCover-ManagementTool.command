@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.3 - Fixed batch mount error message for locked volumes
+# Version: 4.33.4 - Fixed storage mode detection for wrong mount location
 #######################################################
 
 #######################################################
@@ -943,8 +943,29 @@ remove_internal_storage_flag() {
 }
 
 # Get storage mode (intentional internal vs contamination)
+# Enhanced: Check external volume mount status first to avoid misdetection
 get_storage_mode() {
     local container_path=$1
+    local volume_name=$2  # Optional: volume name for mount status check
+    
+    # If volume name is provided, check external volume mount status first
+    if [[ -n "$volume_name" ]]; then
+        if volume_exists "$volume_name"; then
+            local current_mount=$(get_mount_point "$volume_name")
+            
+            if [[ -n "$current_mount" ]]; then
+                # External volume is mounted somewhere
+                if [[ "$current_mount" == "$container_path" ]]; then
+                    echo "external"  # Correctly mounted at target location
+                else
+                    echo "external_wrong_location"  # Mounted at wrong location
+                fi
+                return 0
+            fi
+        fi
+    fi
+    
+    # External volume not mounted, check internal storage
     local storage_type=$(get_storage_type "$container_path")
     
     case "$storage_type" in
@@ -1819,8 +1840,8 @@ individual_volume_control() {
             return
         fi
         
-        # Check storage mode before mounting
-        local storage_mode=$(get_storage_mode "$target_path")
+        # Check storage mode before mounting (includes external volume mount check)
+        local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
         
         if [[ "$storage_mode" == "internal_intentional" ]]; then
             # Intentional internal storage - refuse to mount
@@ -2003,8 +2024,8 @@ batch_mount_all() {
                     echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
                     ((fail_count++))
                 else
-                    # Check storage mode before attempting mount
-                    local storage_mode=$(get_storage_mode "$target_path")
+                    # Check storage mode before attempting mount (includes external volume mount check)
+                    local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                     
                     if [[ "$storage_mode" == "internal_intentional" ]]; then
                         # Intentional internal storage - show locked message
@@ -2722,8 +2743,8 @@ switch_storage_location() {
             
             local target_path="${HOME}/Library/Containers/${bundle_id}"
             
-            # Get storage mode (includes flag check)
-            local storage_mode=$(get_storage_mode "$target_path")
+            # Get storage mode (includes flag check and external volume mount status)
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
             
             # Get container size and free space
             local container_size=$(get_container_size "$target_path")
@@ -2736,6 +2757,11 @@ switch_storage_location() {
                     location_text="${BOLD}${BLUE}🔌 外部ストレージモード${NC}"
                     free_space=$(get_external_drive_free_space "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
+                "external_wrong_location")
+                    location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
+                    local current_mount=$(get_mount_point "$volume_name")
+                    usage_text="${GRAY}現在のマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
                     ;;
                 "internal_intentional")
                     location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
@@ -2794,11 +2820,46 @@ switch_storage_location() {
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         local backup_path="${HOME}/Library/.playcover_backup_${bundle_id}"
         
-        # Check current storage type
-        local current_storage="unknown"
-        if [[ -d "$target_path" ]]; then
-            current_storage=$(get_storage_type "$target_path")
+        # Check current storage mode (enhanced with external volume mount check)
+        local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+        
+        # Handle external volume mounted at wrong location
+        if [[ "$storage_mode" == "external_wrong_location" ]]; then
+            clear
+            print_header "${display_name} のストレージ切替"
+            echo ""
+            print_error "外部ボリュームが誤った位置にマウントされています"
+            echo ""
+            local current_mount=$(get_mount_point "$volume_name")
+            echo "${BOLD}現在のマウント位置:${NC}"
+            echo "  ${DIM_GRAY}${current_mount}${NC}"
+            echo ""
+            echo "${BOLD}正しいマウント位置:${NC}"
+            echo "  ${DIM_GRAY}${target_path}${NC}"
+            echo ""
+            print_info "ストレージ切替を実行する前に、正しい位置に再マウントしてください"
+            echo ""
+            echo "${BOLD}推奨される操作:${NC}"
+            echo "  ${LIGHT_GREEN}1.${NC} ボリューム管理 → 個別ボリューム操作 → 再マウント"
+            echo "  ${LIGHT_GREEN}2.${NC} または、全ボリュームをマウント（自動修正）"
+            echo ""
+            wait_for_enter
+            continue
         fi
+        
+        # Convert storage_mode to legacy storage_type for compatibility
+        local current_storage="unknown"
+        case "$storage_mode" in
+            "external")
+                current_storage="external"
+                ;;
+            "internal_intentional"|"internal_contaminated")
+                current_storage="internal"
+                ;;
+            "none")
+                current_storage="none"
+                ;;
+        esac
         
         # Get current size (both human-readable and bytes)
         local current_size=$(get_container_size "$target_path")
@@ -2947,6 +3008,35 @@ switch_storage_location() {
             else
                 # Check for nested backup structure and find actual Data directory
                 print_info "コンテナ構造を検証中..."
+                
+                # Check if only flag file exists (no actual data)
+                local content_check=$(/bin/ls -A1 "$source_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+                
+                if [[ -z "$content_check" ]]; then
+                    # Only flag file exists, no actual data
+                    print_warning "内蔵ストレージにフラグファイルのみ存在します（実データなし）"
+                    echo ""
+                    print_info "これは外部ボリュームが誤った場所にマウントされている可能性があります"
+                    echo ""
+                    echo "${BOLD}推奨される操作:${NC}"
+                    echo "  ${LIGHT_GREEN}1.${NC} フラグファイルを削除して外部モードに戻す"
+                    echo "  ${LIGHT_GREEN}2.${NC} ボリューム管理から正しい位置に再マウント"
+                    echo ""
+                    echo -n "${BOLD}${YELLOW}フラグファイルを削除しますか？ (Y/n):${NC} "
+                    read delete_flag
+                    
+                    if [[ "$delete_flag" =~ ^[Yy]?$ ]]; then
+                        remove_internal_storage_flag "$source_path"
+                        print_success "フラグファイルを削除しました"
+                        echo ""
+                        print_info "ボリューム管理から外部ボリュームを再マウントしてください"
+                    else
+                        print_info "キャンセルしました"
+                    fi
+                    
+                    wait_for_enter
+                    continue
+                fi
                 
                 local data_path=$(/usr/bin/find "$source_path" -type d -name "Data" -depth 3 2>/dev/null | head -1)
                 if [[ -n "$data_path" ]]; then
