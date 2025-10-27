@@ -1,5 +1,153 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.12: Fixed Empty Internal Mode Display and Mounting
+
+### Enhancement to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Empty Internal Mode Shows as "⚠️ データ無し"
+
+**User Scenario:**
+```
+1. External → Internal switch (creates flag, no data)
+   ✅ Success: "内蔵ストレージへの切り替えが完了しました"
+   ✅ "内蔵ストレージモードフラグを作成しました"
+
+2. Check storage switch menu
+   ❌ Shows: "⚠️ データ無し"
+   ❌ Confusing: User just switched to internal mode!
+```
+
+**Root Cause:**
+- v4.33.11 fix made flag-only state return `"none"` for mounting purposes
+- But storage switch menu should show "🏠 内部ストレージモード (空)"
+- Need to distinguish between:
+  - True empty: No flag, no data → Allow mount
+  - Empty internal mode: Has flag, no data → Show as internal, but allow mount
+
+#### Solution: New Storage Mode `"internal_intentional_empty"`
+
+**Added new mode to distinguish flag-only state:**
+```
+"internal_intentional"        - Internal with actual data (refuse mount)
+"internal_intentional_empty"  - Internal with only flag (allow mount, show as internal)
+"none"                        - No flag, no data (allow mount, show as empty)
+```
+
+#### Changes Made
+
+**1. get_storage_mode() Enhancement (Line 975-1005)**
+
+```zsh
+case "$storage_type" in
+    "internal")
+        local content_check=$(... | grep -v "${INTERNAL_STORAGE_FLAG}")
+        
+        if [[ -z "$content_check" ]]; then
+            # Only flag exists, no real data
+            if has_internal_storage_flag "$container_path"; then
+                echo "internal_intentional_empty"  # ← New mode!
+            else
+                echo "none"
+            fi
+        elif has_internal_storage_flag "$container_path"; then
+            echo "internal_intentional"  # Has data + flag
+        else
+            echo "internal_contaminated"  # Has data, no flag
+        fi
+        ;;
+    "none")
+        if has_internal_storage_flag "$container_path"; then
+            echo "internal_intentional_empty"  # ← New mode!
+        else
+            echo "none"
+        fi
+        ;;
+```
+
+**2. Storage Switch Menu Display (Line 2812-2852)**
+
+```zsh
+case "$storage_mode" in
+    "internal_intentional")
+        location_text="🏠 内部ストレージモード"
+        usage_text="容量情報"
+        ;;
+    "internal_intentional_empty")  # ← New case!
+        location_text="🏠 内部ストレージモード (空)"
+        usage_text="使用容量: 0B / 残容量: XXX"
+        ;;
+    "none")
+        location_text="⚠️ データ無し"
+        usage_text="N/A"
+        ;;
+```
+
+**3. Storage Switch Logic (Line 2924)**
+
+```zsh
+# Treat internal_intentional_empty as "internal" for switching
+case "$storage_mode" in
+    "internal_intentional"|"internal_intentional_empty"|"internal_contaminated")
+        current_storage="internal"
+        ;;
+```
+
+**4. Individual Volume Control Mounting (Line 1908-1926)**
+
+```zsh
+if [[ "$storage_mode" == "internal_intentional" ]]; then
+    # Has data - refuse to mount
+    print_error "意図的に内蔵ストレージモード"
+    return
+elif [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+    # Empty internal mode - cleanup and allow mount
+    print_info "内蔵ストレージモード（空）を検出"
+    print_info "フラグファイルをクリーンアップして外部ボリュームをマウント"
+    sudo rm -rf "$target_path"
+    # Continue to mount
+fi
+```
+
+#### Test Scenario
+
+**Before v4.33.12:**
+```
+1. External → Internal switch (empty volume)
+   Storage Switch Menu shows: "⚠️ データ無し"
+   ❌ Confusing display
+
+2. Individual Volume Control
+   Cannot determine if internal mode or truly empty
+```
+
+**After v4.33.12:**
+```
+1. External → Internal switch (empty volume)
+   Storage Switch Menu shows: "🏠 内部ストレージモード (空)"
+   ✅ Clear indication of internal mode
+
+2. Individual Volume Control: Select volume
+   Detects "internal_intentional_empty"
+   Cleans up flag automatically
+   Mounts external volume
+   ✅ Success
+```
+
+#### Behavior Matrix
+
+| State | Flag | Data | Storage Mode | Menu Display | Mount Behavior |
+|-------|------|------|--------------|--------------|----------------|
+| Empty external | No | No | `none` | ⚠️ データ無し | Allow mount |
+| Empty internal | Yes | No | `internal_intentional_empty` | 🏠 内部 (空) | Auto-cleanup, allow mount |
+| Internal with data | Yes | Yes | `internal_intentional` | 🏠 内部 | Refuse mount |
+| Contaminated | No | Yes | `internal_contaminated` | ⚠️ 内蔵データ検出 | Prompt user |
+
+#### Related Changes
+- Updated script version to 4.33.12
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.11: Fixed mount_volume Freeze with Flag-Only State
 
 ### Critical Bug Fix to `0_PlayCover-ManagementTool.command`

@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.11 - Fixed mount_volume freeze with flag-only state
+# Version: 4.33.12 - Fixed empty internal mode display and mounting
 #######################################################
 
 #######################################################
@@ -980,8 +980,13 @@ get_storage_mode() {
             
             if [[ -z "$content_check" ]]; then
                 # Only flag file (and/or metadata) exists, no real data
-                # Treat as "none" for UI purposes (allow mounting)
-                echo "none"
+                if has_internal_storage_flag "$container_path"; then
+                    # Flag exists = intentional internal mode, but empty
+                    echo "internal_intentional_empty"
+                else
+                    # No flag, no data = truly empty
+                    echo "none"
+                fi
             elif has_internal_storage_flag "$container_path"; then
                 # Has flag + actual data = intentional internal storage
                 echo "internal_intentional"
@@ -993,8 +998,8 @@ get_storage_mode() {
         "none")
             # Directory is empty, but check if flag file exists
             if has_internal_storage_flag "$container_path"; then
-                # Flag file exists without data - treat as none (allow mounting)
-                echo "none"
+                # Flag file exists without data - intentional internal mode (empty)
+                echo "internal_intentional_empty"
             else
                 echo "none"
             fi
@@ -1901,7 +1906,7 @@ individual_volume_control() {
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
         
         if [[ "$storage_mode" == "internal_intentional" ]]; then
-            # Intentional internal storage - refuse to mount
+            # Intentional internal storage with data - refuse to mount
             clear
             print_header "${display_name} の操作"
             echo ""
@@ -1911,6 +1916,12 @@ individual_volume_control() {
             wait_for_enter
             individual_volume_control
             return
+        elif [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+            # Intentional internal storage but empty - allow mounting after cleanup
+            print_info "内蔵ストレージモード（空）を検出しました"
+            print_info "フラグファイルをクリーンアップして外部ボリュームをマウントします"
+            /usr/bin/sudo /bin/rm -rf "$target_path"
+            # Continue to mount below
         elif [[ "$storage_mode" == "internal_contaminated" ]]; then
             # Contaminated data - ask user for cleanup method
             clear
@@ -2826,6 +2837,11 @@ switch_storage_location() {
                     free_space=$(get_storage_free_space "$HOME")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
+                "internal_intentional_empty")
+                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC} ${DIM_GRAY}(空)${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${GRAY}使用容量: 0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
                 "internal_contaminated")
                     location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
                     free_space=$(get_storage_free_space "$HOME")
@@ -2911,7 +2927,7 @@ switch_storage_location() {
             "external")
                 current_storage="external"
                 ;;
-            "internal_intentional"|"internal_contaminated")
+            "internal_intentional"|"internal_intentional_empty"|"internal_contaminated")
                 current_storage="internal"
                 ;;
             "none")
