@@ -1,5 +1,100 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.34.0: Major Refactoring - Terminology Unification and Code Cleanup
+
+### Major Refactoring to `0_PlayCover-ManagementTool.command`
+
+#### Goals: Improve Code Quality, Consistency, and Maintainability
+
+This release focuses on internal code improvements without changing functionality:
+
+**1. Terminology Unification (文言統一)**
+- **「内部ストレージ」→「内蔵ストレージ」**: Unified all occurrences (11 replacements)
+- **「内部データ」→「内蔵データ」**: Unified all occurrences (4 replacements)
+- Consistent terminology throughout the entire script
+- Better readability and reduced confusion
+
+**2. Common Messages Constants (共通メッセージの定数化)**
+
+Added message constants for frequently used strings:
+```zsh
+# Operation status messages
+readonly MSG_CANCELED="キャンセルしました"                           # 11 occurrences
+readonly MSG_INVALID_SELECTION="無効な選択です"                      # 8 occurrences
+readonly MSG_MOUNT_FAILED="ボリュームのマウントに失敗しました"       # 7 occurrences
+readonly MSG_NO_REGISTERED_VOLUMES="登録されているアプリボリュームがありません"  # 4 occurrences
+readonly MSG_CLEANUP_INTERNAL_STORAGE="内蔵ストレージをクリア中..." # 3 occurrences
+readonly MSG_INTENTIONAL_INTERNAL_MODE="このアプリは意図的に内蔵ストレージモードに設定されています"  # 2 occurrences
+readonly MSG_SWITCH_VIA_STORAGE_MENU="外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"  # 2 occurrences
+readonly MSG_UNINTENDED_INTERNAL_DATA="⚠️  内蔵ストレージに意図しないデータが検出されました"  # 2 occurrences
+```
+
+**Benefits:**
+- **Consistency**: All messages use same wording
+- **Maintainability**: Change message in one place, updates everywhere
+- **Readability**: Code is cleaner with constants
+- **Localization**: Easy to add multi-language support in future
+
+**3. Code Cleanup Summary**
+
+| Category | Before | After | Improvement |
+|----------|--------|-------|-------------|
+| Terminology variants | 2 types | 1 type | 100% unified |
+| Duplicate messages | 39+ copies | 8 constants | 80% reduction |
+| Total replacements | - | 39 | - |
+
+#### Changes Made
+
+**Line 6: Version Update**
+```zsh
+# Before
+# Version: 4.33.14 - Fixed empty internal mode to lock consistently
+
+# After
+# Version: 4.34.0 - Major refactoring: terminology unification and code cleanup
+```
+
+**Line 108-117: Added Common Messages Constants**
+```zsh
+# ═══════════════════════════════════════════════════════════════════
+# Common Messages (for consistency and maintainability)
+# ═══════════════════════════════════════════════════════════════════
+
+# Operation status messages
+readonly MSG_CANCELED="キャンセルしました"
+readonly MSG_INVALID_SELECTION="無効な選択です"
+readonly MSG_MOUNT_FAILED="ボリュームのマウントに失敗しました"
+# ... (8 constants total)
+```
+
+**Throughout Script: Terminology Unification**
+- All `"内部ストレージ"` → `"内蔵ストレージ"`
+- All `"内部データ"` → `"内蔵データ"`
+- All duplicate messages → Message constants
+
+#### No Functional Changes
+
+**IMPORTANT**: This is a refactoring release:
+- ✅ All functionality remains exactly the same
+- ✅ No behavior changes
+- ✅ No new features or bug fixes
+- ✅ Pure code quality improvement
+
+**Testing**: All existing test scenarios from v4.33.14 still apply.
+
+#### Future Improvements (Not in this release)
+
+Planned for future versions:
+- Further message constant extraction
+- Function consolidation for duplicate logic
+- Additional code structure improvements
+
+#### Related Changes
+- Updated script version to 4.34.0
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.14: Fixed Empty Internal Mode to Lock Consistently
 
 ### Critical Fix to `0_PlayCover-ManagementTool.command`

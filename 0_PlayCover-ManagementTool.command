@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.14 - Fixed empty internal mode to lock consistently
+# Version: 4.34.0 - Major refactoring: terminology unification and code cleanup
 #######################################################
 
 #######################################################
@@ -104,6 +104,21 @@ readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
 readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
+
+# ═══════════════════════════════════════════════════════════════════
+# Common Messages (for consistency and maintainability)
+# ═══════════════════════════════════════════════════════════════════
+
+# Operation status messages
+readonly MSG_CANCELED="キャンセルしました"
+readonly MSG_INVALID_SELECTION="無効な選択です"
+readonly MSG_MOUNT_FAILED="ボリュームのマウントに失敗しました"
+readonly MSG_NO_REGISTERED_VOLUMES="登録されているアプリボリュームがありません"
+readonly MSG_MAPPING_FILE_NOT_FOUND="マッピングファイルが見つかりません"
+readonly MSG_CLEANUP_INTERNAL_STORAGE="内蔵ストレージをクリア中..."
+readonly MSG_INTENTIONAL_INTERNAL_MODE="このアプリは意図的に内蔵ストレージモードに設定されています"
+readonly MSG_SWITCH_VIA_STORAGE_MENU="外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+readonly MSG_UNINTENDED_INTERNAL_DATA="⚠️  内蔵ストレージに意図しないデータが検出されました"
 
 # Detect Homebrew path (Apple Silicon vs Intel)
 if [[ -x "/opt/homebrew/bin/brew" ]]; then
@@ -570,13 +585,13 @@ mount_volume() {
                 
                 if [[ "$storage_mode" == "internal_intentional" ]]; then
                     # Intentional internal storage - should not mount
-                    print_error "このアプリは意図的に内蔵ストレージモードに設定されています"
-                    print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+                    print_error "$MSG_INTENTIONAL_INTERNAL_MODE"
+                    print_info "$MSG_SWITCH_VIA_STORAGE_MENU"
                     return 1
                 fi
                 
                 # Contaminated data detected - ask user what to do
-                print_warning "⚠️  内蔵ストレージに意図しないデータが検出されました"
+                print_warning "$MSG_UNINTENDED_INTERNAL_DATA"
                 print_info "検出されたデータ:"
                 echo "$content_check" | while read -r line; do
                     echo "  - $line"
@@ -584,7 +599,7 @@ mount_volume() {
                 echo ""
                 echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
                 echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
-                echo "  ${BOLD}${BLUE}2.${NC} 内部データを外部に統合（データを保持）"
+                echo "  ${BOLD}${BLUE}2.${NC} 内蔵データを外部に統合（データを保持）"
                 echo "  ${BOLD}${RED}3.${NC} キャンセル（マウントしない）"
                 echo ""
                 echo -n "${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
@@ -596,16 +611,16 @@ mount_volume() {
                 case "$cleanup_choice" in
                     1)
                         print_info "外部ボリュームを優先します（内蔵データを削除）"
-                        print_info "内部ストレージをクリア中..."
+                        print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
                         /usr/bin/sudo /bin/rm -rf "$target_path"
                         # Continue to mount below
                         ;;
                     2)
-                        print_info "内部データを外部ボリュームに統合します..."
+                        print_info "内蔵データを外部ボリュームに統合します..."
                         echo ""
                         ;;
                     *)
-                        print_info "キャンセルしました"
+                        print_info "$MSG_CANCELED"
                         return 1
                         ;;
                 esac
@@ -626,7 +641,7 @@ mount_volume() {
                     
                     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
                         print_success "データの移行が完了しました"
-                        print_info "内部ストレージをクリア中..."
+                        print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
                         /usr/bin/sudo /bin/rm -rf "$target_path"
                         # Continue to /sbin/mount below
                     else
@@ -1072,7 +1087,7 @@ check_playcover_volume_mount() {
             /bin/mkdir -p "$playcover_keymapping" 2>/dev/null || true
         fi
     else
-        print_error "ボリュームのマウントに失敗しました"
+        print_error "$MSG_MOUNT_FAILED"
         exit_with_cleanup 1 "ボリュームマウントエラー"
     fi
 }
@@ -1298,7 +1313,7 @@ mount_app_volume() {
     if mount_volume "$APP_VOLUME_NAME" "$target_path"; then
         return 0
     else
-        print_error "ボリュームのマウントに失敗しました"
+        print_error "$MSG_MOUNT_FAILED"
         return 1
     fi
 }
@@ -1653,7 +1668,7 @@ individual_volume_control() {
     
     # Check if we have any mappings
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "登録されているアプリボリュームがありません"
+        print_warning "$MSG_NO_REGISTERED_VOLUMES"
         wait_for_enter
         return
     fi
@@ -1803,7 +1818,7 @@ individual_volume_control() {
     fi
     
     if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#selectable_array} ]]; then
-        print_error "無効な選択です"
+        print_error "$MSG_INVALID_SELECTION"
         /bin/sleep 2
         individual_volume_control
         return
@@ -1915,8 +1930,8 @@ individual_volume_control() {
             clear
             print_header "${display_name} の操作"
             echo ""
-            print_error "このアプリは意図的に内蔵ストレージモードに設定されています"
-            print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+            print_error "$MSG_INTENTIONAL_INTERNAL_MODE"
+            print_info "$MSG_SWITCH_VIA_STORAGE_MENU"
             echo ""
             wait_for_enter
             individual_volume_control
@@ -1926,7 +1941,7 @@ individual_volume_control() {
             clear
             print_header "${display_name} の操作"
             echo ""
-            print_warning "⚠️  内蔵ストレージに意図しないデータが検出されました"
+            print_warning "$MSG_UNINTENDED_INTERNAL_DATA"
             echo ""
             echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
             echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
@@ -1941,13 +1956,13 @@ individual_volume_control() {
             case "$cleanup_choice" in
                 1)
                     print_info "外部ボリュームを優先します（内蔵データを削除）"
-                    print_info "内部ストレージをクリア中..."
+                    print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
                     /usr/bin/sudo /bin/rm -rf "$target_path"
                     echo ""
                     # Continue to mount below
                     ;;
                 *)
-                    print_info "キャンセルしました"
+                    print_info "$MSG_CANCELED"
                     echo ""
                     wait_for_enter
                     individual_volume_control
@@ -2007,7 +2022,7 @@ batch_mount_all() {
     done < "$MAPPING_FILE"
     
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "登録されているアプリボリュームがありません"
+        print_warning "$MSG_NO_REGISTERED_VOLUMES"
         wait_for_enter
         return
     fi
@@ -2178,7 +2193,7 @@ batch_unmount_all() {
     done < "$MAPPING_FILE"
     
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "登録されているアプリボリュームがありません"
+        print_warning "$MSG_NO_REGISTERED_VOLUMES"
         wait_for_enter
         return
     fi
@@ -2303,7 +2318,7 @@ eject_disk() {
     confirm=${confirm:-Y}
     
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         wait_for_enter
         return
     fi
@@ -2555,7 +2570,7 @@ nuclear_cleanup() {
     read first_confirm
     
     if [[ "$first_confirm" != "yes" ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         wait_for_enter
         return
     fi
@@ -2565,7 +2580,7 @@ nuclear_cleanup() {
     read final_confirm
     
     if [[ "$final_confirm" != "DELETE ALL" ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         wait_for_enter
         return
     fi
@@ -2790,7 +2805,7 @@ switch_storage_location() {
         local mappings_content=$(read_mappings)
         
         if [[ -z "$mappings_content" ]]; then
-            print_warning "登録されているアプリボリュームがありません"
+            print_warning "$MSG_NO_REGISTERED_VOLUMES"
             wait_for_enter
             return
         fi
@@ -2832,12 +2847,12 @@ switch_storage_location() {
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
                     ;;
                 "internal_intentional")
-                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
+                    location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
                     free_space=$(get_storage_free_space "$HOME")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_intentional_empty")
-                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
+                    location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
                     free_space=$(get_storage_free_space "$HOME")
                     usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
@@ -2878,7 +2893,7 @@ switch_storage_location() {
         fi
         
         if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array} ]]; then
-            print_error "無効な選択です"
+            print_error "$MSG_INVALID_SELECTION"
             /bin/sleep 2
             continue
         fi
@@ -2942,7 +2957,7 @@ switch_storage_location() {
         case "$current_storage" in
             "internal")
                 local internal_free=$(get_storage_free_space "$HOME")
-                echo "  ${BOLD}🏠 ${CYAN}内部ストレージ${NC}"
+                echo "  ${BOLD}🏠 ${CYAN}内蔵ストレージ${NC}"
                 echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
                 ;;
             "external")
@@ -2989,7 +3004,7 @@ switch_storage_location() {
                 storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 
                 echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}🔌外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
-                echo "  ${BOLD}🏠${CYAN}内部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
+                echo "  ${BOLD}🏠${CYAN}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "none")
                 print_error "ストレージ切り替えを実行できません"
@@ -3040,7 +3055,7 @@ switch_storage_location() {
         confirm=${confirm:-Y}
         
         if [[ ! "$confirm" =~ ^[Yy] ]]; then
-            print_info "キャンセルしました"
+            print_info "$MSG_CANCELED"
             wait_for_enter
             continue
             return
@@ -3115,7 +3130,7 @@ switch_storage_location() {
                         # Explicitly remove internal storage flag to prevent false lock status
                         remove_internal_storage_flag "$target_path"
                     else
-                        print_error "ボリュームのマウントに失敗しました"
+                        print_error "$MSG_MOUNT_FAILED"
                     fi
                     
                     wait_for_enter
@@ -3254,7 +3269,7 @@ switch_storage_location() {
                 read force_continue
                 
                 if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-                    print_info "キャンセルしました"
+                    print_info "$MSG_CANCELED"
                     wait_for_enter
                     continue
                     return
@@ -3283,7 +3298,7 @@ switch_storage_location() {
             local volume_device=$(get_volume_device "$volume_name")
             print_info "ボリュームを一時マウント中..."
             if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
-                print_error "ボリュームのマウントに失敗しました"
+                print_error "$MSG_MOUNT_FAILED"
                 /usr/bin/sudo /bin/rm -rf "$temp_mount"
                 wait_for_enter
                 continue
@@ -3363,7 +3378,7 @@ switch_storage_location() {
                 # and any remaining flag file would cause misdetection
                 remove_internal_storage_flag "$target_path"
             else
-                print_error "ボリュームのマウントに失敗しました"
+                print_error "$MSG_MOUNT_FAILED"
             fi
             
         else
@@ -3450,7 +3465,7 @@ switch_storage_location() {
                 read force_continue
                 
                 if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
-                    print_info "キャンセルしました"
+                    print_info "$MSG_CANCELED"
                     wait_for_enter
                     continue
                     return
@@ -3475,7 +3490,7 @@ switch_storage_location() {
                 /usr/bin/sudo /bin/mkdir -p "$temp_mount"
                 local volume_device=$(get_volume_device "$volume_name")
                 if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
-                    print_error "ボリュームのマウントに失敗しました"
+                    print_error "$MSG_MOUNT_FAILED"
                     /usr/bin/sudo /bin/rm -rf "$temp_mount"
                     wait_for_enter
                     continue
@@ -3839,7 +3854,7 @@ show_auto_mount_menu() {
                 return
                 ;;
             *)
-                print_error "無効な選択です"
+                print_error "$MSG_INVALID_SELECTION"
                 /bin/sleep 1
                 ;;
         esac
@@ -4106,7 +4121,7 @@ show_auto_mount_setup_guide() {
     echo "${CYAN}動作仕様:${NC}"
     echo "• ログイン時に自動実行（RunAtLoad）"
     echo "• 既にマウント済みの場合はスキップ"
-    echo "• 内部ストレージに大量データがある場合は警告表示"
+    echo "• 内蔵ストレージに大量データがある場合は警告表示"
     echo "• 少量の初期データは自動クリア"
     echo ""
     print_separator
@@ -4303,11 +4318,11 @@ app_management_menu() {
                 local storage_type=$(get_storage_type "$PLAYCOVER_CONTAINER")
                 if [[ "$storage_type" == "internal" ]]; then
                     clear
-                    print_warning "⚠️  PlayCoverボリュームが未マウントですが、内部ストレージにデータがあります"
+                    print_warning "⚠️  PlayCoverボリュームが未マウントですが、内蔵ストレージにデータがあります"
                     echo ""
                     echo "${ORANGE}対処方法:${NC}"
-                    echo "  1. 内部データを外部に移行してマウント（推奨）"
-                    echo "  2. 内部データを削除してクリーンな状態でマウント"
+                    echo "  1. 内蔵データを外部に移行してマウント（推奨）"
+                    echo "  2. 内蔵データを削除してクリーンな状態でマウント"
                     echo "  3. キャンセル"
                     echo ""
                     echo -n "選択してください (1/2/3): "
@@ -4320,7 +4335,7 @@ app_management_menu() {
                             playcover_mounted=true
                             ;;
                         *)
-                            print_info "キャンセルしました"
+                            print_info "$MSG_CANCELED"
                             echo ""
                             echo -n "Enterキーで続行..."
                             read
@@ -4390,7 +4405,7 @@ app_management_menu() {
                 return
                 ;;
             *)
-                print_error "無効な選択です"
+                print_error "$MSG_INVALID_SELECTION"
                 wait_for_enter
                 ;;
         esac
@@ -4515,7 +4530,7 @@ uninstall_workflow() {
     
     # Validate input for individual uninstall
     if [[ ! "$app_choice" =~ ^[0-9]+$ ]] || [[ $app_choice -lt 0 ]] || [[ $app_choice -gt $total_apps ]]; then
-        print_error "無効な選択です"
+        print_error "$MSG_INVALID_SELECTION"
         wait_for_enter
         continue
     fi
@@ -4569,7 +4584,7 @@ uninstall_workflow() {
     read confirm
     
     if [[ "$confirm" != "yes" ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         wait_for_enter
         return
     fi
@@ -4735,7 +4750,7 @@ uninstall_all_apps() {
     read confirm
     
     if [[ "$confirm" != "yes" ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         wait_for_enter
         return
     fi
@@ -5001,7 +5016,7 @@ select_external_disk() {
         SELECTED_DISK="${external_disks[$selection]}"
         print_success "選択されたディスク: ${disk_info[$selection]}"
     else
-        print_error "無効な選択です"
+        print_error "$MSG_INVALID_SELECTION"
         /bin/sleep 1
         /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 1
     fi
@@ -5157,7 +5172,7 @@ mount_playcover_main_volume() {
     # New approach: Always copy internal container to external volume
     # This ensures proper initialization with all required files
     if $has_internal_data; then
-        print_info "内部ストレージのPlayCoverコンテナを外部に移行します"
+        print_info "内蔵ストレージのPlayCoverコンテナを外部に移行します"
         echo ""
         
         # Mount to temporary location
@@ -5194,7 +5209,7 @@ mount_playcover_main_volume() {
         rmdir "$temp_mount"
         
         # Backup and remove internal container
-        print_info "内部ストレージをクリーンアップ中..."
+        print_info "内蔵ストレージをクリーンアップ中..."
         if [[ -d "${PLAYCOVER_CONTAINER}.backup" ]]; then
             /usr/bin/sudo /bin/rm -rf "${PLAYCOVER_CONTAINER}.backup"
         fi
@@ -5218,7 +5233,7 @@ mount_playcover_main_volume() {
         print_info "マウントポイント: ${PLAYCOVER_CONTAINER}"
         /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
     else
-        print_error "ボリュームのマウントに失敗しました"
+        print_error "$MSG_MOUNT_FAILED"
         wait_for_enter
         exit 1
     fi
@@ -5594,7 +5609,7 @@ main() {
                 ;;
             *)
                 echo ""
-                print_error "無効な選択です"
+                print_error "$MSG_INVALID_SELECTION"
                 /bin/sleep 2
                 ;;
         esac
@@ -5610,7 +5625,7 @@ inal" to close (every window whose name contains "playcover")' & exit 0
                 ;;
             *)
                 echo ""
-                print_error "無効な選択です"
+                print_error "$MSG_INVALID_SELECTION"
                 /bin/sleep 2
                 ;;
         esac
