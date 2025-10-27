@@ -1,5 +1,144 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.5: Improved Wrong Mount Location Handling with Auto-Remount
+
+### UI/UX Improvements to `0_PlayCover-ManagementTool.command`
+
+#### 1. Intuitive Auto-Remount Behavior (Lines 1789-1865)
+
+**User Expectation:**
+```
+ボリューム情報画面:
+  2. ゼンレスゾーンゼロ
+      ⚠️  マウント位置異常: /Volumes/ZenlessZoneZero
+
+User thinks: "番号選択したら直してくれるはず"
+User expects: 自動的に正しい位置へ再マウント
+```
+
+**Previous Behavior (v4.33.4):**
+```
+User selects "2" → Volume unmounts → Shows as "⚪️ 未マウント"
+
+Result: Confusing! User has to:
+1. Notice it's now unmounted
+2. Select "2" again to mount
+3. Two clicks to fix one problem
+```
+
+**New Behavior (v4.33.5):**
+```
+User selects "2" → Automatic remount to correct location → Success!
+
+Result: Intuitive! Volume fixed in one click.
+```
+
+#### 2. Enhanced Individual Volume Control Logic
+
+**Before:**
+```zsh
+if [[ -n "$current_mount" ]]; then
+    # Mounted anywhere → Unmount (wrong!)
+    /usr/bin/sudo /usr/sbin/diskutil unmount "$device"
+else
+    # Not mounted → Mount
+}
+```
+
+**After:**
+```zsh
+if [[ -n "$current_mount" ]]; then
+    # Volume is mounted somewhere
+    if [[ "$current_mount" == "$target_path" ]]; then
+        # Correctly mounted → Unmount (toggle)
+        /usr/bin/sudo /usr/sbin/diskutil unmount "$device"
+    else
+        # Wrong location → Remount to correct location
+        
+        # 1. Unmount from wrong location
+        /usr/bin/sudo /usr/sbin/diskutil unmount "$device"
+        
+        # 2. Mount to correct location
+        /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path"
+    fi
+else
+    # Not mounted → Mount
+}
+```
+
+**Key Changes:**
+- ✅ Check if mount location is correct
+- ✅ Correct location: Toggle (unmount)
+- ✅ Wrong location: Auto-remount to correct location
+- ✅ Not mounted: Mount normally
+
+#### 3. Storage Switch UI Display Improvement (Lines 2761-2765)
+
+**Before (v4.33.4):**
+```
+1. ゼンレスゾーンゼロ
+    位置: ⚠️  マウント位置異常（外部）
+    使用容量: 現在のマウント位置: /Volumes/ZenlessZoneZero
+              ^^^^^^^^^^^^^^^^^^
+              Label text appears where size should be - confusing!
+```
+
+**After (v4.33.5):**
+```
+1. ゼンレスゾーンゼロ
+    位置: ⚠️  マウント位置異常（外部）
+    使用容量: 8.0K | 誤ったマウント位置: /Volumes/ZenlessZoneZero
+              ^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              Shows actual size, then wrong location - clear!
+```
+
+**Code Change:**
+```zsh
+# Before
+usage_text="${GRAY}現在のマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
+
+# After
+usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
+```
+
+#### 4. User Experience Flow
+
+**Scenario: User discovers wrong mount location**
+
+**Before (v4.33.4):**
+```
+1. See "⚠️  マウント位置異常"
+2. Select number → Volume unmounts
+3. See "⚪️ 未マウント" (confused)
+4. Select number again → Volume mounts correctly
+5. Total: 2 clicks + confusion
+```
+
+**After (v4.33.5):**
+```
+1. See "⚠️  マウント位置異常"
+2. Select number → Automatic remount to correct location
+3. Success! (as expected)
+4. Total: 1 click, intuitive behavior
+```
+
+#### 5. Impact & Benefits
+
+**Before:**
+- ❌ Counter-intuitive: Unmounts instead of fixing
+- ❌ Requires two actions to fix one problem
+- ❌ Display shows label text in size field
+- ❌ User confusion and frustration
+
+**After:**
+- ✅ Intuitive: Selecting wrong mount → Automatically fixes
+- ✅ Single action fixes the problem
+- ✅ Clear display with size and wrong location
+- ✅ Matches user expectation perfectly
+- ✅ Better overall user experience
+
+---
+
 ## 2025-01-28 - Version 4.33.4: Fixed Storage Mode Detection for Wrong Mount Location
 
 ### Critical Bug Fix to `0_PlayCover-ManagementTool.command`

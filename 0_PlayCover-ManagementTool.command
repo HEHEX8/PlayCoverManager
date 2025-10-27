@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.4 - Fixed storage mode detection for wrong mount location
+# Version: 4.33.5 - Improved wrong mount location handling with auto-remount
 #######################################################
 
 #######################################################
@@ -1791,7 +1791,7 @@ individual_volume_control() {
     
     # Quick switch without confirmation
     if [[ -n "$current_mount" ]]; then
-        # Currently mounted -> Unmount
+        # Volume is mounted somewhere
         if ! volume_exists "$volume_name"; then
             clear
             print_header "${display_name} の操作"
@@ -1802,31 +1802,71 @@ individual_volume_control() {
             return
         fi
         
-        
-        # Quit app first
-        if [[ -n "$bundle_id" ]]; then
-            /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
-            /bin/sleep 0.3
-        fi
-        
-        local device=$(get_volume_device "$volume_name")
-        if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
-            # Success - silently return to menu
-            individual_volume_control
-            return
-        else
-            # Failed - show error
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
-                print_error "アンマウント失敗: アプリが実行中です"
-            else
-                print_error "アンマウント失敗: ファイルが使用中の可能性があります"
+        # Check if mounted at correct location
+        if [[ "$current_mount" == "$target_path" ]]; then
+            # Correctly mounted -> Unmount
+            
+            # Quit app first
+            if [[ -n "$bundle_id" ]]; then
+                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+                /bin/sleep 0.3
             fi
-            wait_for_enter
-            individual_volume_control
-            return
+            
+            local device=$(get_volume_device "$volume_name")
+            if /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                # Success - silently return to menu
+                individual_volume_control
+                return
+            else
+                # Failed - show error
+                clear
+                print_header "${display_name} の操作"
+                echo ""
+                if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                    print_error "アンマウント失敗: アプリが実行中です"
+                else
+                    print_error "アンマウント失敗: ファイルが使用中の可能性があります"
+                fi
+                wait_for_enter
+                individual_volume_control
+                return
+            fi
+        else
+            # Mounted at wrong location -> Remount to correct location
+            
+            # Quit app first
+            if [[ -n "$bundle_id" ]]; then
+                /usr/bin/pkill -9 -f "$bundle_id" 2>/dev/null || true
+                /bin/sleep 0.3
+            fi
+            
+            local device=$(get_volume_device "$volume_name")
+            
+            # Unmount from wrong location
+            if ! /usr/bin/sudo /usr/sbin/diskutil unmount "$device" >/dev/null 2>&1; then
+                clear
+                print_header "${display_name} の操作"
+                echo ""
+                print_error "アンマウント失敗: ファイルが使用中の可能性があります"
+                wait_for_enter
+                individual_volume_control
+                return
+            fi
+            
+            # Mount to correct location
+            if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                # Success - silently return to menu
+                individual_volume_control
+                return
+            else
+                clear
+                print_header "${display_name} の操作"
+                echo ""
+                print_error "再マウント失敗"
+                wait_for_enter
+                individual_volume_control
+                return
+            fi
         fi
     else
         # Currently unmounted -> Mount
@@ -2761,7 +2801,8 @@ switch_storage_location() {
                 "external_wrong_location")
                     location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
                     local current_mount=$(get_mount_point "$volume_name")
-                    usage_text="${GRAY}現在のマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
+                    free_space=$(get_external_drive_free_space "$volume_name")
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
                     ;;
                 "internal_intentional")
                     location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
