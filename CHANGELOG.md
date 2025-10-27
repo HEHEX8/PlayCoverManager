@@ -1,5 +1,147 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.33.14: Fixed Empty Internal Mode to Lock Consistently
+
+### Critical Fix to `0_PlayCover-ManagementTool.command`
+
+#### Issue: Empty Internal Mode Should Be Locked, Not Selectable
+
+**User Feedback:**
+```
+個別ボリューム操作:
+  3. 原神 | 🏠 内蔵ストレージモード (空)  ← 選択可能
+      ⚪️ 未マウント
+
+❌ ロックされていないのが問題
+❌ 空でも通常の内蔵モードと同じ扱いにすべき
+```
+
+**Root Cause:**
+- v4.33.13 made empty internal mode selectable
+- But user intentionally switched to internal mode
+- Should respect user's intent and lock it
+- To mount external, user must explicitly switch back via Storage Switch menu
+
+**Correct Behavior:**
+- Empty internal mode = Same as regular internal mode
+- Show as "🔒 ロック中 | 🏠 内蔵ストレージモード" (no "(空)")
+- Not selectable in Individual Volume Control
+- Must use Storage Switch to return to external
+
+#### Changes Made
+
+**1. Individual Volume Control Display (Line 1738-1745)**
+
+Merged `internal_intentional` and `internal_intentional_empty`:
+```zsh
+# Before v4.33.13
+elif [[ "$extra_info" == "internal_intentional" ]]; then
+    # Show as locked
+    echo "🔒 ロック中 | 🏠 内蔵ストレージモード"
+elif [[ "$extra_info" == "internal_intentional_empty" ]]; then
+    # Show as selectable
+    echo "${display_index}. | 🏠 内蔵ストレージモード (空)"
+
+# After v4.33.14
+elif [[ "$extra_info" == "internal_intentional" ]] || [[ "$extra_info" == "internal_intentional_empty" ]]; then
+    # Both locked (same treatment)
+    echo "🔒 ロック中 | 🏠 内蔵ストレージモード"
+```
+
+**2. Storage Switch Menu Display (Line 2854-2858)**
+
+Removed "(空)" from display:
+```zsh
+# Before
+location_text="🏠 内部ストレージモード (空)"
+
+# After
+location_text="🏠 内部ストレージモード"
+```
+
+**3. Individual Volume Control Mount Logic (Line 1908-1920)**
+
+Merged refusal logic:
+```zsh
+# Before
+if [[ "$storage_mode" == "internal_intentional" ]]; then
+    # Refuse with data
+elif [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+    # Auto-cleanup and allow mount
+
+# After
+if [[ "$storage_mode" == "internal_intentional" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+    # Both refused (same treatment)
+    print_error "意図的に内蔵ストレージモードに設定されています"
+    print_info "外部ボリュームをマウントするには、先にストレージ切替で外部に戻してください"
+```
+
+#### Test Scenario
+
+**Individual Volume Control:**
+
+**Before v4.33.14:**
+```
+  3. 原神 | 🏠 内蔵ストレージモード (空)  ← Selectable
+      ⚪️ 未マウント
+      
+  🔒 ロック中 崩壊：スターレイル | 🏠 内蔵ストレージモード
+      ⚪️ 未マウント
+```
+
+**After v4.33.14:**
+```
+  🔒 ロック中 原神 | 🏠 内蔵ストレージモード  ← Locked
+      ⚪️ 未マウント
+      
+  🔒 ロック中 崩壊：スターレイル | 🏠 内蔵ストレージモード
+      ⚪️ 未マウント
+```
+
+**Storage Switch Menu:**
+
+**Before v4.33.14:**
+```
+  2. 原神
+      位置: 🏠 内部ストレージモード (空)  ← Shows "(空)"
+      使用容量: 0B / 残容量: 156G
+```
+
+**After v4.33.14:**
+```
+  2. 原神
+      位置: 🏠 内部ストレージモード  ← No "(空)"
+      使用容量: 0B / 残容量: 156G
+```
+
+#### Design Philosophy
+
+**User Intent Respect:**
+- If user switches to internal mode → Lock external volume mounting
+- Regardless of data amount (empty or with data)
+- To return to external → Must use Storage Switch explicitly
+- This prevents accidental switching and respects user's mode choice
+
+**Consistency:**
+- Empty internal mode = Regular internal mode (UI and behavior)
+- No special "(空)" label needed
+- Same locked status in Individual Volume Control
+
+#### Behavior Matrix (Final)
+
+| State | Flag | Data | Volume Control | Selectable | Storage Switch | Mount Behavior |
+|-------|------|------|----------------|------------|----------------|----------------|
+| Empty external | No | No | 未マウント | ✅ Yes | ⚠️ データ無し | Allow mount |
+| Empty internal | Yes | No | 🔒 🏠 内蔵 | ❌ No | 🏠 内部 | **Locked** |
+| Internal w/data | Yes | Yes | 🔒 🏠 内蔵 | ❌ No | 🏠 内部 | **Locked** |
+| Contaminated | No | Yes | ⚠️ 内蔵データ検出 | ✅ Yes | ⚠️ 検出 | Prompt |
+
+#### Related Changes
+- Updated script version to 4.33.14
+- Updated documentation (README.md, CHANGELOG.md)
+
+---
+
 ## 2025-01-28 - Version 4.33.13: Enhanced Empty Internal Mode Handling in Volume Control
 
 ### Enhancement to `0_PlayCover-ManagementTool.command`

@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.13 - Enhanced empty internal mode handling in volume control
+# Version: 4.33.14 - Fixed empty internal mode to lock consistently
 #######################################################
 
 #######################################################
@@ -1740,20 +1740,11 @@ individual_volume_control() {
             echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ起動中${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
-        elif [[ "$extra_info" == "internal_intentional" ]]; then
-            # Intentional internal storage mode with data: show as locked
+        elif [[ "$extra_info" == "internal_intentional" ]] || [[ "$extra_info" == "internal_intentional_empty" ]]; then
+            # Intentional internal storage mode (with or without data): show as locked
             echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージモード${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
-        elif [[ "$extra_info" == "internal_intentional_empty" ]]; then
-            # Intentional internal storage mode but empty: show as selectable
-            selectable_array+=("${mappings_array[$i]}")
-            selectable_indices+=("$i")
-            
-            echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${DIM_GRAY}| 🏠 内蔵ストレージモード (空)${NC}"
-            echo "      ${GRAY}${status_line}${NC}"
-            echo ""
-            ((display_index++))
         elif [[ "$extra_info" == "internal_contaminated" ]]; then
             # Contaminated: show as warning (selectable)
             selectable_array+=("${mappings_array[$i]}")
@@ -1919,8 +1910,8 @@ individual_volume_control() {
         # Check storage mode before mounting (includes external volume mount check)
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
         
-        if [[ "$storage_mode" == "internal_intentional" ]]; then
-            # Intentional internal storage with data - refuse to mount
+        if [[ "$storage_mode" == "internal_intentional" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+            # Intentional internal storage (with or without data) - refuse to mount
             clear
             print_header "${display_name} の操作"
             echo ""
@@ -1930,12 +1921,6 @@ individual_volume_control() {
             wait_for_enter
             individual_volume_control
             return
-        elif [[ "$storage_mode" == "internal_intentional_empty" ]]; then
-            # Intentional internal storage but empty - allow mounting after cleanup
-            print_info "内蔵ストレージモード（空）を検出しました"
-            print_info "フラグファイルをクリーンアップして外部ボリュームをマウントします"
-            /usr/bin/sudo /bin/rm -rf "$target_path"
-            # Continue to mount below
         elif [[ "$storage_mode" == "internal_contaminated" ]]; then
             # Contaminated data - ask user for cleanup method
             clear
@@ -2852,7 +2837,7 @@ switch_storage_location() {
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_intentional_empty")
-                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC} ${DIM_GRAY}(空)${NC}"
+                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
                     free_space=$(get_storage_free_space "$HOME")
                     usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
