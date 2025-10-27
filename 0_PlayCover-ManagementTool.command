@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.33.1 - Fixed individual volume control contamination handling
+# Version: 4.33.2 - Enhanced storage switch UI with mode detection
 #######################################################
 
 #######################################################
@@ -2696,13 +2696,9 @@ switch_storage_location() {
             return
         fi
         
-        # Display volume list with storage type and /sbin/mount status
-        echo "データ位置情報"
+        # Display volume list with storage type and mount status
+        echo "${BOLD}データ位置情報${NC}"
         echo ""
-        
-        # Cache /usr/sbin/diskutil and /sbin/mount output for performance
-        local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-        local mount_cache=$(/sbin/mount 2>/dev/null)
         
         declare -a mappings_array=()
         local index=1
@@ -2714,66 +2710,57 @@ switch_storage_location() {
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
             
             local target_path="${HOME}/Library/Containers/${bundle_id}"
-            local storage_icon=""
-            local mount_status=""
             
-            # Determine storage type using get_storage_type function
-            local storage_type="unknown"
-            if [[ -d "$target_path" ]]; then
-                storage_type=$(get_storage_type "$target_path")
-            fi
+            # Get storage mode (includes flag check)
+            local storage_mode=$(get_storage_mode "$target_path")
             
-            # Get container size
+            # Get container size and free space
             local container_size=$(get_container_size "$target_path")
+            local free_space=""
+            local location_text=""
+            local usage_text=""
             
-            case "$storage_type" in
+            case "$storage_mode" in
                 "external")
-                    storage_icon="🔌 外部"
-                    mount_status="🟢 外部ストレージマウント済"
+                    location_text="${BOLD}${BLUE}🔌 外部ストレージモード${NC}"
+                    free_space=$(get_external_drive_free_space "$volume_name")
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
-                "internal")
-                    storage_icon="🏠 内部"
-                    mount_status="⚪️ 内部ストレージにデータ有"
+                "internal_intentional")
+                    location_text="${BOLD}${GREEN}🏠 内部ストレージモード${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
+                "internal_contaminated")
+                    location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "none")
-                    storage_icon="⚠️  データ無し"
-                    mount_status="⚪️ 外部ストレージ未マウント"
-                    container_size="0B"
+                    location_text="${GRAY}⚠️ データ無し${NC}"
+                    usage_text="${GRAY}N/A${NC}"
                     ;;
                 *)
-                    storage_icon="⚠️  データ無し"
-                    mount_status="⚪️ 外部ストレージ未マウント"
-                    container_size="0B"
+                    location_text="${GRAY}⚠️ データ無し${NC}"
+                    usage_text="${GRAY}N/A${NC}"
                     ;;
             esac
             
-            # Get free space for display
-            local free_space=""
-            if [[ "$storage_type" == "external" ]]; then
-                free_space=$(get_external_drive_free_space "$volume_name")
-            elif [[ "$storage_type" == "internal" ]]; then
-                free_space=$(get_storage_free_space "$HOME")
-            fi
-            
-            # Format with fixed spacing
-            printf "  %s. %s\n" "$index" "$display_name"
-            printf "      位置: %-16s %s\n" "$storage_icon" "$mount_status"
-            if [[ -n "$free_space" ]]; then
-                printf "      使用容量: %s / 残容量: %s\n" "$container_size" "$free_space"
-            else
-                printf "      使用容量: %s\n" "$container_size"
-            fi
+            # Display formatted output
+            echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
+            echo "      ${GRAY}位置:${NC} ${location_text}"
+            echo "      ${GRAY}使用容量:${NC} ${usage_text}"
             echo ""
             ((index++))
         done <<< "$mappings_content"
         
         print_separator
         echo ""
-        echo "切り替えるアプリを選択してください"
-        echo "  [番号] : データ位置切替"
-        echo "  [0]    : 戻る"
+        echo "${BOLD}${UNDERLINE}切り替えるアプリを選択してください${NC}"
+        echo "  ${BOLD}${CYAN}[番号]${NC} : データ位置切替"
+        echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
         echo ""
-        echo -n "選択: "
+        echo -n "${BOLD}${YELLOW}選択:${NC} "
         read choice
         
         if [[ "$choice" == "0" ]]; then
