@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.39.1 - Fix: Create system directories before installation
+# Version: 4.39.2 - Fix: Menu status check for LaunchDaemon
 #######################################################
 
 #######################################################
@@ -4634,13 +4634,17 @@ show_auto_mount_menu() {
         clear
         print_header "リムーバブルドライブ自動マウント"
         
-        local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
+        # Use LaunchDaemon paths (system-level)
+        local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
+        local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
         local is_installed=false
         local is_loaded=false
         
-        if [[ -f "$launch_agent_path" ]]; then
+        # Check if installed (both plist and script must exist)
+        if [[ -f "$launch_daemon_path" && -f "$monitor_script_path" ]]; then
             is_installed=true
-            if launchctl list | grep -q "com.playcover.diskmount"; then
+            # Check if loaded (use sudo launchctl for system-level daemon)
+            if /usr/bin/sudo launchctl list 2>/dev/null | grep -q "com.playcover.diskmount"; then
                 is_loaded=true
             fi
         fi
