@@ -1,5 +1,158 @@
 # PlayCover Scripts Changelog
 
+## 2025-10-28 - Version 4.43.0: Hidden Option for Nuclear Cleanup + Volume Operations Verification Tools
+
+### Changes Summary
+
+**User Request:**
+> "5. 🔥 超強力クリーンアップ（完全リセット）の隠しオプション化  
+> 表示にないがキーを押せば出る。数字ではないものを割り当て  
+> と、ボリューム操作のいろんなパターンの動作検証"
+
+#### 1. Nuclear Cleanup Hidden Option
+
+**Modified Files:**
+- `0_PlayCover-ManagementTool.command`
+
+**Changes:**
+1. **Menu Display Update:**
+   - Removed "5. 🔥 超強力クリーンアップ（完全リセット）" from menu
+   - Changed menu selection range from (0-5) to (0-4)
+   - Hidden from normal user view to prevent accidental execution
+
+2. **Hidden Trigger Implementation:**
+   - Added case statement for `X|x|RESET|reset` in main menu
+   - Displays warning message: "隠しオプション: 超強力クリーンアップ"
+   - Executes `nuclear_cleanup()` function when triggered
+
+3. **Benefits:**
+   - Prevents accidental deletion of all PlayCover data
+   - Requires intentional action (typing specific keys)
+   - Maintains functionality for advanced users/troubleshooting
+
+**Code Changes:**
+```zsh
+# Menu display (line 3870-3874)
+echo "  ${LIGHT_GREEN}4.${NC} ${eject_label}"
+echo "  ${LIGHT_GREEN}0.${NC} 終了"
+echo ""
+echo -n "${CYAN}選択 (0-4):${NC} "
+
+# Case statement (line 3340-3367)
+case "$choice" in
+    # ... existing options ...
+    X|x|RESET|reset)
+        echo ""
+        print_warning "隠しオプション: 超強力クリーンアップ"
+        /bin/sleep 1
+        nuclear_cleanup
+        ;;
+    # ...
+esac
+```
+
+#### 2. Volume Operations Verification Tools
+
+**New Files:**
+1. `volume_operations_test_plan.md` (200+ lines)
+2. `verify_volume_operations.sh` (400+ lines, executable)
+
+**Verification Test Plan (`volume_operations_test_plan.md`):**
+
+**10 Test Patterns Defined:**
+1. Normal internal → external transfer
+2. Normal external → internal transfer
+3. Internal empty (0 bytes) → external transfer
+4. External empty (0 bytes) → internal transfer
+5. Differential sync behavior verification
+6. Insufficient capacity error handling
+7. Transfer interruption recovery
+8. Concurrent execution mutual exclusion
+9. Unmounted volume transfer
+10. Mapping file integrity
+
+**Each Pattern Includes:**
+- Prerequisites
+- Expected behavior
+- Verification commands
+- Test scenarios
+
+**Automated Verification Script (`verify_volume_operations.sh`):**
+
+**Features:**
+1. **Test Environment Check:**
+   - macOS detection
+   - Required command availability (diskutil, rsync)
+   - sudo permission verification
+
+2. **Test Data Creation:**
+   - Automatic test container creation
+   - Random test file generation (50MB total)
+   - Proper permission setup
+
+3. **Verification Tests:**
+   - Empty source directory detection
+   - Data size calculation accuracy
+   - rsync behavior patterns (with/without --delete)
+   - File permission handling
+   - Volume operation basic functions
+
+4. **Cleanup Function:**
+   - Test data removal
+   - Test volume deletion
+   - Clean environment restoration
+
+**Menu Options:**
+```
+1. Test environment check
+2. Create test data
+3. Verify empty source detection
+4. Verify data size calculation
+5. Verify rsync behavior patterns
+6. Verify file permission handling
+7. Verify volume operations
+8. Run all verifications
+9. Cleanup test data
+0. Exit
+```
+
+**Usage Example:**
+```bash
+# Make executable
+chmod +x verify_volume_operations.sh
+
+# Run verification
+./verify_volume_operations.sh
+
+# Follow menu prompts
+# Select test patterns to verify
+```
+
+### Version History Context
+
+**Recent Versions:**
+- v4.42.2: Empty source directory handling
+- v4.42.1: Fixed capacity check for storage switch
+- v4.42.0: Mapping file location change
+- v4.41.0: Complete removal of auto-mount feature
+- v4.43.0: **Hidden option + verification tools (current)**
+
+### Technical Details
+
+**Version Number:** 4.38.0 → 4.43.0
+
+**Modified Functions:**
+- `show_menu()`: Menu display update
+- `main()`: Hidden option case handling
+
+**Benefits:**
+1. **Safety:** Prevents accidental data loss
+2. **Maintainability:** Comprehensive test coverage
+3. **Debugging:** Easy verification of edge cases
+4. **Documentation:** Clear test scenarios and expectations
+
+---
+
 ## 2025-01-28 - Version 4.37.0: New Feature - Auto-Mount for Removable Drives
 
 ### Feature Overview
