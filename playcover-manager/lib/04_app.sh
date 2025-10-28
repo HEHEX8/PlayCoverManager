@@ -51,7 +51,7 @@ SELECTED_DISK=""
 # PlayCover Volume Management
 #######################################################
 
-check_playcover_volume_mount() {
+check_playcover_volume_mount_install() {
     if [[ ! -d "$PLAYCOVER_CONTAINER" ]]; then
         /usr/bin/sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER"
     fi
@@ -319,7 +319,7 @@ select_installation_disk() {
     return 0
 }
 
-create_app_volume() {
+create_app_volume_install() {
     local existing_volume=""
     existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/awk '/Device Node:/ {gsub(/\/dev\//, "", $NF); print $NF}')
     
@@ -341,7 +341,7 @@ create_app_volume() {
     fi
 }
 
-mount_app_volume() {
+mount_app_volume_install() {
     local target_path="${HOME}/Library/Containers/${APP_BUNDLE_ID}"
     
     if mount_volume "$APP_VOLUME_NAME" "$target_path"; then
@@ -686,7 +686,7 @@ install_workflow() {
     check_mapping_file
     check_full_disk_access
     authenticate_sudo
-    check_playcover_volume_mount
+    check_playcover_volume_mount_install
     
     select_ipa_files || return
     
@@ -700,8 +700,8 @@ install_workflow() {
         
         extract_ipa_info "$ipa_file" || continue
         select_installation_disk || continue
-        create_app_volume || continue
-        mount_app_volume || continue
+        create_app_volume_install || continue
+        mount_app_volume_install || continue
         install_ipa_to_playcover "$ipa_file" || continue
     done
     
