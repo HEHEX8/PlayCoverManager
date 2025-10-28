@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.0 - New feature: Auto-mount for removable drives with disk monitoring
+# Version: 4.36.0 - Improvements: nobrowse fix, detailed missing data detection
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.21.0${NC}"
     echo ""
     
     show_quick_status
@@ -3825,10 +3825,9 @@ show_menu() {
     
     echo "  ${LIGHT_GREEN}4.${NC} ${eject_label}"
     echo "  ${LIGHT_GREEN}5.${NC} 🔥 超強力クリーンアップ（完全リセット）"
-    echo "  ${LIGHT_GREEN}6.${NC} リムーバブルドライブ自動マウント設定"
     echo "  ${LIGHT_GREEN}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-6):${NC} "
+    echo -n "${CYAN}選択 (0-5):${NC} "
 }
 
 show_mapping_info() {
@@ -3865,364 +3864,26 @@ show_mapping_info() {
     read
 }
 
-#######################################################
-# Module 10: Auto-Mount for Removable Drives
-#######################################################
-
-# Install disk monitoring LaunchAgent for automatic mounting
-install_disk_monitor() {
-    clear
-    print_header "リムーバブルドライブ自動マウント - インストール"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
-    local monitor_script_path="${HOME}/.playcover-disk-monitor.sh"
-    local log_file="${HOME}/Library/Logs/playcover-disk-monitor.log"
-    
-    # Check if already installed
-    if [[ -f "$launch_agent_path" ]]; then
-        print_warning "自動マウント機能は既にインストールされています"
-        echo ""
-        
-        if ! prompt_confirmation "再インストールしますか？" "Y"; then
-            return
-        fi
-        
-        # Unload existing LaunchAgent
-        if launchctl list | grep -q "com.playcover.diskmount"; then
-            print_info "既存のLaunchAgentをアンロード中..."
-            launchctl unload "$launch_agent_path" 2>/dev/null
-        fi
-    fi
-    
-    print_info "監視スクリプトを作成中..."
-    
-    # Create monitoring script
-    cat > "$monitor_script_path" << 'EOF'
-#!/bin/zsh
-
-# PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.0
-
-LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
-MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
-PLAYCOVER_VOLUME_NAME="PlayCover"
-
-# Ensure log directory exists
-mkdir -p "$(dirname "$LOG_FILE")"
-
-# Log function
-log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
-}
-
-# Check if PlayCover volume exists on any drive
-check_playcover_drive() {
-    diskutil list 2>/dev/null | grep -q "$PLAYCOVER_VOLUME_NAME"
-}
-
-# Mount all registered volumes using batch_mount logic
-mount_all_volumes() {
-    log_message "INFO: マウント処理開始"
-    
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        log_message "ERROR: マッピングファイルが見つかりません"
-        return 1
-    fi
-    
-    local success_count=0
-    local fail_count=0
-    
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
-        # Skip empty lines
-        [[ -z "$volume_name" ]] && continue
-        
-        # Check if volume exists
-        local volume_device=$(diskutil list 2>/dev/null | grep "$volume_name" | awk '{print $NF}')
-        if [[ -z "$volume_device" ]]; then
-            log_message "WARNING: ボリューム '${volume_name}' が見つかりません（ドライブ未接続の可能性）"
-            continue
-        fi
-        
-        # Target mount point
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
-        
-        # Check if already mounted
-        if mount | grep -q " on ${target_path} "; then
-            log_message "INFO: '${volume_name}' は既にマウント済み"
-            ((success_count++))
-            continue
-        fi
-        
-        # Check for internal data
-        if [[ -d "$target_path" ]]; then
-            local dir_size=$(du -sk "$target_path" 2>/dev/null | awk '{print $1}')
-            if [[ $dir_size -gt 100 ]]; then
-                log_message "WARNING: '${volume_name}' - 内蔵データが存在するためスキップ (${dir_size}KB)"
-                ((fail_count++))
-                continue
-            else
-                # Clean up small initial data
-                log_message "INFO: '${volume_name}' - 小容量データをクリーンアップ (${dir_size}KB)"
-                sudo /bin/rm -rf "$target_path" 2>/dev/null
-            fi
-        fi
-        
-        # Create mount point
-        sudo /bin/mkdir -p "$target_path" 2>/dev/null
-        
-        # Mount with nobrowse option
-        if sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>/dev/null; then
-            log_message "SUCCESS: '${volume_name}' をマウント成功"
-            ((success_count++))
-        else
-            log_message "ERROR: '${volume_name}' のマウント失敗"
-            ((fail_count++))
-        fi
-        
-    done < "$MAPPING_FILE"
-    
-    log_message "INFO: マウント処理完了 (成功: ${success_count}, 失敗: ${fail_count})"
-    
-    # Send notification
-    if [[ $success_count -gt 0 ]]; then
-        osascript -e "display notification \"PlayCoverボリューム ${success_count}個をマウントしました\" with title \"PlayCover 自動マウント\" sound name \"Glass\"" 2>/dev/null
-    fi
-}
-
-# Main execution
-log_message "=========================================="
-log_message "INFO: PlayCoverドライブ監視開始"
-
-# Check if PlayCover drive is connected
-if check_playcover_drive; then
-    log_message "INFO: PlayCoverボリュームを検知"
-    mount_all_volumes
-else
-    log_message "INFO: PlayCoverボリュームが見つかりません（ドライブ未接続）"
-fi
-
-log_message "INFO: 監視処理終了"
-EOF
-
-    chmod +x "$monitor_script_path"
-    print_success "監視スクリプトを作成しました"
-    
-    print_info "LaunchAgent plistを作成中..."
-    
-    # Create LaunchAgent plist (WatchPaths for /Volumes)
-    cat > "$launch_agent_path" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.playcover.diskmount</string>
-    
-    <key>ProgramArguments</key>
-    <array>
-        <string>${monitor_script_path}</string>
-    </array>
-    
-    <key>WatchPaths</key>
-    <array>
-        <string>/Volumes</string>
-    </array>
-    
-    <key>StandardOutPath</key>
-    <string>${log_file}</string>
-    
-    <key>StandardErrorPath</key>
-    <string>${log_file}</string>
-    
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>
-EOF
-
-    print_success "LaunchAgent plistを作成しました"
-    
-    # Load LaunchAgent
-    print_info "LaunchAgentを読み込み中..."
-    if launchctl load "$launch_agent_path" 2>/dev/null; then
-        print_success "LaunchAgentを読み込みました"
-    else
-        print_warning "LaunchAgentの読み込みに失敗しました（既に読み込まれている可能性）"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    print_success "リムーバブルドライブ自動マウント機能のインストールが完了しました！"
-    echo ""
-    print_info "${CYAN}動作仕様:${NC}"
-    echo "  • PlayCoverボリュームを含むドライブを接続すると自動検知"
-    echo "  • 登録されている全ボリュームを自動マウント"
-    echo "  • 内蔵データが存在する場合はスキップ（安全設計）"
-    echo "  • 小容量の初期データは自動クリーンアップ"
-    echo ""
-    print_info "${CYAN}ログファイル:${NC} ${log_file}"
-    echo ""
-    print_info "${CYAN}テスト方法:${NC}"
-    echo "  1. ドライブを一度取り外し"
-    echo "  2. 再接続すると自動的にマウント処理が実行されます"
-    echo "  3. 通知が表示され、ログに記録されます"
-    echo ""
-    wait_for_enter
-}
-
-# Uninstall disk monitoring LaunchAgent
-uninstall_disk_monitor() {
-    clear
-    print_header "リムーバブルドライブ自動マウント - アンインストール"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
-    local monitor_script_path="${HOME}/.playcover-disk-monitor.sh"
-    
-    if [[ ! -f "$launch_agent_path" ]]; then
-        print_warning "自動マウント機能はインストールされていません"
-        wait_for_enter
-        return
-    fi
-    
-    if ! prompt_confirmation "${RED}自動マウント機能をアンインストールしますか？${NC}" "Y"; then
-        print_info "アンインストールをキャンセルしました"
-        wait_for_enter
-        return
-    fi
-    
-    # Unload LaunchAgent
-    if launchctl list | grep -q "com.playcover.diskmount"; then
-        print_info "LaunchAgentをアンロード中..."
-        launchctl unload "$launch_agent_path" 2>/dev/null
-        print_success "LaunchAgentをアンロードしました"
-    fi
-    
-    # Remove files
-    print_info "ファイルを削除中..."
-    [[ -f "$launch_agent_path" ]] && /bin/rm "$launch_agent_path"
-    [[ -f "$monitor_script_path" ]] && /bin/rm "$monitor_script_path"
-    print_success "ファイルを削除しました"
-    
-    echo ""
-    print_separator
-    echo ""
-    print_success "自動マウント機能のアンインストールが完了しました"
-    echo ""
-    print_info "${CYAN}ログファイルは残されています:${NC}"
-    echo "  ${HOME}/Library/Logs/playcover-disk-monitor.log"
-    wait_for_enter
-}
-
-# Check disk monitor status
-check_disk_monitor_status() {
-    clear
-    print_header "リムーバブルドライブ自動マウント - 動作確認"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
-    local monitor_script_path="${HOME}/.playcover-disk-monitor.sh"
-    local log_file="${HOME}/Library/Logs/playcover-disk-monitor.log"
-    
-    # Installation status
-    echo "${CYAN}インストール状態:${NC}"
-    echo ""
-    
-    if [[ -f "$monitor_script_path" ]]; then
-        print_success "監視スクリプト: インストール済み"
-    else
-        print_error "監視スクリプト: 未インストール"
-    fi
-    
-    if [[ -f "$launch_agent_path" ]]; then
-        print_success "LaunchAgent: インストール済み"
-    else
-        print_error "LaunchAgent: 未インストール"
-    fi
-    
-    echo ""
-    
-    # LaunchAgent status
-    echo "${CYAN}LaunchAgent状態:${NC}"
-    echo ""
-    
-    if launchctl list | grep -q "com.playcover.diskmount"; then
-        print_success "LaunchAgent: 読み込み済み ✅"
-        local agent_info=$(launchctl list | grep "com.playcover.diskmount")
-        echo "  詳細: $agent_info"
-    else
-        print_error "LaunchAgent: 未読み込み"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Recent logs
-    echo "${CYAN}最近のログ（最新15行）:${NC}"
-    echo ""
-    
-    if [[ -f "$log_file" ]]; then
-        tail -15 "$log_file" | while IFS= read -r line; do
-            if echo "$line" | grep -q "ERROR"; then
-                echo "${RED}${line}${NC}"
-            elif echo "$line" | grep -q "SUCCESS"; then
-                echo "${GREEN}${line}${NC}"
-            elif echo "$line" | grep -q "WARNING"; then
-                echo "${ORANGE}${line}${NC}"
-            elif echo "$line" | grep -q "INFO"; then
-                echo "${SKY_BLUE}${line}${NC}"
-            else
-                echo "$line"
-            fi
-        done
-    else
-        print_warning "ログファイルが見つかりません"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Manual test
-    echo -n "${CYAN}スクリプトを手動実行してテストしますか？ (y/N):${NC} "
-    read test_confirm
-    
-    if [[ "$test_confirm" =~ ^[Yy]$ ]]; then
-        echo ""
-        print_info "監視スクリプトを実行中..."
-        echo ""
-        
-        if [[ -x "$monitor_script_path" ]]; then
-            "$monitor_script_path"
-            echo ""
-            print_success "実行完了（ログファイルを確認してください）"
-        else
-            print_error "スクリプトが実行可能ではありません"
-        fi
-    fi
-    
-    wait_for_enter
-}
-
-# Show auto-mount menu
 show_auto_mount_menu() {
     while true; do
         clear
-        print_header "リムーバブルドライブ自動マウント"
+        print_header "PlayCover 自動マウント設定"
         
-        local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
+        # Check LaunchAgent status
+        local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
+        local script_path="${HOME}/playcover-auto-mount.sh"
         local is_installed=false
         local is_loaded=false
         
-        if [[ -f "$launch_agent_path" ]]; then
+        if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
             is_installed=true
-            if launchctl list | grep -q "com.playcover.diskmount"; then
+            if launchctl list | grep -q "com.playcover.automount"; then
                 is_loaded=true
             fi
         fi
         
-        # Current status
-        echo "${CYAN}現在の状態:${NC}"
+        # Display current status
+        echo "現在の状態:"
         echo ""
         if [[ "$is_installed" == true ]]; then
             if [[ "$is_loaded" == true ]]; then
@@ -4237,35 +3898,30 @@ show_auto_mount_menu() {
         print_separator
         echo ""
         
-        echo "${CYAN}機能説明:${NC}"
-        echo "  • PlayCoverボリュームを含むドライブ接続時に自動検知"
-        echo "  • 登録されている全ボリュームを自動マウント"
-        echo "  • /Volumes/ ディレクトリを監視（WatchPaths）"
-        echo "  • 内蔵データがある場合は安全にスキップ"
-        echo ""
-        print_separator
-        echo ""
-        
         echo "${CYAN}メニュー${NC}"
         echo ""
         echo "  ${LIGHT_GREEN}1.${NC} 自動マウント機能をインストール"
         echo "  ${LIGHT_GREEN}2.${NC} 自動マウント機能をアンインストール"
         echo "  ${LIGHT_GREEN}3.${NC} 動作確認・ログ表示"
+        echo "  ${LIGHT_GREEN}4.${NC} インストール手順を表示"
         echo "  ${LIGHT_GREEN}0.${NC} 戻る"
         echo ""
-        echo -n "${CYAN}選択 (0-3):${NC} "
+        echo -n "${CYAN}選択 (0-4):${NC} "
         
         read choice
         
         case "$choice" in
             1)
-                install_disk_monitor
+                install_auto_mount
                 ;;
             2)
-                uninstall_disk_monitor
+                uninstall_auto_mount
                 ;;
             3)
-                check_disk_monitor_status
+                check_auto_mount_status
+                ;;
+            4)
+                show_auto_mount_setup_guide
                 ;;
             0)
                 return
@@ -4276,6 +3932,294 @@ show_auto_mount_menu() {
                 ;;
         esac
     done
+}
+
+install_auto_mount() {
+    clear
+    print_header "自動マウント機能のインストール"
+    
+    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
+    local script_path="${HOME}/playcover-auto-mount.sh"
+    
+    # Check if already installed
+    if [[ -f "$launch_agent_path" ]] && [[ -f "$script_path" ]]; then
+        print_warning "自動マウント機能は既にインストールされています"
+        echo ""
+        
+        if ! prompt_confirmation "再インストールしますか？" "Y"; then
+            return
+        fi
+        
+        # Unload existing LaunchAgent
+        if launchctl list | grep -q "com.playcover.automount"; then
+            print_info "既存のLaunchAgentをアンロード中..."
+            launchctl unload "$launch_agent_path" 2>/dev/null
+        fi
+    fi
+    
+    # Step 1: Copy script
+    print_info "スクリプトをコピー中..."
+    if [[ -f "${SCRIPT_DIR}/playcover-auto-mount.sh" ]]; then
+        /bin/cp "${SCRIPT_DIR}/playcover-auto-mount.sh" "$script_path"
+        /bin/chmod +x "$script_path"
+        print_success "スクリプトをコピーしました: $script_path"
+    else
+        print_error "スクリプトファイルが見つかりません: ${SCRIPT_DIR}/playcover-auto-mount.sh"
+        wait_for_enter
+        return
+    fi
+    
+    # Step 2: Create LaunchAgents directory if not exists
+    local launch_agents_dir="${HOME}/Library/LaunchAgents"
+    if [[ ! -d "$launch_agents_dir" ]]; then
+        /bin/mkdir -p "$launch_agents_dir"
+    fi
+    
+    # Step 3: Copy and modify plist
+    print_info "LaunchAgent plistを設定中..."
+    if [[ -f "${SCRIPT_DIR}/com.playcover.automount.plist" ]]; then
+        /bin/cp "${SCRIPT_DIR}/com.playcover.automount.plist" "$launch_agent_path"
+        
+        # Replace YOUR_USERNAME with actual username
+        sed -i '' "s|/Users/YOUR_USERNAME/|${HOME}/|g" "$launch_agent_path"
+        
+        print_success "LaunchAgent plistを設定しました: $launch_agent_path"
+    else
+        print_error "plistファイルが見つかりません: ${SCRIPT_DIR}/com.playcover.automount.plist"
+        wait_for_enter
+        return
+    fi
+    
+    # Step 4: Load LaunchAgent
+    print_info "LaunchAgentを読み込み中..."
+    if launchctl load "$launch_agent_path" 2>/dev/null; then
+        print_success "LaunchAgentを読み込みました"
+    else
+        print_warning "LaunchAgentの読み込みに失敗しました（既に読み込まれている可能性）"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    print_success "自動マウント機能のインストールが完了しました！"
+    echo ""
+    echo "${CYAN}次のステップ:${NC}"
+    echo "  ${GREEN}推奨:${NC} システムを再起動またはログアウト→ログイン"
+    echo "  ${SKY_BLUE}理由:${NC} ログイン時にPlayCoverボリュームが自動マウントされます"
+    echo ""
+    echo "${CYAN}動作確認方法:${NC}"
+    echo "  1. ログイン後、ボリュームがマウントされていることを確認"
+    echo "  2. PlayCover.appを起動して正常動作を確認"
+    echo ""
+    echo "${ORANGE}ログファイル:${NC} ${HOME}/Library/Logs/playcover-auto-mount.log"
+    echo ""
+    echo "${MAGENTA}注意:${NC} WatchPaths方式は廃止し、ログイン時マウントに変更しました"
+    echo "       これにより、PlayCover起動前の確実なマウントを実現"
+    wait_for_enter
+}
+
+uninstall_auto_mount() {
+    clear
+    print_header "自動マウント機能のアンインストール"
+    
+    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
+    local script_path="${HOME}/playcover-auto-mount.sh"
+    
+    if [[ ! -f "$launch_agent_path" ]] && [[ ! -f "$script_path" ]]; then
+        print_warning "自動マウント機能はインストールされていません"
+        wait_for_enter "Enterキーで続行..."
+        return
+    fi
+    
+    if ! prompt_confirmation "${RED}自動マウント機能をアンインストールしますか？${NC}" "Y"; then
+        print_info "アンインストールをキャンセルしました"
+        wait_for_enter "Enterキーで続行..."
+        return
+    fi
+    
+    # Unload LaunchAgent
+    if [[ -f "$launch_agent_path" ]]; then
+        if launchctl list | grep -q "com.playcover.automount"; then
+            print_info "LaunchAgentをアンロード中..."
+            launchctl unload "$launch_agent_path" 2>/dev/null
+            print_success "LaunchAgentをアンロードしました"
+        fi
+        
+        print_info "plistファイルを削除中..."
+        /bin/rm "$launch_agent_path"
+        print_success "plistファイルを削除しました"
+    fi
+    
+    # Remove script
+    if [[ -f "$script_path" ]]; then
+        print_info "スクリプトを削除中..."
+        /bin/rm "$script_path"
+        print_success "スクリプトを削除しました"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    print_success "自動マウント機能のアンインストールが完了しました"
+    echo ""
+    echo "${CYAN}ログファイルは残されています:${NC}"
+    echo "  ${HOME}/Library/Logs/playcover-auto-mount.log"
+    wait_for_enter
+}
+
+check_auto_mount_status() {
+    clear
+    print_header "自動マウント機能の動作確認"
+    
+    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.automount.plist"
+    local script_path="${HOME}/playcover-auto-mount.sh"
+    local log_file="${HOME}/Library/Logs/playcover-auto-mount.log"
+    
+    # Check installation
+    echo "${CYAN}インストール状態:${NC}"
+    echo ""
+    
+    if [[ -f "$script_path" ]]; then
+        print_success "スクリプト: ${script_path}"
+    else
+        print_error "スクリプト: 未インストール"
+    fi
+    
+    if [[ -f "$launch_agent_path" ]]; then
+        print_success "LaunchAgent plist: ${launch_agent_path}"
+    else
+        print_error "LaunchAgent plist: 未インストール"
+    fi
+    
+    echo ""
+    
+    # Check LaunchAgent status
+    echo "${CYAN}LaunchAgent状態:${NC}"
+    echo ""
+    
+    if launchctl list | grep -q "com.playcover.automount"; then
+        print_success "LaunchAgent: 読み込み済み ✅"
+        
+        # Get PID if available
+        local agent_info=$(launchctl list | grep "com.playcover.automount")
+        echo "  詳細: $agent_info"
+    else
+        print_error "LaunchAgent: 未読み込み"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    
+    # Show recent logs
+    echo "${CYAN}最近のログ（最新10行）:${NC}"
+    echo ""
+    
+    if [[ -f "$log_file" ]]; then
+        tail -10 "$log_file" | while IFS= read -r line; do
+            # Colorize log levels
+            if echo "$line" | grep -q "ERROR"; then
+                echo "${RED}${line}${NC}"
+            elif echo "$line" | grep -q "SUCCESS"; then
+                echo "${GREEN}${line}${NC}"
+            elif echo "$line" | grep -q "INFO"; then
+                echo "${SKY_BLUE}${line}${NC}"
+            else
+                echo "$line"
+            fi
+        done
+    else
+        print_warning "ログファイルが見つかりません: ${log_file}"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    
+    # Test script manually
+    echo -n "${CYAN}スクリプトを手動実行してテストしますか？ (y/N):${NC} "
+    read test_confirm
+    
+    if [[ "$test_confirm" =~ ^[Yy]$ ]]; then
+        echo ""
+        print_info "スクリプトを実行中..."
+        echo ""
+        
+        if [[ -x "$script_path" ]]; then
+            "$script_path"
+            local exit_code=$?
+            
+            echo ""
+            if [[ $exit_code -eq 0 ]]; then
+                print_success "スクリプトが正常に実行されました（終了コード: 0）"
+            else
+                print_error "スクリプトがエラーで終了しました（終了コード: ${exit_code}）"
+            fi
+        else
+            print_error "スクリプトが実行可能ではありません"
+        fi
+    fi
+    
+    wait_for_enter
+}
+
+show_auto_mount_setup_guide() {
+    clear
+    print_header "自動マウント機能 - インストール手順"
+    
+    echo "${CYAN}概要:${NC}"
+    echo "PlayCoverを未マウント状態で起動すると内蔵ストレージにデータが作成され、"
+    echo "その後ボリュームをマウントできなくなる問題を解決します。"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}解決策:${NC}"
+    echo "ログイン時に自動的にPlayCoverボリュームをマウントするLaunchAgentを設定"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}動作仕様:${NC}"
+    echo "• ログイン時に自動実行（RunAtLoad）"
+    echo "• 既にマウント済みの場合はスキップ"
+    echo "• 内蔵ストレージに大量データがある場合は警告表示"
+    echo "• 少量の初期データは自動クリア"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}インストール手順:${NC}"
+    echo ""
+    echo "${GREEN}1. ファイル配置${NC}"
+    echo "   このスクリプトの「${GREEN}1. 自動マウント機能をインストール${NC}」メニューから"
+    echo "   自動的にインストールできます。"
+    echo ""
+    echo "${GREEN}2. 動作確認${NC}"
+    echo "   a) システムを再起動またはログアウト→ログイン"
+    echo "   b) ログイン後、自動的にボリュームがマウントされることを確認"
+    echo "   c) PlayCover.appを起動して正常動作を確認"
+    echo ""
+    echo "${GREEN}3. ログ確認${NC}"
+    echo "   ${ORANGE}${HOME}/Library/Logs/playcover-auto-mount.log${NC}"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}安全性:${NC}"
+    echo "• 内蔵ストレージにデータが既に存在する場合はマウントしません"
+    echo "• データ消失リスクはありません"
+    echo "• エラー時は通知で警告を表示します"
+    echo ""
+    print_separator
+    echo ""
+    
+    echo "${CYAN}詳細情報:${NC}"
+    echo "セットアップガイド: ${SCRIPT_DIR}/PLAYCOVER_AUTO_MOUNT_SETUP.md"
+    echo ""
+    
+    echo -n "Enterキーで続行..."
+    read
 }
 
 #######################################################
@@ -5718,14 +5662,27 @@ main() {
             5)
                 nuclear_cleanup
                 ;;
-            6)
-                show_auto_mount_menu
-                ;;
             0)
                 echo ""
                 print_info "終了します"
                 /bin/sleep 1
                 /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+                ;;
+            *)
+                echo ""
+                print_error "$MSG_INVALID_SELECTION"
+                /bin/sleep 2
+                ;;
+        esac
+    done
+}
+
+# Trap Ctrl+C
+trap 'echo ""; print_info "終了します"; /bin/sleep 1; /usr/bin/osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
+
+# Execute main
+main
+inal" to close (every window whose name contains "playcover")' & exit 0
                 ;;
             *)
                 echo ""

@@ -1,5 +1,199 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.37.0: New Feature - Auto-Mount for Removable Drives
+
+### Feature Overview
+
+**User Request:**
+> "自動マウント機能の追加  
+> 柔軟なリムーバブル対応として  
+> 「PlayCover」ボリュームがあるドライブを検知したら  
+> 全ボリュームのマウントを実施（ドライブ接続時は基本的に/Volumes/にマウントされてる）  
+> ALLアンマウント（ドライブ取り外し）も容易に実行できる何かがあるとより良い"
+
+**Implementation: LaunchAgent-based Disk Monitoring**
+
+Added new auto-mount feature that automatically mounts all registered PlayCover volumes when a removable drive containing the PlayCover volume is connected.
+
+---
+
+### Technical Implementation
+
+#### 1. LaunchAgent Configuration (`com.playcover.diskmount.plist`)
+
+**Key Features:**
+- **WatchPaths**: Monitors `/Volumes` directory for drive connection/disconnection events
+- **RunAtLoad**: Executes immediately when LaunchAgent is loaded
+- **Label**: `com.playcover.diskmount`
+
+**Monitoring Trigger:**
+```xml
+<key>WatchPaths</key>
+<array>
+    <string>/Volumes</string>
+</array>
+```
+
+When any drive is mounted to `/Volumes`, the monitoring script is automatically triggered.
+
+#### 2. Monitoring Script (`.playcover-disk-monitor.sh`)
+
+**Location:** `${HOME}/.playcover-disk-monitor.sh`
+
+**Workflow:**
+1. **Drive Detection**: Check if PlayCover volume exists using `diskutil list`
+2. **Volume Iteration**: Read all registered volumes from mapping file
+3. **Safety Check**: Skip volumes with existing internal data (>100KB)
+4. **Auto-Cleanup**: Remove small initial data (<100KB) automatically
+5. **Mount Execution**: Mount all volumes with `nobrowse` option using `/sbin/mount`
+6. **Logging**: All operations logged to `~/Library/Logs/playcover-disk-monitor.log`
+7. **Notification**: Display success notification using AppleScript
+
+**Key Safety Features:**
+```zsh
+# Skip if internal data exists (>100KB)
+if [[ $dir_size -gt 100 ]]; then
+    log_message "WARNING: スキップ (内蔵データ: ${dir_size}KB)"
+    continue
+fi
+
+# Clean up small initial data (<100KB)
+log_message "INFO: 小容量データをクリーンアップ (${dir_size}KB)"
+sudo /bin/rm -rf "$target_path"
+```
+
+#### 3. Menu Integration (Lines 3867-4097)
+
+**New Module 10:**
+```
+Module 10: Auto-Mount for Removable Drives
+├── install_disk_monitor()        - Install LaunchAgent and monitoring script
+├── uninstall_disk_monitor()      - Remove auto-mount feature
+├── check_disk_monitor_status()   - Check status and view logs
+└── show_auto_mount_menu()        - Main menu interface
+```
+
+**Main Menu Addition:**
+```
+6. リムーバブルドライブ自動マウント設定
+```
+
+---
+
+### User Benefits
+
+#### Automatic Operation
+- **Drive Connection**: All volumes auto-mount when PlayCover drive is connected
+- **Hands-Free**: No manual mount operations needed
+- **Fast Detection**: WatchPaths responds immediately to drive connection
+
+#### Safety & Reliability
+- **Data Protection**: Never overwrites existing internal data
+- **Clean Mounting**: Uses `nobrowse` to prevent desktop clutter
+- **Error Logging**: Detailed logs for troubleshooting
+- **Notifications**: Visual feedback on successful mounts
+
+#### Easy Management
+1. **One-Time Setup**: Install LaunchAgent from menu option 6
+2. **Automatic Operation**: Works in background after installation
+3. **Status Check**: View logs and monitor status from menu
+4. **Easy Removal**: Uninstall anytime from menu
+
+---
+
+### Files Created
+
+1. **LaunchAgent**: `~/Library/LaunchAgents/com.playcover.diskmount.plist`
+2. **Monitoring Script**: `~/.playcover-disk-monitor.sh`
+3. **Log File**: `~/Library/Logs/playcover-disk-monitor.log`
+
+---
+
+### Removed Legacy Feature
+
+**Deleted:** Old unused login-time auto-mount feature (Lines 3867-4223 in v4.36.0)
+- Previous implementation: Login-time mount of PlayCover volume only
+- Reason for removal: Not used, different purpose than new feature
+- Lines removed: 357 lines of dead code
+
+---
+
+### Code Statistics
+
+**Changes Summary:**
+- **Lines Added**: 328 lines (new auto-mount implementation)
+- **Lines Removed**: 357 lines (old unused feature)
+- **Net Change**: -29 lines
+- **New Total**: 5,746 lines (from 5,775 lines)
+
+**Module Structure:**
+```
+Module 10: Auto-Mount for Removable Drives (231 lines)
+├── install_disk_monitor: 93 lines
+├── uninstall_disk_monitor: 36 lines
+├── check_disk_monitor_status: 68 lines
+└── show_auto_mount_menu: 34 lines
+```
+
+---
+
+### Testing Workflow
+
+1. **Installation**: Menu → 6 → 1 (Install)
+2. **Drive Test**: Eject drive and reconnect
+3. **Verification**: Check notification and log file
+4. **Status Check**: Menu → 6 → 3 (Status check)
+
+**Expected Results:**
+- Notification: "PlayCoverボリューム X個をマウントしました"
+- Log: SUCCESS messages for each mounted volume
+- Volumes: Mounted to `~/Library/Containers/{bundle_id}`
+
+---
+
+### User Instructions
+
+**To Enable:**
+```
+メインメニュー → 6. リムーバブルドライブ自動マウント設定
+→ 1. 自動マウント機能をインストール
+```
+
+**To Test:**
+1. Eject PlayCover drive
+2. Reconnect drive
+3. Automatic mount notification should appear
+4. Check log: `tail ~/Library/Logs/playcover-disk-monitor.log`
+
+**To Disable:**
+```
+メインメニュー → 6. リムーバブルドライブ自動マウント設定
+→ 2. 自動マウント機能をアンインストール
+```
+
+---
+
+### Git Commit
+
+```bash
+git add .
+git commit -m "v4.37.0: リムーバブルドライブ自動マウント機能の実装
+
+新機能:
+- LaunchAgent監視による自動マウント機能
+- /Volumes監視でPlayCoverドライブ検知
+- 全ボリュームの自動マウント実行
+- 内蔵データ保護機能（>100KB時はスキップ）
+- 詳細ログとシステム通知
+
+削除:
+- 未使用の旧ログイン時自動マウント機能（357行）
+
+行数: 5,775 → 5,746行（-29行）"
+```
+
+---
+
 ## 2025-01-28 - Version 4.36.0: Feature Improvements - Desktop Icon Fix & Detailed Error Messages
 
 ### Improvement 1: Fixed Desktop Icon Display Issue
