@@ -406,8 +406,10 @@ verify_volume_operations() {
     print_info "マウント情報の確認..."
     if mount | grep -q "apfs"; then
         print_success "APFSマウントが検出されました"
-        local apfs_count=$(mount | grep -c "apfs")
+        local apfs_count=$(mount | grep -c "apfs" || echo "0")
         echo "  APFSマウント数: ${apfs_count}"
+    else
+        print_warning "APFSマウントが見つかりませんでした"
     fi
     
     print_test_result "ボリューム操作確認" "PASS"
