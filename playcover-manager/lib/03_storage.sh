@@ -299,8 +299,25 @@ get_storage_mode() {
             ;;
         "internal")
             # Check if has actual data or just flag file
-            # Exclude metadata AND flag file to determine if real data exists
-            local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+            # Exclude macOS system files AND flag file to determine if real data exists
+            # macOS automatically creates these in Containers directories:
+            # - .DS_Store (Finder metadata)
+            # - .com.apple.containermanagerd.metadata.plist (container metadata)
+            local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | \
+                /usr/bin/grep -v -x -F '.DS_Store' | \
+                /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \
+                /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+            
+            # If only "Data" directory remains, check if it's empty
+            if [[ "$content_check" == "Data" ]]; then
+                # Check if Data directory is empty (or only contains .DS_Store)
+                local data_content=$(/bin/ls -A1 "${container_path}/Data" 2>/dev/null | \
+                    /usr/bin/grep -v -x -F '.DS_Store')
+                if [[ -z "$data_content" ]]; then
+                    # Data directory is empty - treat as no real data
+                    content_check=""
+                fi
+            fi
             
             if [[ -z "$content_check" ]]; then
                 # Only flag file (and/or metadata) exists, no real data
