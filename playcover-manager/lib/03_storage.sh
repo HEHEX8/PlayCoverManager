@@ -986,13 +986,18 @@ perform_external_to_internal_migration() {
         
         # Unmount external volume
         print_info "外部ボリュームをアンマウント中..."
-        unmount_app_volume "$volume_name" "$bundle_id" || true
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "外部ボリュームのアンマウントに失敗しました"
+            print_warning "空ディレクトリは作成されましたが、外部ボリュームがまだマウントされています"
+            print_info "手動でアンマウントしてから、再度ストレージ切替を実行してください"
+            return 1
+        fi
         
         echo ""
         print_success "内蔵ストレージへの切り替えが完了しました（空ディレクトリ作成）"
         print_info "保存場所: ${target_path}"
         
-        # Create internal storage flag
+        # Create internal storage flag (only after successful unmount)
         if create_internal_storage_flag "$target_path"; then
             print_info "内蔵ストレージモードフラグを作成しました"
         fi
@@ -1174,21 +1179,39 @@ perform_external_to_internal_migration() {
     fi
     
     # Unmount volume
+    local unmount_success=true
     if [[ "$temp_mount_created" == true ]]; then
         print_info "一時マウントをクリーンアップ中..."
-        unmount_with_fallback "$source_mount" "silent" || true
+        if ! unmount_with_fallback "$source_mount" "silent"; then
+            print_warning "一時マウントのアンマウントに失敗しました"
+            unmount_success=false
+        fi
         /bin/sleep 1  # Wait for unmount to complete
         cleanup_temp_dir "$source_mount" true
     else
         print_info "外部ボリュームをアンマウント中..."
-        unmount_app_volume "$volume_name" "$bundle_id" || true
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "外部ボリュームのアンマウントに失敗しました"
+            print_warning "ボリュームがまだマウントされている可能性があります"
+            print_info "手動でアンマウントしてください"
+            unmount_success=false
+        fi
+    fi
+    
+    # Only proceed with flag creation if unmount succeeded
+    if [[ "$unmount_success" == false ]]; then
+        echo ""
+        print_error "アンマウント失敗のため、内蔵ストレージモードの設定を完了できませんでした"
+        print_warning "データは ${target_path} にコピーされましたが、外部ボリュームがまだマウントされています"
+        print_info "手動で外部ボリュームをアンマウントしてから、再度ストレージ切替を実行してください"
+        return 1
     fi
     
     echo ""
     print_success "内蔵ストレージへの切り替えが完了しました"
     print_info "保存場所: ${target_path}"
     
-    # Create internal storage flag to mark this as intentional
+    # Create internal storage flag to mark this as intentional (only if unmount succeeded)
     if create_internal_storage_flag "$target_path"; then
         print_info "内蔵ストレージモードフラグを作成しました"
     fi
