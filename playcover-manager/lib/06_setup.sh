@@ -308,7 +308,7 @@ find_apfs_container_setup() {
     
     local disk_id=$(echo "$SELECTED_EXTERNAL_DISK" | sed -E 's|/dev/(disk[0-9]+).*|\1|')
     
-    # Check if disk itself is APFS container
+    # Method 1: Check if disk itself is APFS container (synthesized disk)
     local disk_info=$(diskutil info "$SELECTED_EXTERNAL_DISK" 2>/dev/null)
     if echo "$disk_info" | grep -q "APFS Container Scheme"; then
         SELECTED_CONTAINER="$disk_id"
@@ -317,13 +317,32 @@ find_apfs_container_setup() {
         return 0
     fi
     
-    # Check for APFS volumes on this disk
+    # Method 2: Look for "Apple_APFS Container diskX" in diskutil list output
+    # Example: "2:                 Apple_APFS Container disk5         4.0 TB     disk4s2"
+    local container_line=$(diskutil list "$SELECTED_EXTERNAL_DISK" 2>/dev/null | grep "Apple_APFS Container")
+    if [[ -n "$container_line" ]]; then
+        # Extract container disk ID (e.g., "disk5" from "Container disk5")
+        SELECTED_CONTAINER=$(echo "$container_line" | grep -o "Container disk[0-9]*" | awk '{print $2}')
+        
+        if [[ -n "$SELECTED_CONTAINER" ]]; then
+            print_success "APFS コンテナを検出しました: $SELECTED_CONTAINER"
+            echo ""
+            return 0
+        fi
+    fi
+    
+    # Method 3: Check for APFS volumes on this disk and get container from volume info
     local apfs_volumes=$(diskutil list | grep "APFS Volume" | grep "$disk_id")
     if [[ -n "$apfs_volumes" ]]; then
-        # Extract container reference from volume
+        # Extract container reference from first volume
         local first_volume=$(echo "$apfs_volumes" | head -1 | awk '{print $NF}')
         local volume_info=$(diskutil info "/dev/$first_volume" 2>/dev/null)
-        SELECTED_CONTAINER=$(echo "$volume_info" | grep "APFS Container:" | awk '{print $NF}')
+        SELECTED_CONTAINER=$(echo "$volume_info" | grep "APFS Container Reference:" | awk '{print $NF}')
+        
+        # Fallback: try "APFS Container:" format
+        if [[ -z "$SELECTED_CONTAINER" ]]; then
+            SELECTED_CONTAINER=$(echo "$volume_info" | grep "APFS Container:" | awk '{print $NF}')
+        fi
         
         if [[ -n "$SELECTED_CONTAINER" ]]; then
             print_success "APFS コンテナを検出しました: $SELECTED_CONTAINER"
