@@ -1,5 +1,70 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.5: Root Cause Fixed - Duplicate Function Definition
+
+### Critical Discovery: Two mount_volume() Functions Existed
+
+**User Report - Getting Worse:**
+```
+❌ ボリューム 'disk5s4' が見つかりません
+❌ マウント失敗: マウントコマンドが失敗
+```
+
+**Root Cause Analysis:**
+- **Line 385**: New unified `mount_volume(device, mount_point, nobrowse, mode)`
+- **Line 727**: Old `mount_volume(volume_name, target_path, force, cache)`
+- **zsh behavior**: Later definition wins → old function was being called
+- **Parameter mismatch**: New code passed `device` (disk5s4) but old function expected `volume_name` (ゼンレスゾーンゼロ)
+- **Result**: `volume_exists("disk5s4")` failed → error message
+
+**Why v4.35.3 and v4.35.4 Made Things Worse:**
+- Replaced `/sbin/mount` calls with `mount_volume()` calls
+- But `mount_volume()` was actually calling the OLD function
+- Old function did `volume_exists(device)` check which always failed
+- Before: silent failure, After: loud error messages
+
+**Solution:**
+Deleted old `mount_volume()` function (Lines 727-869, 143 lines removed)
+
+**Verification:**
+```bash
+$ grep -n "^mount_volume()" 0_PlayCover-ManagementTool.command
+385:mount_volume() {
+```
+Only one function remains.
+
+**Impact:**
+- ✅ Function name conflict resolved
+- ✅ Correct parameter types now used (device vs volume_name)
+- ✅ Directory creation works (Line 397 in unified function)
+- ✅ Batch mount should finally work
+
+**Lessons Learned:**
+- Always check for duplicate function definitions before refactoring
+- Test incremental changes before committing
+- Parameter type mismatches can cause cascading failures
+
+**Git Commit:**
+```bash
+commit [hash]
+"v4.35.5 - 重複mount_volume関数を削除（根本原因修正）"
+
+2つのmount_volume()関数が存在し、後者が優先されていた:
+- Line 385: 新しい統一関数 (device, mount_point, nobrowse, mode)
+- Line 727-869: 古い関数 (volume_name, target_path, force, cache)
+
+パラメータ型の不一致:
+- 新コードはdevice (disk5s4)を渡す
+- 古関数はvolume_name (ゼンレスゾーンゼロ)を期待
+- volume_exists("disk5s4") が失敗 → エラー
+
+解決:
+- Line 727-869の古い関数を完全削除（143行）
+- 統一関数のみが残る
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.4: Complete Fix - All Batch Mount Failures
 
 ### Critical Bug: Missed Two More `/sbin/mount` Direct Calls
