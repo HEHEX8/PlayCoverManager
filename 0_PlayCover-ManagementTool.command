@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.41.0 - Remove auto-mount feature completely
+# Version: 4.42.0 - Move mapping file to script directory
 #######################################################
 
 #######################################################
@@ -101,7 +101,8 @@ readonly PLAYCOVER_VOLUME_NAME="PlayCover"
 readonly PLAYCOVER_APP_NAME="PlayCover.app"
 readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-readonly MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
+# Mapping file stored in same directory as script
+readonly MAPPING_FILE="${SCRIPT_DIR}/.playcover-volume-mapping.tsv"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
 readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
 
