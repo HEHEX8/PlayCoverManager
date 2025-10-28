@@ -4,14 +4,169 @@
 # マッピングファイルの読み書き、ロック管理
 #######################################################
 
-# このモジュールには以下の関数が含まれます（抽出予定）:
-# - acquire_mapping_lock()
-# - release_mapping_lock()
-# - check_mapping_file()
-# - read_mappings()
-# - deduplicate_mappings()
-# - add_mapping()
-# - remove_mapping()
-# - update_mapping()
+#######################################################
+# Mapping Lock Functions
+#######################################################
 
-# TODO: 0_PlayCover-ManagementTool.command の line 547-685 から抽出
+# Acquire lock for mapping file operations
+# Returns: 0 on success, 1 on timeout
+acquire_mapping_lock() {
+    local timeout=10
+    local elapsed=0
+    
+    while ! /bin/mkdir "$MAPPING_LOCK_FILE" 2>/dev/null; do
+        /bin/sleep 0.1
+        elapsed=$((elapsed + 1))
+        
+        if [[ $elapsed -ge $((timeout * 10)) ]]; then
+            print_error "マッピングファイルのロック取得に失敗しました（タイムアウト）"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+# Release lock for mapping file operations
+release_mapping_lock() {
+    rmdir "$MAPPING_LOCK_FILE" 2>/dev/null || true
+}
+
+#######################################################
+# Mapping File Operations
+#######################################################
+
+# Check if mapping file exists, create if not
+# Returns: 0 if exists, 1 if not found or created
+check_mapping_file() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_warning "マッピングファイルが見つかりません"
+        
+        if [[ -x "$INITIAL_SETUP_SCRIPT" ]]; then
+            print_info "初期セットアップスクリプトを実行してください"
+            print_info "実行: $INITIAL_SETUP_SCRIPT"
+        else
+            print_info "空のマッピングファイルを作成します"
+            touch "$MAPPING_FILE"
+        fi
+        
+        echo ""
+        return 1
+    fi
+    
+    return 0
+}
+
+# Read all mappings from file
+# Output: TSV format (volume_name, bundle_id, display_name)
+# Returns: 0 on success, 1 if file not found
+read_mappings() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
+    fi
+    
+    # Return mappings via stdout (caller captures with command substitution)
+    /bin/cat "$MAPPING_FILE"
+}
+
+# Remove duplicate entries from mapping file
+# Keeps first occurrence of each volume_name
+# Returns: 0 on success
+deduplicate_mappings() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 0
+    fi
+    
+    acquire_mapping_lock || return 1
+    
+    local temp_file="${MAPPING_FILE}.dedup"
+    local original_count=$(wc -l < "$MAPPING_FILE" 2>/dev/null || echo "0")
+    
+    # Remove duplicates based on volume_name (first column)
+    # Keep first occurrence, remove subsequent duplicates
+    /usr/bin/awk -F'\t' '!seen[$1]++' "$MAPPING_FILE" > "$temp_file"
+    
+    local new_count=$(wc -l < "$temp_file" 2>/dev/null || echo "0")
+    local removed=$((original_count - new_count))
+    
+    if [[ $removed -gt 0 ]]; then
+        /bin/mv "$temp_file" "$MAPPING_FILE"
+        print_info "重複エントリを ${removed} 件削除しました"
+    else
+        /bin/rm -f "$temp_file"
+    fi
+    
+    release_mapping_lock
+    return 0
+}
+
+#######################################################
+# Mapping CRUD Operations
+#######################################################
+
+# Add new mapping entry
+# Args: volume_name, bundle_id, display_name
+# Returns: 0 on success, 1 on lock failure
+add_mapping() {
+    local volume_name=$1
+    local bundle_id=$2
+    local display_name=$3
+    
+    acquire_mapping_lock || return 1
+    
+    # Check if mapping already exists (by volume_name OR bundle_id)
+    if /usr/bin/grep -q "^${volume_name}"$'\t' "$MAPPING_FILE" 2>/dev/null; then
+        print_warning "ボリューム名が既に存在します: $volume_name"
+        release_mapping_lock
+        return 0
+    fi
+    
+    if /usr/bin/grep -q $'\t'"${bundle_id}"$'\t' "$MAPPING_FILE" 2>/dev/null; then
+        print_warning "Bundle IDが既に存在します: $bundle_id"
+        release_mapping_lock
+        return 0
+    fi
+    
+    # Add new mapping
+    echo "${volume_name}"$'\t'"${bundle_id}"$'\t'"${display_name}" >> "$MAPPING_FILE"
+    
+    release_mapping_lock
+    print_success "マッピングを追加しました: $display_name"
+    
+    return 0
+}
+
+# Remove mapping entry by bundle_id
+# Args: bundle_id
+# Returns: 0 on success, 1 on lock failure
+remove_mapping() {
+    local bundle_id=$1
+    
+    acquire_mapping_lock || return 1
+    
+    # Create temporary file
+    local temp_file="${MAPPING_FILE}.tmp"
+    
+    # Remove matching line
+    /usr/bin/grep -v $'\t'"${bundle_id}"$'\t' "$MAPPING_FILE" > "$temp_file" 2>/dev/null || true
+    
+    # Replace original file
+    /bin/mv "$temp_file" "$MAPPING_FILE"
+    
+    release_mapping_lock
+    
+    return 0
+}
+
+# Update existing mapping (remove old, add new)
+# Args: volume_name, bundle_id, display_name
+# Returns: 0 on success
+update_mapping() {
+    local volume_name=$1
+    local bundle_id=$2
+    local display_name=$3
+    
+    # Remove old mapping if exists, then add new one
+    remove_mapping "$bundle_id"
+    add_mapping "$volume_name" "$bundle_id" "$display_name"
+}
