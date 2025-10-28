@@ -89,7 +89,8 @@ readonly NC='\033[0m' # No Color / Reset All
 #######################################################
 
 readonly PLAYCOVER_BUNDLE_ID="io.playcover.PlayCover"
-readonly PLAYCOVER_CONTAINER="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
+readonly PLAYCOVER_BASE="${HOME}/Library/Containers"
+readonly PLAYCOVER_CONTAINER="${PLAYCOVER_BASE}/${PLAYCOVER_BUNDLE_ID}"
 readonly PLAYCOVER_VOLUME_NAME="PlayCover"
 readonly PLAYCOVER_APP_NAME="PlayCover.app"
 readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"

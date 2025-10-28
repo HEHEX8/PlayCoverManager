@@ -565,6 +565,18 @@ batch_mount_all() {
             continue
         fi
         
+        # Debug: Show mount paths if mismatch detected (always show for investigation)
+        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
+            echo ""
+            echo "  ${YELLOW}[デバッグ] ${display_name}:${NC}"
+            echo "    ${GRAY}ボリューム名: ${volume_name}${NC}"
+            echo "    ${GRAY}Bundle ID: ${bundle_id}${NC}"
+            echo "    ${GRAY}実際のマウント位置: '${actual_mount}'${NC}"
+            echo "    ${GRAY}期待されるマウント位置: '${target_path}'${NC}"
+            echo "    ${GRAY}パス比較結果: $([ "$actual_mount" == "$target_path" ] && echo "一致" || echo "不一致")${NC}"
+            echo ""
+        fi
+        
         # Skip if app is running
         if is_app_running "$bundle_id"; then
             echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
@@ -593,6 +605,8 @@ batch_mount_all() {
             echo -n "  📍 ${display_name}: マウント位置調整中..."
             if unmount_volume "/dev/$device" "silent"; then
                 echo " ✓"
+                # Wait for unmount to complete fully
+                /bin/sleep 1
             else
                 echo " ✗"
                 ((failed_count++))
