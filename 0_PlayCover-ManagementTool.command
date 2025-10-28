@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.39.2 - Fix: Menu status check for LaunchDaemon
+# Version: 4.39.3 - Fix: Use sudo test for system path checks
 #######################################################
 
 #######################################################
@@ -3879,8 +3879,8 @@ install_disk_monitor() {
     local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
     local log_file="/var/log/playcover-disk-monitor.log"
     
-    # Check if already installed
-    if [[ -f "$launch_daemon_path" ]]; then
+    # Check if already installed (need sudo for system paths)
+    if /usr/bin/sudo test -f "$launch_daemon_path"; then
         print_warning "自動マウント機能は既にインストールされています"
         echo ""
         
@@ -4165,7 +4165,8 @@ uninstall_disk_monitor() {
     local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
     local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
     
-    if [[ ! -f "$launch_daemon_path" ]]; then
+    # Check if LaunchDaemon exists (need sudo for system paths)
+    if ! /usr/bin/sudo test -f "$launch_daemon_path"; then
         print_warning "自動マウント機能はインストールされていません"
         wait_for_enter
         return
@@ -4213,13 +4214,15 @@ check_disk_monitor_status() {
     echo "${CYAN}インストール状態:${NC}"
     echo ""
     
-    if [[ -f "$monitor_script_path" ]]; then
+    # Monitor script can be checked without sudo (world-readable)
+    if [[ -x "$monitor_script_path" ]]; then
         print_success "監視スクリプト: インストール済み"
     else
         print_error "監視スクリプト: 未インストール"
     fi
     
-    if [[ -f "$launch_daemon_path" ]]; then
+    # LaunchDaemon plist needs sudo to check (system path)
+    if /usr/bin/sudo test -f "$launch_daemon_path"; then
         print_success "LaunchDaemon: インストール済み"
     else
         print_error "LaunchDaemon: 未インストール"
@@ -4641,7 +4644,8 @@ show_auto_mount_menu() {
         local is_loaded=false
         
         # Check if installed (both plist and script must exist)
-        if [[ -f "$launch_daemon_path" && -f "$monitor_script_path" ]]; then
+        # Use sudo test for system paths that require elevated privileges to read
+        if /usr/bin/sudo test -f "$launch_daemon_path" && [[ -x "$monitor_script_path" ]]; then
             is_installed=true
             # Check if loaded (use sudo launchctl for system-level daemon)
             if /usr/bin/sudo launchctl list 2>/dev/null | grep -q "com.playcover.diskmount"; then
