@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.39.0 - Feature: LaunchDaemon (system-level) auto-mount
+# Version: 4.39.1 - Fix: Create system directories before installation
 #######################################################
 
 #######################################################
@@ -4052,9 +4052,17 @@ fi
 log_message "INFO: 監視処理終了"
 EOF
 
+    # Ensure /usr/local/bin directory exists
+    print_info "システムディレクトリを準備中..."
+    if ! /usr/bin/sudo /bin/mkdir -p /usr/local/bin; then
+        print_error "/usr/local/bin ディレクトリの作成に失敗しました"
+        return
+    fi
+
     # Install script to /usr/local/bin with sudo
     print_info "監視スクリプトをインストール中..."
-    if /usr/bin/sudo /usr/bin/install -m 755 /tmp/playcover-disk-monitor.sh.$$ "$monitor_script_path"; then
+    if /usr/bin/sudo /bin/cp /tmp/playcover-disk-monitor.sh.$$ "$monitor_script_path" && \
+       /usr/bin/sudo /bin/chmod 755 "$monitor_script_path"; then
         print_success "監視スクリプトをインストールしました: ${monitor_script_path}"
         /bin/rm /tmp/playcover-disk-monitor.sh.$$
     else
@@ -4095,15 +4103,25 @@ EOF
 </plist>
 EOF
 
+    # Ensure /Library/LaunchDaemons directory exists (should exist, but just in case)
+    /usr/bin/sudo /bin/mkdir -p /Library/LaunchDaemons
+
     # Install LaunchDaemon plist with sudo
     print_info "LaunchDaemon plistをインストール中..."
-    if /usr/bin/sudo /usr/bin/install -m 644 -o root -g wheel /tmp/com.playcover.diskmount.plist.$$ "$launch_daemon_path"; then
+    if /usr/bin/sudo /bin/cp /tmp/com.playcover.diskmount.plist.$$ "$launch_daemon_path" && \
+       /usr/bin/sudo /bin/chmod 644 "$launch_daemon_path" && \
+       /usr/bin/sudo /usr/sbin/chown root:wheel "$launch_daemon_path"; then
         print_success "LaunchDaemon plistをインストールしました"
         /bin/rm /tmp/com.playcover.diskmount.plist.$$
     else
         print_error "LaunchDaemon plistのインストールに失敗しました"
         return
     fi
+    
+    # Prepare log file
+    print_info "ログファイルを準備中..."
+    /usr/bin/sudo /usr/bin/touch "$log_file"
+    /usr/bin/sudo /bin/chmod 644 "$log_file"
     
     # Load LaunchDaemon (system-level, no sudoers or Full Disk Access needed)
     print_info "LaunchDaemonを読み込み中..."
