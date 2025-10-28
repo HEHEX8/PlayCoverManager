@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.42.0 - Move mapping file to script directory
+# Version: 4.42.1 - Fix capacity check for internal to external storage switch
 #######################################################
 
 #######################################################
@@ -3083,16 +3083,19 @@ switch_storage_location() {
         case "$current_storage" in
             "internal")
                 action="external"
-                # Moving to external - show external drive free space
+                # Moving to external - show external drive free space for the target volume
                 storage_free=$(get_external_drive_free_space "$volume_name")
                 storage_location="外部ドライブ"
                 
-                # Get mount point for external drive to check capacity
-                local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
-                if [[ -n "$playcover_mount" ]]; then
-                    storage_free_bytes=$(get_storage_free_space_bytes "$playcover_mount")
+                # Get mount point of the target app volume (not PlayCover volume) to check capacity
+                local volume_mount=$(get_mount_point "$volume_name")
+                if [[ -n "$volume_mount" ]]; then
+                    # Target volume is mounted, get its free space
+                    storage_free_bytes=$(get_storage_free_space_bytes "$volume_mount")
                 else
-                    storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
+                    # Volume not mounted, assume sufficient space (will be verified during actual operation)
+                    # Set to a large value to skip capacity warning
+                    storage_free_bytes=999999999999
                 fi
                 
                 echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}🔌外部${NC} ${LIGHT_GRAY}へ移動${NC}"
