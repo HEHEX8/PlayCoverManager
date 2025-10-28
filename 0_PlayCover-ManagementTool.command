@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.42.1 - Fix capacity check for internal to external storage switch
+# Version: 4.42.2 - Handle empty source during storage switch
 #######################################################
 
 #######################################################
@@ -3269,8 +3269,27 @@ switch_storage_location() {
             # Check disk space before migration
             print_info "転送前の容量チェック中..."
             local source_size_bytes=$(get_container_size_bytes "$source_path")
-            if [[ "$source_size_bytes" -eq 0 ]]; then
-                print_error "コピー元のサイズを取得できませんでした"
+            
+            # Special handling for empty source (0 bytes or failed to get size)
+            if [[ -z "$source_size_bytes" ]] || [[ "$source_size_bytes" -eq 0 ]]; then
+                print_warning "コピー元が空です（0バイト）"
+                print_info "空のディレクトリを外部ボリュームにマウントします"
+                echo ""
+                
+                # Remove internal data (empty directory)
+                /usr/bin/sudo /bin/rm -rf "$target_path"
+                
+                # Mount external volume directly
+                print_info "外部ボリュームをマウント中..."
+                if mount_volume "$volume_name" "$target_path"; then
+                    echo ""
+                    print_success "外部ストレージへの切り替えが完了しました"
+                    print_info "保存場所: ${target_path}"
+                    remove_internal_storage_flag "$target_path"
+                else
+                    print_error "$MSG_MOUNT_FAILED"
+                fi
+                
                 wait_for_enter
                 continue
             fi
@@ -3529,8 +3548,29 @@ switch_storage_location() {
                 cleanup_temp_dir "$temp_check_mount" true
             fi
             
-            if [[ -z "$source_size_bytes" ]]; then
-                print_error "コピー元のサイズを取得できませんでした"
+            # Special handling for empty source (0 bytes or failed to get size)
+            if [[ -z "$source_size_bytes" ]] || [[ "$source_size_bytes" -eq 0 ]]; then
+                print_warning "外部ボリュームが空です（0バイト）"
+                print_info "空のデータを内蔵ストレージにコピーします"
+                echo ""
+                
+                # Create empty internal directory
+                /usr/bin/sudo /bin/mkdir -p "$target_path"
+                /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
+                
+                # Unmount external volume
+                print_info "外部ボリュームをアンマウント中..."
+                unmount_app_volume "$volume_name" "$bundle_id" || true
+                
+                echo ""
+                print_success "内蔵ストレージへの切り替えが完了しました（空ディレクトリ作成）"
+                print_info "保存場所: ${target_path}"
+                
+                # Create internal storage flag
+                if create_internal_storage_flag "$target_path"; then
+                    print_info "内蔵ストレージモードフラグを作成しました"
+                fi
+                
                 wait_for_enter
                 continue
             fi
