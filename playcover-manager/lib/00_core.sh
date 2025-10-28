@@ -321,7 +321,7 @@ get_available_space() {
         return 1
     fi
     
-    local available_kb=$(df -k "$path" 2>/dev/null | tail -1 | /usr/bin/awk '{print $4}')
+    local available_kb=$(/bin/df -k "$path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
     
     if [[ -n "$available_kb" ]] && [[ "$available_kb" =~ ^[0-9]+$ ]]; then
         echo "$available_kb"
