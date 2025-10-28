@@ -952,8 +952,9 @@ perform_external_to_internal_migration() {
         check_mount_point="$temp_check_mount"
     fi
     
-    local source_size_kb=$(sudo get_directory_size "$check_mount_point")
-    local source_size_bytes=$((source_size_kb))
+    # Get directory size (no sudo needed - du can read mounted volumes)
+    local source_size_kb=$(get_directory_size "$check_mount_point")
+    local source_size_bytes=$((source_size_kb * 1024))  # Convert KB to bytes
     
     # Unmount temporary check mount if created
     if [[ -n "$temp_check_mount" ]]; then
