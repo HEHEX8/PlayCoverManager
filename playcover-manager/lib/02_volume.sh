@@ -627,7 +627,7 @@ batch_mount_all() {
     print_header "マウント完了"
     echo ""
     echo "  ${GREEN}✅ マウント成功: ${mounted_count}件${NC}"
-    echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
+    echo "  ${GRAY}⏭️  スキップ: ${skipped_count}件${NC}"
     if [[ $failed_count -gt 0 ]]; then
         echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
     fi
@@ -639,11 +639,11 @@ batch_mount_all() {
         echo "${YELLOW}📊 容量表示について${NC}"
         echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
-        echo "${ORANGE}⚠️  Finderの「ストレージ」で容量が増えて見える場合がありますが、${NC}"
+        echo "${ORANGE}⚠️  内蔵ストレージの使用容量が増えて見える場合がありますが、${NC}"
         echo "${GREEN}✅ 外部ボリューム使用により内蔵ストレージは節約されています${NC}"
         echo ""
-        echo "${GRAY}詳細: APFSの仕様により論理サイズが重複カウントされます${NC}"
-        echo "${WHITE}実際の効果は Macintosh HDの「使用済み」(上部の数値)で確認してください${NC}"
+        echo "${GRAY}詳細: APFSの仕様により論理サイズが重複カウントされています。${NC}"
+        echo "${WHITE}使用容量表示が実容量を超えて表示される場合もありますが、仕様です。${NC}"
         echo ""
         echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
@@ -732,7 +732,7 @@ batch_unmount_all() {
     print_header "アンマウント完了"
     echo ""
     echo "  ${GREEN}✅ アンマウント成功: ${unmounted_count}件${NC}"
-    echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
+    echo "  ${GRAY}⏭️  スキップ: ${skipped_count}件${NC}"
     if [[ $failed_count -gt 0 ]]; then
         echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
     fi
