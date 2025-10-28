@@ -731,11 +731,18 @@ individual_volume_control() {
             echo ""
             print_warning "$MSG_UNINTENDED_INTERNAL_DATA"
             echo ""
+            
+            # Show data sizes for informed decision
+            local internal_size=$(get_container_size "$target_path")
+            echo "  ${CYAN}内蔵データサイズ:${NC} ${BOLD}${internal_size}${NC}"
+            echo ""
+            
             echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
             echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
-            echo "  ${BOLD}${BLUE}2.${NC} キャンセル（マウントしない）"
+            echo "  ${BOLD}${CYAN}2.${NC} 内蔵データを外部ボリュームにマージ（内蔵データを保持）"
+            echo "  ${BOLD}${BLUE}3.${NC} キャンセル（マウントしない）"
             echo ""
-            echo -n "${BOLD}${YELLOW}選択 (1-2) [デフォルト: 1]:${NC} "
+            echo -n "${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
             read cleanup_choice
             
             # Default to option 1 if empty
@@ -747,6 +754,53 @@ individual_volume_control() {
                     print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
                     /usr/bin/sudo /bin/rm -rf "$target_path"
                     echo ""
+                    # Continue to mount below
+                    ;;
+                2)
+                    print_info "内蔵データを外部ボリュームにマージします"
+                    echo ""
+                    
+                    # Mount external volume to temporary location
+                    local temp_mount=$(create_temp_dir) || {
+                        show_error_and_return "${display_name} の操作" "一時ディレクトリの作成に失敗しました" "individual_volume_control"
+                        return
+                    }
+                    
+                    local device=$(get_volume_device "$volume_name")
+                    if [[ -z "$device" ]]; then
+                        cleanup_temp_dir "$temp_mount" true
+                        show_error_and_return "${display_name} の操作" "ボリュームデバイスの取得に失敗しました" "individual_volume_control"
+                        return
+                    fi
+                    
+                    print_info "外部ボリュームを一時マウント中..."
+                    if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "/dev/$device" "$temp_mount" 2>/dev/null; then
+                        cleanup_temp_dir "$temp_mount" true
+                        show_error_and_return "${display_name} の操作" "外部ボリュームのマウントに失敗しました" "individual_volume_control"
+                        return
+                    fi
+                    
+                    # Copy internal data to external volume (merge)
+                    print_info "内蔵データを外部ボリュームにマージ中..."
+                    if /usr/bin/sudo /usr/bin/rsync -a --info=progress2 "$target_path/" "$temp_mount/"; then
+                        print_success "マージ完了"
+                        
+                        # Unmount temporary mount
+                        unmount_volume "/dev/$device" "silent"
+                        cleanup_temp_dir "$temp_mount" true
+                        
+                        # Remove internal data
+                        print_info "内蔵データをクリーンアップ中..."
+                        /usr/bin/sudo /bin/rm -rf "$target_path"
+                        echo ""
+                    else
+                        print_error "マージに失敗しました"
+                        unmount_volume "/dev/$device" "silent"
+                        cleanup_temp_dir "$temp_mount" true
+                        wait_for_enter
+                        individual_volume_control
+                        return
+                    fi
                     # Continue to mount below
                     ;;
                 *)

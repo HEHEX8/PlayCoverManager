@@ -363,6 +363,36 @@ check_playcover_volume_mount() {
     return 1
 }
 
+# Ensure PlayCover main volume is mounted (dependency for app volumes)
+# Returns: 0 if already mounted or successfully mounted, 1 on failure
+ensure_playcover_main_volume() {
+    # Check if already mounted
+    if check_playcover_volume_mount; then
+        return 0
+    fi
+    
+    # Check if PlayCover volume exists
+    if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+        return 1
+    fi
+    
+    # Get device
+    local device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
+    if [[ -z "$device" ]]; then
+        return 1
+    fi
+    
+    # Create mount point if needed
+    /usr/bin/sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER" 2>/dev/null
+    
+    # Mount PlayCover volume
+    if mount_volume "/dev/$device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 #######################################################
 # Disk Eject Function
 #######################################################
@@ -550,10 +580,18 @@ batch_mount_all() {
             continue
         fi
         
+        # Get device early (needed for both unmount and mount)
+        local device=$(get_volume_device "$volume_name")
+        if [[ -z "$device" ]]; then
+            echo "  ❌ ${display_name}: デバイス取得失敗"
+            ((failed_count++))
+            continue
+        fi
+        
         # Unmount if mounted elsewhere
         if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
             echo -n "  📍 ${display_name}: マウント位置調整中..."
-            if unmount_volume "$volume_name" "silent"; then
+            if unmount_volume "/dev/$device" "silent"; then
                 echo " ✓"
             else
                 echo " ✗"
@@ -564,14 +602,6 @@ batch_mount_all() {
         
         # Mount the volume
         echo -n "  🔄 ${display_name}: マウント中..."
-        
-        # Get device
-        local device=$(get_volume_device "$volume_name")
-        if [[ -z "$device" ]]; then
-            echo " ✗ (デバイス取得失敗)"
-            ((failed_count++))
-            continue
-        fi
         
         # Create mount point
         /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
