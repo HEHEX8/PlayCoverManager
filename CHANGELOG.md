@@ -1,5 +1,69 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.3: Hotfix - Batch Mount Failure
+
+### Critical Bug Fix: Mount Failure in Batch Mount
+
+**Problem:**
+- All volumes failed to mount in `batch_mount_all` after selecting option 1 (delete internal data)
+- User reported 100% failure rate:
+  ```
+  ✅ 既にマウント済: PlayCover
+  ❌ マウント失敗: ゼンレスゾーンゼロ
+  ❌ マウント失敗: 原神
+  ❌ マウント失敗: 崩壊：スターレイル
+  ```
+
+**Root Cause:**
+- Used `/sbin/mount` directly without creating mount point directory
+- After `rm -rf "$target_path"`, directory didn't exist
+- `/sbin/mount` requires existing mount point
+
+**Code Analysis (Lines 2306-2315):**
+```zsh
+# BEFORE (Broken):
+/usr/bin/sudo /bin/rm -rf "$target_path"
+local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+    # ❌ This fails because $target_path doesn't exist
+```
+
+**Solution:**
+Use `mount_volume()` function which handles directory creation automatically.
+
+**Fixed Code (Lines 2306-2317):**
+```zsh
+# AFTER (Fixed):
+/usr/bin/sudo /bin/rm -rf "$target_path"
+
+# Use mount_volume function which creates directory if needed
+local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
+    # ✅ mount_volume creates directory first (Line 397)
+    echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
+```
+
+**Files Modified:**
+- Line 2309: Changed `/sbin/mount` to `mount_volume()` (Option 1)
+- Line 2337: Changed `/sbin/mount` to `mount_volume()` (Option 2)
+
+**Impact:**
+- ✅ Batch mount now works correctly
+- ✅ All volumes mount successfully after internal data deletion
+- ✅ Both option 1 and option 2 now function properly
+
+**Git Commit:**
+```bash
+commit [hash]
+"v4.35.3 - batch_mount_allのマウント失敗修正"
+
+- rm -rf 後に /sbin/mount を直接呼び出していた
+- マウントポイントのディレクトリが存在せず失敗
+- mount_volume関数を使用するように修正（ディレクトリ自動作成）
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.2: Critical Bug Fixes - Emoji Duplication, Batch Mount, Storage Cleanup
 
 ### Three Critical Bug Fixes to `0_PlayCover-ManagementTool.command`

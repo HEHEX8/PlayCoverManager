@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.35.2 - Fixed: emoji duplication, batch mount prompts, storage cleanup
+# Version: 4.35.3 - Fixed: batch mount failure (missing directory creation)
 #######################################################
 
 #######################################################
@@ -2305,8 +2305,9 @@ batch_mount_all() {
                                 echo "     ${INFO}ℹ️  外部ボリュームを優先します（内蔵データを削除）${NC}"
                                 /usr/bin/sudo /bin/rm -rf "$target_path"
                                 
+                                # Use mount_volume function which creates directory if needed
                                 local device=$(get_volume_device "$volume_name" "$diskutil_cache")
-                                if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                                if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
                                     echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                                     ((success_count++))
                                 else
@@ -2333,8 +2334,8 @@ batch_mount_all() {
                                         echo "     ${GREEN}✅ データの統合が完了しました${NC}"
                                         /usr/bin/sudo /bin/rm -rf "$target_path"
                                         
-                                        # Mount to correct location
-                                        if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                                        # Mount to correct location using mount_volume function
+                                        if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
                                             echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                                             ((success_count++))
                                         else
