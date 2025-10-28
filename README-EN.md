@@ -172,6 +172,20 @@ PlayCoverManager/
 - **Number of Functions**: 91
 - **Testing**: Comprehensively verified
 
+### About the Icon
+
+The project includes a custom icon. To build with icon on macOS:
+
+```bash
+# Generate icon (run on macOS)
+./create-icon.sh
+
+# Build with icon
+./build-app.sh
+```
+
+See [ICON_GUIDE.md](ICON_GUIDE.md) for details.
+
 ---
 
 ## 🐛 Bug Reports

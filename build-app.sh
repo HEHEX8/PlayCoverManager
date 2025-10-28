@@ -41,6 +41,17 @@ echo "🔧 Updating script paths..."
 sed -i.bak 's|SCRIPT_DIR="${0:A:h}"|SCRIPT_DIR="$(cd "$(dirname "$0")/../Resources" \&\& pwd)"|' "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
 rm -f "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager.bak"
 
+# Copy app icon if available
+if [ -f "AppIcon.icns" ]; then
+    echo "🎨 Adding app icon..."
+    cp AppIcon.icns "${APP_BUNDLE}/Contents/Resources/"
+    ICON_KEY='    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>'
+else
+    echo "ℹ️  No AppIcon.icns found (run ./create-icon.sh on macOS to create)"
+    ICON_KEY=""
+fi
+
 # Create Info.plist
 echo "📄 Creating Info.plist..."
 cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
@@ -64,6 +75,7 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
     <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
     <string>${APP_VERSION}</string>
+${ICON_KEY}
     <key>LSMinimumSystemVersion</key>
     <string>15.1</string>
     <key>LSArchitecturePriority</key>

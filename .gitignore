@@ -51,6 +51,10 @@ build/
 *.zip
 *.dmg
 
+# Icon generation (keep source, ignore generated)
+AppIcon.iconset/
+AppIcon.icns
+
 # Backup files
 *.bak
 *.backup
