@@ -352,10 +352,7 @@ create_playcover_volume_setup() {
         print_info "デバイス: $existing_device"
         echo ""
         
-        echo -n "既存のボリュームを使用しますか？ (Y/n): "
-        read use_existing
-        
-        if [[ "$use_existing" =~ ^[Nn]$ ]]; then
+        if ! prompt_confirmation "既存のボリュームを使用しますか？" "Y/n"; then
             print_error "セットアップを中断しました"
             wait_for_enter
             exit 1
@@ -426,45 +423,36 @@ run_initial_setup() {
     # Step 2: Xcode tools check
     check_xcode_tools
     if [[ $NEED_XCODE_TOOLS == true ]]; then
-        echo -n "Xcode Command Line Tools をインストールしますか？ (Y/n): "
-        read install_choice
-        if [[ ! "$install_choice" =~ ^[Nn]$ ]]; then
-            install_xcode_tools
-        else
+        if ! prompt_confirmation "Xcode Command Line Tools をインストールしますか？" "Y/n"; then
             print_error "Xcode Command Line Tools は必須です"
             wait_for_enter
             exit 1
         fi
+        install_xcode_tools
     fi
     wait_for_enter "Enterキーで続行..."
     
     # Step 3: Homebrew check
     check_homebrew
     if [[ $NEED_HOMEBREW == true ]]; then
-        echo -n "Homebrew をインストールしますか？ (Y/n): "
-        read install_choice
-        if [[ ! "$install_choice" =~ ^[Nn]$ ]]; then
-            install_homebrew
-        else
+        if ! prompt_confirmation "Homebrew をインストールしますか？" "Y/n"; then
             print_error "Homebrew は必須です"
             wait_for_enter
             exit 1
         fi
+        install_homebrew
     fi
     wait_for_enter "Enterキーで続行..."
     
     # Step 4: PlayCover check
     check_playcover_installation
     if [[ $NEED_PLAYCOVER == true ]]; then
-        echo -n "PlayCover をインストールしますか？ (Y/n): "
-        read install_choice
-        if [[ ! "$install_choice" =~ ^[Nn]$ ]]; then
-            install_playcover
-        else
+        if ! prompt_confirmation "PlayCover をインストールしますか？" "Y/n"; then
             print_error "PlayCover は必須です"
             wait_for_enter
             exit 1
         fi
+        install_playcover
     fi
     wait_for_enter "Enterキーで続行..."
     

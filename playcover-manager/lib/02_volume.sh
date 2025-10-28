@@ -394,9 +394,7 @@ eject_disk() {
     
     if [[ -z "$playcover_device" ]]; then
         print_header "ディスク取り外し"
-        print_error "PlayCoverボリュームが見つかりません"
-        wait_for_enter
-        return
+        handle_error_and_return "PlayCoverボリュームが見つかりません"
     fi
     
     local disk_id=$(echo "$playcover_device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
@@ -409,7 +407,7 @@ eject_disk() {
     print_info "注意: PlayCover関連ボリューム以外も含まれる可能性があります"
     echo ""
     
-    if ! prompt_confirmation "続行しますか？" "Y"; then
+    if ! prompt_confirmation "続行しますか？" "Y/n"; then
         print_info "$MSG_CANCELED"
         wait_for_enter "Enterキーで続行..."
         return

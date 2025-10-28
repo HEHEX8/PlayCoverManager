@@ -392,13 +392,7 @@ install_ipa_to_playcover() {
         # Check if existing app was found and ask for confirmation OUTSIDE the loop
         if [[ -n "$existing_app_path" ]]; then
             print_warning "${APP_NAME} (${existing_version}) は既にインストール済みです"
-            echo -n "上書きしますか？ (Y/n): "
-            read overwrite_choice </dev/tty
-            
-            # Default to Yes if empty
-            overwrite_choice=${overwrite_choice:-Y}
-            
-            if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
+            if ! prompt_confirmation "上書きしますか？" "Y/n"; then
                 print_info "スキップしました"
                 INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
                 
@@ -845,10 +839,7 @@ uninstall_workflow() {
     echo ""
     print_error "この操作は取り消せません！"
     echo ""
-    echo -n "${RED}本当にアンインストールしますか？ (yes/NO):${NC} "
-    read confirm
-    
-    if [[ "$confirm" != "yes" ]]; then
+    if ! prompt_confirmation "本当にアンインストールしますか？" "yes/NO"; then
         print_info "$MSG_CANCELED"
         wait_for_enter
         return
@@ -868,9 +859,7 @@ uninstall_workflow() {
     
     if [[ -d "$app_path" ]]; then
         if ! /bin/rm -rf "$app_path" 2>/dev/null; then
-            print_error "アプリの削除に失敗しました"
-            wait_for_enter
-            return
+            handle_error_and_return "アプリの削除に失敗しました"
         fi
     fi
     
@@ -908,9 +897,7 @@ uninstall_workflow() {
     
     # Step 9: Remove from mapping file (silent)
     if ! remove_mapping "$selected_bundle"; then
-        print_error "マッピング情報の削除に失敗しました"
-        wait_for_enter
-        return
+        handle_error_and_return "マッピング情報の削除に失敗しました"
     fi
     
     # Step 10: If PlayCover volume, remove PlayCover.app and exit
@@ -1012,10 +999,7 @@ uninstall_all_apps() {
     print_error "この操作は取り消せません！"
     print_error "PlayCoverを含むすべてのアプリが削除されます！"
     echo ""
-    echo -n "${RED}本当にすべてのアプリをアンインストールしますか？ (yes/NO):${NC} "
-    read confirm
-    
-    if [[ "$confirm" != "yes" ]]; then
+    if ! prompt_confirmation "本当にすべてのアプリをアンインストールしますか？" "yes/NO"; then
         print_info "$MSG_CANCELED"
         wait_for_enter
         return

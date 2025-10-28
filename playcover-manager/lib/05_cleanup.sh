@@ -177,10 +177,7 @@ nuclear_cleanup() {
     #######################################################
     
     # First confirmation
-    echo -n "${RED}上記の項目をすべて削除しますか？ (yes/no):${NC} "
-    read first_confirm
-    
-    if [[ "$first_confirm" != "yes" ]]; then
+    if ! prompt_confirmation "上記の項目をすべて削除しますか？" "yes/no"; then
         print_info "$MSG_CANCELED"
         wait_for_enter
         return

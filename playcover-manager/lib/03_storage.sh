@@ -784,10 +784,7 @@ perform_internal_to_external_migration() {
         echo ""
         print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
         echo ""
-        echo -n "${ORANGE}それでも続行しますか？ (y/N):${NC} "
-        read force_continue
-        
-        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+        if ! prompt_confirmation "それでも続行しますか？" "y/N"; then
             print_info "$MSG_CANCELED"
             return 1
         fi
@@ -1016,10 +1013,7 @@ perform_external_to_internal_migration() {
         echo ""
         print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
         echo ""
-        echo -n "${ORANGE}それでも続行しますか？ (y/N):${NC} "
-        read force_continue
-        
-        if [[ ! "$force_continue" =~ ^[Yy]$ ]]; then
+        if ! prompt_confirmation "それでも続行しますか？" "y/N"; then
             print_info "$MSG_CANCELED"
             return 1
         fi

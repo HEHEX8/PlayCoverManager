@@ -233,6 +233,19 @@ wait_for_enter() {
     read
 }
 
+# Handle error and return (combines print_error + wait_for_enter + return)
+# Args:
+#   $1: error_message (required)
+#   $2: exit_code (optional, default: 1)
+# Usage: handle_error_and_return "エラーメッセージ" [exit_code]
+handle_error_and_return() {
+    local error_message="$1"
+    local exit_code="${2:-1}"
+    print_error "$error_message"
+    wait_for_enter
+    return "$exit_code"
+}
+
 #######################################################
 # Basic Utility Functions
 #######################################################
@@ -285,25 +298,57 @@ quit_app_if_running() {
     return 0
 }
 
-# Prompt for confirmation with default option
+# Prompt for confirmation with various prompt types
+# Args:
+#   $1: message (required)
+#   $2: prompt_type (optional, default: "Y/n")
+#       - "Y/n"    : Yes is default (press Enter → Yes)
+#       - "y/N"    : No is default (press Enter → No)
+#       - "yes/NO" : Dangerous operation (must type "yes" explicitly, default: No)
+#       - "yes/no" : Nuclear operation (must type "yes" explicitly, no default)
+# Returns: 0 if confirmed, 1 if canceled
+# Usage: 
+#   prompt_confirmation "続行しますか？"              # Default: Y/n
+#   prompt_confirmation "削除しますか？" "y/N"       # Default: No
+#   prompt_confirmation "本当に削除？" "yes/NO"      # Must type "yes", default No
+#   prompt_confirmation "全削除？" "yes/no"          # Must type "yes", no default
 prompt_confirmation() {
     local message="$1"
-    local default="${2:-Y}"
+    local prompt_type="${2:-Y/n}"
+    local response
     
-    if [[ "$default" == "Y" ]]; then
-        echo -n "${message} (Y/n): "
-    else
-        echo -n "${message} (y/N): "
-    fi
-    read response
-    
-    response=${response:-$default}
-    
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+    case "$prompt_type" in
+        "Y/n")
+            echo -n "${message} (Y/n): "
+            read response
+            response=${response:-Y}
+            [[ "$response" =~ ^[Yy]$ ]]
+            ;;
+        "y/N")
+            echo -n "${message} (y/N): "
+            read response
+            response=${response:-N}
+            [[ "$response" =~ ^[Yy]$ ]]
+            ;;
+        "yes/NO")
+            echo -n "${message} (yes/NO): "
+            read response
+            response=${response:-NO}
+            [[ "$response" == "yes" ]]
+            ;;
+        "yes/no")
+            echo -n "${message} (yes/no): "
+            read response
+            [[ "$response" == "yes" ]]
+            ;;
+        *)
+            # Fallback to Y/n
+            echo -n "${message} (Y/n): "
+            read response
+            response=${response:-Y}
+            [[ "$response" =~ ^[Yy]$ ]]
+            ;;
+    esac
 }
 
 # Check if PlayCover is running
@@ -412,10 +457,7 @@ check_full_disk_access() {
         else
             print_error "権限が確認できませんでした"
             echo ""
-            echo -n "それでも続行しますか？ (y/N): "
-            read continue_choice
-            
-            if [[ ! "$continue_choice" =~ ^[Yy]$ ]]; then
+            if ! prompt_confirmation "それでも続行しますか？" "y/N"; then
                 exit_with_cleanup 1 "フルディスクアクセス権限が必要です"
             fi
             echo ""
