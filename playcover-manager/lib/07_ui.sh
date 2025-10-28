@@ -687,7 +687,10 @@ individual_volume_control() {
             fi
             
             # Mount to correct location
-            if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+            # Create mount point if not exists
+            /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+            
+            if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
                 # Success - silently return to menu
                 individual_volume_control
                 return
@@ -756,13 +759,23 @@ individual_volume_control() {
         # Ensure PlayCover volume is mounted first (dependency requirement)
         if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
             if ! ensure_playcover_main_volume >/dev/null 2>&1; then
-                show_error_and_return "${display_name} の操作" "PlayCover ボリュームのマウントに失敗しました" "individual_volume_control"
+                show_error_and_return "${display_name} の操作" "PlayCover ボリューム（依存先）のマウントに失敗しました" "individual_volume_control"
                 return
             fi
         fi
         
-        # Try to mount using mount_volume function (includes nobrowse, proper error handling)
-        if mount_volume "$volume_name" "$target_path" "false" >/dev/null 2>&1; then
+        # Get device path for mounting
+        local device=$(get_volume_device "$volume_name")
+        if [[ -z "$device" ]]; then
+            show_error_and_return "${display_name} の操作" "ボリュームデバイスの取得に失敗しました" "individual_volume_control"
+            return
+        fi
+        
+        # Create mount point if not exists
+        /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+        
+        # Try to mount using mount_volume function with device path and nobrowse option
+        if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
             # Success - silently return to menu
             individual_volume_control
             return
