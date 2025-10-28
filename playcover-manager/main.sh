@@ -10,12 +10,12 @@
 SCRIPT_DIR="${0:A:h}"
 
 # Load all modules in order
-source "${SCRIPT_DIR}/lib/00_header.sh"
-source "${SCRIPT_DIR}/lib/01_utils.sh"
-source "${SCRIPT_DIR}/lib/02_disk.sh"
-source "${SCRIPT_DIR}/lib/03_mapping.sh"
+source "${SCRIPT_DIR}/lib/00_core.sh"
+source "${SCRIPT_DIR}/lib/01_mapping.sh"
+source "${SCRIPT_DIR}/lib/02_volume.sh"
+source "${SCRIPT_DIR}/lib/03_storage.sh"
 source "${SCRIPT_DIR}/lib/04_app.sh"
-source "${SCRIPT_DIR}/lib/05_batch.sh"
+source "${SCRIPT_DIR}/lib/05_cleanup.sh"
 source "${SCRIPT_DIR}/lib/06_setup.sh"
 source "${SCRIPT_DIR}/lib/07_ui.sh"
 
