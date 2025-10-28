@@ -770,7 +770,7 @@ install_workflow() {
         echo ""
         print_error "インストール失敗: ${#INSTALL_FAILED} 個"
         for app in "${(@)INSTALL_FAILED}"; do
-            echo "  ✗ $app"
+            echo "  ❌ $app"
         done
     fi
     

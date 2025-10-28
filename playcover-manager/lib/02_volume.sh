@@ -596,11 +596,11 @@ batch_mount_all() {
         if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
             echo -n "  📍 ${display_name}: マウント位置調整中..."
             if unmount_volume "/dev/$device" "silent"; then
-                echo " ✓"
+                echo " ✅"
                 # Wait for unmount to complete fully
                 /bin/sleep 1
             else
-                echo " ✗"
+                echo " ❌"
                 ((failed_count++))
                 continue
             fi
@@ -614,10 +614,10 @@ batch_mount_all() {
         
         # Mount with nobrowse
         if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
-            echo " ✓"
+            echo " ✅"
             ((mounted_count++))
         else
-            echo " ✗ (マウント失敗)"
+            echo " ❌ (マウント失敗)"
             ((failed_count++))
         fi
         
@@ -626,10 +626,10 @@ batch_mount_all() {
     echo ""
     print_header "マウント完了"
     echo ""
-    echo "  ${GREEN}✓ マウント成功: ${mounted_count}件${NC}"
+    echo "  ${GREEN}✅ マウント成功: ${mounted_count}件${NC}"
     echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
     if [[ $failed_count -gt 0 ]]; then
-        echo "  ${RED}✗ 失敗: ${failed_count}件${NC}"
+        echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
     fi
     echo ""
     
@@ -703,10 +703,10 @@ batch_unmount_all() {
         echo -n "  🔄 ${display_name}: アンマウント中..."
         
         if unmount_with_fallback "$volume_name" "silent"; then
-            echo " ✓"
+            echo " ✅"
             ((unmounted_count++))
         else
-            echo " ✗ (アンマウント失敗)"
+            echo " ❌ (アンマウント失敗)"
             ((failed_count++))
         fi
         
@@ -715,10 +715,10 @@ batch_unmount_all() {
     echo ""
     print_header "アンマウント完了"
     echo ""
-    echo "  ${GREEN}✓ アンマウント成功: ${unmounted_count}件${NC}"
+    echo "  ${GREEN}✅ アンマウント成功: ${unmounted_count}件${NC}"
     echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
     if [[ $failed_count -gt 0 ]]; then
-        echo "  ${RED}✗ 失敗: ${failed_count}件${NC}"
+        echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
     fi
     echo ""
     
