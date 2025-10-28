@@ -404,8 +404,37 @@ install_ipa_to_playcover() {
         
         # Check if existing app was found and ask for confirmation OUTSIDE the loop
         if [[ -n "$existing_app_path" ]]; then
-            print_warning "${APP_NAME} (${existing_version}) は既にインストール済みです"
-            if ! prompt_confirmation "上書きしますか？" "Y/n"; then
+            # Check if app is currently running
+            if is_app_running "$APP_BUNDLE_ID"; then
+                echo ""
+                print_error "アプリが実行中のため、インストールできません"
+                echo ""
+                print_info "アプリを終了してから再度お試しください"
+                INSTALL_FAILED+=("$APP_NAME (実行中)")
+                echo ""
+                return 1
+            fi
+            
+            # Show version comparison
+            echo ""
+            print_warning "既存のアプリが見つかりました"
+            echo ""
+            echo "  ${BOLD}アプリ名:${NC} ${APP_NAME}"
+            echo "  ${BOLD}インストール済みバージョン:${NC} ${YELLOW}${existing_version}${NC}"
+            echo "  ${BOLD}新しいバージョン:${NC} ${GREEN}${APP_VERSION}${NC}"
+            echo ""
+            
+            # Version comparison hint
+            if [[ "$APP_VERSION" == "$existing_version" ]]; then
+                print_info "💡 同じバージョンです（再インストール）"
+            elif [[ "$APP_VERSION" > "$existing_version" ]]; then
+                print_info "💡 アップデート: ${existing_version} → ${APP_VERSION}"
+            else
+                print_warning "💡 ダウングレード: ${existing_version} → ${APP_VERSION}"
+            fi
+            
+            echo ""
+            if ! prompt_confirmation "上書きインストールしますか？" "Y/n"; then
                 print_info "スキップしました"
                 INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
                 
@@ -852,8 +881,28 @@ uninstall_workflow() {
     echo ""
     print_error "この操作は取り消せません！"
     echo ""
+    
+    # Check if app is currently running before uninstall
+    if is_app_running "$selected_bundle"; then
+        print_error "アプリが実行中のため、アンインストールできません"
+        echo ""
+        print_info "アプリを終了してから再度お試しください"
+        wait_for_enter
+        return
+    fi
+    
     if ! prompt_confirmation "本当にアンインストールしますか？" "yes/NO"; then
         print_info "$MSG_CANCELED"
+        wait_for_enter
+        return
+    fi
+    
+    # Re-check if app was started during confirmation (race condition prevention)
+    if is_app_running "$selected_bundle"; then
+        echo ""
+        print_error "確認中にアプリが起動されました"
+        echo ""
+        print_info "アプリを終了してから再度お試しください"
         wait_for_enter
         return
     fi
@@ -1000,6 +1049,29 @@ uninstall_all_apps() {
     
     echo "${ORANGE}合計: ${total_apps} 個のアプリ${NC}"
     echo ""
+    
+    # Check if any apps are currently running
+    echo "アプリの実行状態をチェック中..."
+    echo ""
+    local running_apps=()
+    for ((i=1; i<=${#bundles_list}; i++)); do
+        if is_app_running "${bundles_list[$i]}"; then
+            running_apps+=("${apps_list[$i]}")
+        fi
+    done
+    
+    if [[ ${#running_apps[@]} -gt 0 ]]; then
+        print_error "以下のアプリが実行中のため、アンインストールできません:"
+        echo ""
+        for app in "${running_apps[@]}"; do
+            echo "  🏃 ${app}"
+        done
+        echo ""
+        print_info "すべてのアプリを終了してから再度お試しください"
+        wait_for_enter
+        return
+    fi
+    
     print_warning "この操作は以下を実行します:"
     echo "  1. すべてのアプリを PlayCover から削除"
     echo "  2. すべての設定ファイルを削除"
@@ -1017,6 +1089,18 @@ uninstall_all_apps() {
         wait_for_enter
         return
     fi
+    
+    # Re-check if any apps were started during confirmation (race condition prevention)
+    for ((i=1; i<=${#bundles_list}; i++)); do
+        if is_app_running "${bundles_list[$i]}"; then
+            echo ""
+            print_error "確認中に ${apps_list[$i]} が起動されました"
+            echo ""
+            print_info "すべてのアプリを終了してから再度お試しください"
+            wait_for_enter
+            return
+        fi
+    done
     
     # Start batch uninstallation
     echo ""
