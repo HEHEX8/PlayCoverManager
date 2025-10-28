@@ -1,270 +1,198 @@
 # PlayCover Manager
 
-macOS用PlayCover統合管理ツール - モジュラーアーキテクチャ版
+<div align="center">
 
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://www.apple.com/macos/)
-[![Language](https://img.shields.io/badge/language-Zsh-orange)](https://www.zsh.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-macOS%20Sequoia%2015.1%2B-lightgrey.svg)
+![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-orange.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+**APFS Volume Management Tool for PlayCover**
+
+[English](README-EN.md) | 日本語
+
+</div>
 
 ---
 
-## 🚀 バージョン情報
+## 🎉 v5.0.0 - 正式安定版リリース
 
-### モジュラー版: v5.0.0-alpha5（Phase 8完了）
-- **ディレクトリ**: `playcover-manager/`
-- **状態**: ✅ Phase 8完了（volume操作の高レベル統一）
-- **統計**: 5,455行、107関数、8モジュール + main.sh
-- **テスト**: 18テスト全パス（test-phase8.sh）
-- **言語**: 日本語のみ
-- **最適化**: 
-  - Phase 5: エラーハンドリング・確認プロンプトの共通化（約110行削減）
-  - Phase 6: 容量チェック・一時ディレクトリ管理の統一（5箇所で使用）
-  - Phase 7: diskutil/volume/print/logging統一（+13関数、15箇所最適化）
-  - Phase 8: volume操作の高レベル統一（4箇所を置き換え、約15行削減）
+PlayCover Manager の最初の正式安定版がリリースされました。全ての重大バグが修正され、本番環境での使用に適しています。
 
-### 統合版: v4.43.0（安定版・推奨）
-- **ファイル**: `0_PlayCover-ManagementTool.command`
-- **状態**: ✅ 安定版・本番利用推奨
-- **サイズ**: 約5,380行の統合スクリプト
-
-**推奨**: 本番環境では安定版（v4.43.0）を使用してください。
+**リリース詳細**: [RELEASE_NOTES_5.0.0.md](RELEASE_NOTES_5.0.0.md)
 
 ---
 
 ## 📖 概要
 
-PlayCover Managerは、macOS上でiOSゲームを動作させる「PlayCover」のボリューム・ストレージ管理を効率化するツールです。
+PlayCover Manager は、PlayCover で実行する iOS アプリのデータを外部ストレージに移行・管理するための macOS 専用ツールです。APFS ボリュームの作成・マウント管理を自動化し、内蔵ストレージの容量を節約します。
 
-### 🎮 主な機能
+### 主な機能
 
-1. **APFSボリューム管理**
-   - 外部ディスクへのゲーム専用ボリューム作成
-   - マウント/アンマウント操作
-   - nobrowse設定（Finderに表示させない）
-
-2. **ストレージ切替**
-   - 内蔵ストレージ ⇄ 外部ストレージの双方向切替
-   - rsyncベースの差分同期・完全コピー
-   - フラグファイルによる状態管理
-
-3. **アプリ管理**
-   - IPAファイルのインストール（単一・複数・バッチモード）
-   - アプリのアンインストール（個別・一括）
-   - 日本語アプリ名対応
-
-4. **クリーンアップ機能**
-   - 完全リセット（隠しオプション: X/x/RESET/reset）
-   - すべてのボリューム・コンテナを削除
-   - PlayCover本体のアンインストール
+- ✅ **外部ストレージ移行**: ゲームデータを外部ドライブに安全に移動
+- ✅ **内蔵⇄外部切り替え**: ワンクリックでストレージモード変更
+- ✅ **バッチ操作**: 複数ボリュームの一括マウント/アンマウント
+- ✅ **データ保護**: 容量チェック、実行中チェック、rsync 同期
+- ✅ **完全クリーンアップ**: 全データを安全に削除（隠しオプション）
 
 ---
 
-## 🏗️ モジュラーアーキテクチャ（v5.0.0-alpha1）
+## 🚀 クイックスタート
 
-### Phase 8完了状態
+### 前提条件
 
-✅ **Phase 1**: 基本構造とコアモジュール  
-✅ **Phase 2**: 全モジュール実装（8モジュール + main.sh）  
-✅ **Phase 3**: 包括的検証（11段階すべてクリア）  
-✅ **Phase 4**: 自動テストスイート（61テスト、100%パス率）  
-✅ **Phase 5**: 関数共通化（重複パターンの統一・コード最適化）  
-✅ **Phase 6**: 容量チェック・一時ディレクトリ管理の統一  
-✅ **Phase 7**: diskutil/volume/print/logging完全最適化  
-✅ **Phase 8**: volume操作の高レベル統一
+- macOS Sequoia 15.1 以降
+- Apple Silicon Mac (M1/M2/M3/M4)
+- PlayCover 3.0 以降
+- 外部ストレージ（APFS 対応）
 
-### モジュール構成
-
-```
-playcover-manager/
-├── main.sh (101行)              # メインエントリーポイント
-├── test-phase8.sh               # テストスイート（18テスト）
-└── lib/
-    ├── 00_core.sh (772行)      # コア機能（41関数）← Phase 7: +13関数
-    ├── 01_mapping.sh (166行)   # マッピング管理（8関数）
-    ├── 02_volume.sh (493行)    # ボリューム操作（14関数）← Phase 8: 最適化
-    ├── 03_storage.sh (1169行)  # ストレージ管理（14関数）
-    ├── 04_app.sh (1090行)      # アプリ管理（11関数）
-    ├── 05_cleanup.sh (402行)   # クリーンアップ（1関数）
-    ├── 06_setup.sh (491行)     # 初期セットアップ（12関数）
-    └── 07_ui.sh (775行)        # UIとメニュー（6関数）
-```
-
-### Phase 5の改善内容
-
-**新規追加関数:**
-- `handle_error_and_return()`: エラー表示 + 待機 + returnを1つに統一
-- `prompt_confirmation()`: 確認プロンプトを拡張（4つの形式に対応）
-  - `Y/n`: デフォルトYes
-  - `y/N`: デフォルトNo
-  - `yes/NO`: 危険操作（明示的に"yes"入力必須）
-  - `yes/no`: 最危険操作（明示的に"yes"入力必須、デフォルトなし）
-
-**コード削減:**
-- エラーハンドリングパターン: 3箇所を統一（約40行削減）
-- 確認プロンプトパターン: 10箇所を統一（約70行削減）
-- **総削減量**: 約110行
-
-### Phase 6の改善内容
-
-**新規追加関数:**
-- `get_available_space()`: ディスク空き容量を取得（5箇所で使用）
-- `get_directory_size()`: ディレクトリサイズを取得（5箇所で使用）
-- `create_temp_dir()`: 一時ディレクトリを安全に作成（3箇所で使用）
-
-**コード統一:**
-- 容量チェックパターン: `df -k | tail | awk` → `get_available_space()`
-- ディレクトリサイズ: `du -sk | awk` → `get_directory_size()`
-- 一時ディレクトリ作成: `mktemp -d` → `create_temp_dir()`
-
-**テストスイート:**
-- `test-phase6.sh`: 13テスト全パス
-- 関数存在チェック、使用箇所確認、構文チェック
-
-### Phase 7の改善内容
-
-**新規追加関数（13関数）:**
-
-1. **diskutil infoラッパー関数（4関数）**:
-   - `get_volume_mount_point()`: マウントポイント取得
-   - `get_volume_device_node()`: デバイスノード取得
-   - `get_disk_name()`: ディスク名取得
-   - `get_disk_location()`: ディスク位置（Internal/External）取得
-
-2. **高レベルvolume操作（2関数）**:
-   - `get_volume_device_or_fail()`: ボリューム存在確認 + デバイス取得を統合
-   - `ensure_volume_mounted()`: ボリュームのマウント状態を保証
-
-3. **print関数の改良（5関数）**:
-   - `print_success_ln()`: 成功メッセージ + 自動改行
-   - `print_error_ln()`: エラーメッセージ + 自動改行
-   - `print_warning_ln()`: 警告メッセージ + 自動改行
-   - `print_info_ln()`: 情報メッセージ + 自動改行
-   - `print_highlight_ln()`: ハイライトメッセージ + 自動改行
-
-4. **ログ出力関数（2関数）**:
-   - `print_debug()`: DEBUG=1時のみ出力
-   - `print_verbose()`: VERBOSE=1時のみ出力
-
-**コード統一の成果:**
-- diskutilパース処理: 17箇所 → 2箇所（88%削減）
-- 新関数の使用回数: 20回（5モジュールで活用）
-- 戦略的な置き換え: リスク評価により11箇所を厳選して最適化
-
-**テストスイート:**
-- `test-phase7.sh`: 17テスト全パス
-- 13個の新関数すべて検証済み
-- 使用箇所カウント、パターン削減、構文チェック
-
-### Phase 8の改善内容
-
-**`get_volume_device_or_fail()` の活用拡大:**
-
-Phase 7で実装した `get_volume_device_or_fail()` を更に4箇所で活用し、ボリューム操作の一貫性を向上させました。
-
-**置き換え箇所（4箇所）:**
-1. **mount_app_volume()**: 11行 → 2行（ボリューム存在確認 + デバイス取得 + エラーチェック）
-2. **delete_app_volume()**: 9行 → 4行（早期リターン用の意図的なvolume_exists保持）
-3. **eject_disk()**: 9行 → 4行（ネストしたif文を簡潔に）
-4. **setup_external_storage()**: デバッグ情報のため既存実装を維持（変更なし）
-
-**コード削減の成果:**
-- `get_volume_device_or_fail` 使用回数: 1回 → 4回（4倍に拡大）
-- 02_volume.shのコード削減: 504行 → 493行（11行削減）
-- 古いパターン（volume_exists + get_volume_device + 空チェック）の削減
-
-**設計判断:**
-- delete_app_volume: 早期リターン最適化のためvolume_existsを保持（意図的）
-- setup_external_storage: デバッグ情報保持のため既存実装を維持
-
-**テストスイート:**
-- `test-phase8.sh`: 18テスト全パス
-- 使用箇所の増加確認、パターン削減検証、構文チェック
-
-### テストスイート
-
-```
-tests/
-├── run_all_tests.sh           # テスト実行スクリプト
-├── test_lib.sh                # テストフレームワーク
-├── test_functions_exist.sh    # 関数存在チェック
-└── test_01_mapping.sh         # マッピング機能テスト
-```
-
-**テスト結果**: 61テスト、100%パス率  
-- 関数存在チェック: 91関数すべて検証済み
-- 重複関数チェック: 0件（クリーン）
-- 未定義関数チェック: 0件（すべて定義済み）
-- 未宣言変数チェック: 0件（すべて宣言済み）
-
----
-
-## 🚀 使用方法
-
-### 統合版（推奨）
+### インストール
 
 ```bash
-# ダブルクリックで実行
-0_PlayCover-ManagementTool.command
+# リポジトリをクローン
+git clone https://github.com/HEHEX8/PlayCoverManager.git
+cd PlayCoverManager
+
+# 実行権限を付与
+chmod +x playcover-manager.command
+
+# 起動
+./playcover-manager.command
 ```
 
-### モジュラー版（開発版）
+### 初回セットアップ
 
-```bash
-# ダブルクリックで実行
-playcover-manager/playcover-manager.command
+1. ツールを起動すると自動的に初期セットアップが開始されます
+2. 外部ストレージを選択（USB/Thunderbolt/SSD）
+3. PlayCover 用 APFS ボリュームが自動作成されます
+4. セットアップ完了後、メインメニューが表示されます
 
-# または直接実行
-playcover-manager/main.sh
+---
+
+## 📚 使い方
+
+### メインメニュー
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  📱 PlayCover Volume Manager v5.0.0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. アプリ管理
+  2. ボリューム操作
+  3. ストレージ切り替え（内蔵⇄外部）
+  4. ディスクを取り外す
+  0. 終了
+
+選択してください (0-4):
 ```
 
+### 1. アプリ管理
+
+- **IPA インストール**: 複数 IPA ファイルの一括インストール（進捗表示付き）
+- **アンインストール**: アプリと関連ボリュームの削除
+
+### 2. ボリューム操作
+
+- **全ボリュームマウント**: 登録済みボリュームを一括マウント
+- **全ボリュームアンマウント**: 安全に一括アンマウント
+- **個別操作**: 特定ボリュームのマウント/アンマウント/再マウント
+
+### 3. ストレージ切り替え
+
+- **内蔵 → 外部**: 内蔵データを外部ボリュームに移行
+- **外部 → 内蔵**: 外部データを内蔵ストレージに戻す
+- 容量チェック・アプリ実行中チェック・データ保護機能完備
+
+### 4. ディスク取り外し
+
+外部ストレージを安全に取り外します（全ボリュームのアンマウント処理）
+
 ---
 
-## 📂 プロジェクト構造
+## 🏗️ アーキテクチャ
+
+### モジュール構造
 
 ```
-/home/user/webapp/
-├── README.md                              # メインドキュメント
-├── README-EN.md                           # English documentation
-├── CHANGELOG.md                           # 変更履歴
-├── CHANGELOG-EN.md                        # English changelog
-├── 0_PlayCover-ManagementTool.command     # 安定版 v4.43.0
-├── 0_PlayCover-ManagementTool-EN.command  # English version
-├── playcover-debug-detector.command       # Debug utility
-└── playcover-manager/                     # モジュラー版 v5.0.0-alpha1
-    ├── lib/                               # 8 modules
-    ├── tests/                             # Test suite
-    ├── main.sh                            # Main entry point
-    └── playcover-manager.command          # Wrapper script
+PlayCoverManager/
+├── main.sh                    # メインエントリーポイント
+├── playcover-manager.command  # GUI起動スクリプト
+├── lib/                       # モジュール
+│   ├── 00_core.sh            # コア機能・ユーティリティ
+│   ├── 01_mapping.sh         # マッピングファイル管理
+│   ├── 02_volume.sh          # APFS ボリューム操作
+│   ├── 03_storage.sh         # ストレージ切り替え
+│   ├── 04_app.sh             # アプリインストール・管理
+│   ├── 05_cleanup.sh         # クリーンアップ機能
+│   ├── 06_setup.sh           # 初期セットアップ
+│   └── 07_ui.sh              # UI・メニュー表示
+├── README.md                  # このファイル
+├── CHANGELOG.md               # 変更履歴（旧版）
+└── RELEASE_NOTES_5.0.0.md    # v5.0.0 リリースノート
 ```
 
----
+### 技術詳細
 
-## ⚠️ 注意事項
-
-### 必須要件
-- Apple Silicon Mac（M1/M2/M3/M4シリーズ）
-- macOS Sequoia 15.1+ (Tahoe 26.0.1以降)
-- フルディスクアクセス権限（ターミナル.app）
-- 外部ストレージ（USB/Thunderbolt/SSD）
-
-### 推奨事項
-- PlayCover使用時は必ずボリュームをマウント
-- Mac終了前には必ずボリュームをアンマウント
-- 外部ストレージ取り外し前に「ディスク全体を取り外し」を実行
+- **総コード行数**: 6,056 行
+- **モジュール数**: 8 個
+- **言語**: Zsh (macOS 標準シェル)
+- **関数数**: 91 個
+- **テスト**: 包括的な検証済み
 
 ---
 
-## 🔗 関連リンク
+## 🐛 バグ報告
 
-- **GitHub**: https://github.com/HEHEX8/PlayCoverManager
-- **PlayCover Community**: https://github.com/PlayCover/PlayCover
+バグを発見した場合は、以下の情報と共に Issue を作成してください：
+
+- macOS バージョン
+- Mac モデル（M1/M2/M3/M4）
+- PlayCover バージョン
+- 再現手順
+- エラーメッセージ
 
 ---
 
-## 📝 ライセンス
+## 📝 既知の制限
 
-このプロジェクトは個人利用および学習目的で作成されました。
+1. **APFS 容量表示**: macOS の仕様により、Finder で容量が実際と異なって見える場合があります
+   - ツールは正常動作しています
+   - 実際の効果は Macintosh HD の「使用済み」（上部の数値）で確認してください
+
+2. **Intel Mac 未サポート**: Apple Silicon 専用です
+
+3. **PlayCover 依存**: PlayCover がインストールされている必要があります
 
 ---
 
-**最終更新**: 2025年10月28日（v5.0.0-alpha5 Phase 8完了、v4.43.0安定版）
+## 🔐 セキュリティ
+
+- sudo 権限は必要最小限のみ使用
+- データ破損防止のための多重チェック
+- 破壊的操作には確認プロンプトを表示
+- rsync による安全なデータ転送
+
+---
+
+## 📜 ライセンス
+
+MIT License
+
+---
+
+## 🙏 謝辞
+
+このツールは、PlayCover で iOS ゲームを楽しむユーザーのために開発されました。
+全ての重大バグが修正され、本番環境での使用に適しています。
+
+---
+
+## 📮 連絡先
+
+- **GitHub**: [HEHEX8/PlayCoverManager](https://github.com/HEHEX8/PlayCoverManager)
+- **Issues**: [Bug Reports](https://github.com/HEHEX8/PlayCoverManager/issues)
+
+---
+
+**最終更新**: 2025年10月28日 | **バージョン**: 5.0.0

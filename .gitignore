@@ -1,39 +1,52 @@
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
+# Dependencies
+node_modules/
 
-# Thumbnails
-._*
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
+# Build output
+build/
+dist/
 
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# PlayCover Manager specific
+.playcover-volume-mapping.tsv
+playcover-log.txt
+test-*.sh
+debug/
+archive/
 
 # Backup files
-*.backup
 *.bak
-*.tar.gz
-*.zip
-
-# Temporary files
-*.tmp
-*.temp
-
-# User-specific mapping data (optional - uncomment if needed)
-# playcover-map.txt
+*.backup
+*.old
