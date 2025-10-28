@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.8 - Fix: Sudoers installation error handling and transparency
+# Version: 4.37.9 - Fix: Sudoers validation using allowed commands
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.8${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.9${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.5
+# Version: 1.0.6
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -4034,16 +4034,21 @@ log_message "DEBUG: 実行ユーザー: $(whoami)"
 log_message "DEBUG: HOME: ${HOME}"
 log_message "DEBUG: PATH: ${PATH}"
 
-# Check sudoers configuration
-if ! sudo -n /bin/echo "sudoers test" >/dev/null 2>&1; then
-    log_message "ERROR: sudoers設定が見つかりません"
+# Check sudoers configuration by testing an allowed command
+# Use mkdir with a test path that won't cause issues
+local test_path="${HOME}/Library/Containers/.playcover-sudo-test-$$"
+if sudo -n /bin/mkdir -p "$test_path" >/dev/null 2>&1; then
+    log_message "INFO: sudoers設定確認 OK"
+    # Clean up test directory
+    sudo /bin/rm -rf "$test_path" 2>/dev/null
+else
+    log_message "ERROR: sudoers設定が正しく動作していません"
     log_message "ERROR: sudo権限がないため自動マウントできません"
+    log_message "INFO: sudoersファイル確認: sudo cat /etc/sudoers.d/playcover-automount"
     log_message "INFO: メインメニュー → 6 → 1 から再インストールしてsudoers設定を行ってください"
     osascript -e "display notification \"sudoers設定が必要です\" with title \"PlayCover 自動マウント エラー\" sound name \"Basso\"" 2>/dev/null
     exit 1
 fi
-
-log_message "INFO: sudoers設定確認 OK"
 
 # Check if PlayCover drive is connected
 if check_playcover_drive; then
