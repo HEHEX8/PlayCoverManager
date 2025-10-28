@@ -69,8 +69,8 @@ get_container_size_bytes() {
         return
     fi
     
-    # Use du -sk for kilobytes, then convert to bytes
-    local size_kb=$(/usr/bin/du -sk "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    # Use get_directory_size for kilobytes, then convert to bytes
+    local size_kb=$(get_directory_size "$container_path")
     
     if [[ -z "$size_kb" ]]; then
         echo "0"
@@ -731,14 +731,14 @@ perform_internal_to_external_migration() {
     if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
         # Volume already mounted - need to unmount it first for fresh mount later
         print_info "外部ボリュームは既にマウントされています: $existing_mount"
-        available_bytes=$(df -k "$existing_mount" | tail -1 | /usr/bin/awk '{print $4}')
+        available_bytes=$(get_available_space "$existing_mount")
         mount_cleanup_needed=true
     else
         # Volume not mounted - mount it temporarily for capacity check
         print_info "外部ボリュームをマウント中..."
         if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
             print_success "マウント成功"
-            available_bytes=$(df -k "$temp_check_mount" | tail -1 | /usr/bin/awk '{print $4}')
+            available_bytes=$(get_available_space "$temp_check_mount")
             existing_mount="$temp_check_mount"
             mount_cleanup_needed=true
         else
@@ -950,7 +950,7 @@ perform_external_to_internal_migration() {
         check_mount_point="$temp_check_mount"
     fi
     
-    local source_size_kb=$(sudo /usr/bin/du -sk "$check_mount_point" 2>/dev/null | /usr/bin/awk '{print $1}')
+    local source_size_kb=$(sudo get_directory_size "$check_mount_point")
     local source_size_bytes=$((source_size_kb))
     
     # Unmount temporary check mount if created
@@ -992,7 +992,7 @@ perform_external_to_internal_migration() {
         internal_disk_path=$(dirname "$internal_disk_path")
     done
     
-    local available_bytes=$(df -k "$internal_disk_path" | tail -1 | /usr/bin/awk '{print $4}')
+    local available_bytes=$(get_available_space "$internal_disk_path")
     
     # Convert to human readable
     local source_size_mb=$((source_size_bytes / 1024))

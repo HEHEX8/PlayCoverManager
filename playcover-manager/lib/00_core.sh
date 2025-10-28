@@ -268,6 +268,63 @@ show_error_and_return() {
     fi
 }
 
+# Get available disk space in kilobytes
+# Args: path (mount point or directory path)
+# Returns: Available space in KB, or empty string on error
+# Usage: local available_kb=$(get_available_space "/Volumes/MyDisk")
+get_available_space() {
+    local path="$1"
+    
+    if [[ -z "$path" ]] || [[ ! -e "$path" ]]; then
+        return 1
+    fi
+    
+    local available_kb=$(df -k "$path" 2>/dev/null | tail -1 | /usr/bin/awk '{print $4}')
+    
+    if [[ -n "$available_kb" ]] && [[ "$available_kb" =~ ^[0-9]+$ ]]; then
+        echo "$available_kb"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get directory size in kilobytes
+# Args: directory_path
+# Returns: Size in KB, or empty string on error
+# Usage: local size_kb=$(get_directory_size "/path/to/dir")
+get_directory_size() {
+    local dir_path="$1"
+    
+    if [[ -z "$dir_path" ]] || [[ ! -d "$dir_path" ]]; then
+        return 1
+    fi
+    
+    local size_kb=$(/usr/bin/du -sk "$dir_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    
+    if [[ -n "$size_kb" ]] && [[ "$size_kb" =~ ^[0-9]+$ ]]; then
+        echo "$size_kb"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Create temporary directory with automatic cleanup on error
+# Returns: temp directory path
+# Usage: local temp_dir=$(create_temp_dir) || return 1
+create_temp_dir() {
+    local temp_dir=$(mktemp -d 2>/dev/null)
+    
+    if [[ -z "$temp_dir" ]] || [[ ! -d "$temp_dir" ]]; then
+        print_error "一時ディレクトリの作成に失敗しました"
+        return 1
+    fi
+    
+    echo "$temp_dir"
+    return 0
+}
+
 # Clean up temporary directory with error handling
 cleanup_temp_dir() {
     local temp_dir="$1"

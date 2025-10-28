@@ -191,7 +191,7 @@ EOF
 extract_ipa_info() {
     local ipa_file=$1
     
-    local temp_dir=$(mktemp -d)
+    local temp_dir=$(create_temp_dir) || return 1
     
     local plist_path=$(unzip -l "$ipa_file" 2>/dev/null | /usr/bin/grep -E "Payload/.*\.app/Info\.plist" | head -n 1 | /usr/bin/awk '{print $NF}')
     
