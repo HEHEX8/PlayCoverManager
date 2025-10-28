@@ -260,9 +260,11 @@ extract_ipa_info() {
     APP_NAME_EN="$app_name_en"
     APP_VOLUME_NAME=$(echo "$APP_NAME_EN" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | /usr/bin/sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME_EN" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
     
-    # Fallback: If volume name is empty (e.g., Japanese-only app name), use Bundle ID
+    # Fallback: If volume name is empty (e.g., Japanese-only app name), use last segment of Bundle ID
     if [[ -z "$APP_VOLUME_NAME" ]]; then
-        APP_VOLUME_NAME=$(echo "$APP_BUNDLE_ID" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
+        # Extract last segment after last dot (e.g., jp.co.cygames.umamusume -> umamusume)
+        local bundle_last_segment=$(echo "$APP_BUNDLE_ID" | /usr/bin/awk -F. '{print $NF}')
+        APP_VOLUME_NAME=$(echo "$bundle_last_segment" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
     fi
     
     /bin/rm -rf "$temp_dir"
@@ -354,6 +356,18 @@ mount_app_volume_install() {
     if [[ -z "$device" ]]; then
         print_error "デバイスの取得に失敗しました"
         return 1
+    fi
+    
+    # Check if already mounted at the correct location
+    local current_mount=$(get_volume_mount_point "$device")
+    if [[ "$current_mount" == "$target_path" ]]; then
+        # Already mounted correctly, no action needed
+        return 0
+    fi
+    
+    # If mounted elsewhere, unmount first
+    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
+        unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force"
     fi
     
     # Mount with nobrowse option
@@ -980,24 +994,9 @@ uninstall_workflow() {
     fi
     
     echo ""
-    print_success "✓ ${selected_app}"
+    print_success "${selected_app} のアンインストールが完了しました"
     echo ""
-    
-    # Check if there are more apps
-    local remaining_content=$(read_mappings)
-    if [[ -z "$remaining_content" ]]; then
-        print_success "すべてのアプリがアンインストールされました"
-        echo ""
-        echo -n "Enterキーでメニューに戻る..."
-        read
-        return
-    else
-        local remaining_count=$(echo "$remaining_content" | wc -l | tr -d ' ')
-        echo ""
-        echo "${CYAN}残り ${remaining_count} 個のアプリがインストールされています${NC}"
-        wait_for_enter
-        # Loop continues to show uninstall menu again
-    fi
+    wait_for_enter
     done
 }
 

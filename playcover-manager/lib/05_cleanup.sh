@@ -227,7 +227,7 @@ nuclear_cleanup() {
             echo "  アンマウント中: ${display} (${device})"
             if unmount_volume "$device" "silent" "force"; then
                 ((unmount_count++))
-                print_success "  ✅ 完了"
+                print_success "  完了"
             else
                 print_warning "  失敗（既にアンマウント済み）"
             fi
@@ -257,7 +257,7 @@ nuclear_cleanup() {
             echo "  削除中: ${display} (${device})"
             
             if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
-                print_success "  ✅ 削除完了"
+                print_success "  削除完了"
                 ((volume_count++))
             else
                 print_warning "  削除失敗（マウント済みまたは保護されています）"
@@ -282,7 +282,7 @@ nuclear_cleanup() {
         if [[ "$playcover_homebrew" == true ]]; then
             echo "  アンインストール中: PlayCover (Homebrew Cask)"
             if "$BREW_PATH" uninstall --cask playcover-community >/dev/null 2>&1; then
-                print_success "  ✅ Homebrewからアンインストール完了"
+                print_success "  Homebrewからアンインストール完了"
             else
                 print_warning "  Homebrewアンインストール失敗"
             fi
@@ -293,7 +293,7 @@ nuclear_cleanup() {
         # Clean up manual installation remnants
         if [[ -d "/Applications/PlayCover.app" ]]; then
             if /usr/bin/sudo /bin/rm -rf "/Applications/PlayCover.app" 2>/dev/null; then
-                print_success "  ✅ 削除完了"
+                print_success "  削除完了"
             else
                 print_warning "  削除失敗"
             fi
@@ -320,7 +320,7 @@ nuclear_cleanup() {
             
             echo "  削除中: ${display}"
             if /usr/bin/sudo /bin/rm -rf "$container_path" 2>/dev/null; then
-                print_success "  ✅ 削除完了"
+                print_success "  削除完了"
                 ((container_count++))
             else
                 print_warning "  削除失敗"
