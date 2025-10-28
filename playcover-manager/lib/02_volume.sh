@@ -565,18 +565,6 @@ batch_mount_all() {
             continue
         fi
         
-        # Debug: Show mount paths if mismatch detected (always show for investigation)
-        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
-            echo ""
-            echo "  ${YELLOW}[デバッグ] ${display_name}:${NC}"
-            echo "    ${GRAY}ボリューム名: ${volume_name}${NC}"
-            echo "    ${GRAY}Bundle ID: ${bundle_id}${NC}"
-            echo "    ${GRAY}実際のマウント位置: '${actual_mount}'${NC}"
-            echo "    ${GRAY}期待されるマウント位置: '${target_path}'${NC}"
-            echo "    ${GRAY}パス比較結果: $([ "$actual_mount" == "$target_path" ] && echo "一致" || echo "不一致")${NC}"
-            echo ""
-        fi
-        
         # Skip if app is running
         if is_app_running "$bundle_id"; then
             echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
@@ -588,6 +576,10 @@ batch_mount_all() {
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
         if [[ "$storage_mode" == "internal_intentional" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
             echo "  🏠 ${display_name}: 内蔵ストレージモード（スキップ）"
+            ((skipped_count++))
+            continue
+        elif [[ "$storage_mode" == "internal_contaminated" ]]; then
+            echo "  ⚠️  ${display_name}: 内蔵データ検出（個別操作で処理してください）"
             ((skipped_count++))
             continue
         fi
