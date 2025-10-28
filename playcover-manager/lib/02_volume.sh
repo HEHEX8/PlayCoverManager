@@ -75,6 +75,121 @@ check_volume_exists_or_error() {
 }
 
 #######################################################
+# Core Volume Mount/Unmount Functions
+#######################################################
+
+# Unmount volume with optional force
+# Args: target (device or mount point), mode (silent|verbose), force (optional)
+# Returns: 0 on success, 1 on failure
+unmount_volume() {
+    local target="$1"
+    local mode="${2:-silent}"   # silent, verbose
+    local force="${3:-}"         # force (optional)
+    
+    local force_option=""
+    if [[ "$force" == "force" ]]; then
+        force_option="force"
+    fi
+    
+    if [[ "$mode" == "verbose" ]]; then
+        if [[ -n "$force_option" ]]; then
+            print_info "強制アンマウント中..."
+        else
+            print_info "アンマウント中..."
+        fi
+    fi
+    
+    if /usr/bin/sudo /usr/sbin/diskutil unmount $force_option "$target" >/dev/null 2>&1; then
+        if [[ "$mode" == "verbose" ]]; then
+            print_success "アンマウント成功"
+        fi
+        return 0
+    else
+        if [[ "$mode" == "verbose" ]]; then
+            if [[ -z "$force_option" ]]; then
+                print_error "アンマウント失敗"
+            else
+                print_error "強制アンマウント失敗"
+            fi
+        fi
+        return 1
+    fi
+}
+
+# Unmount with automatic force fallback (try normal, then force if failed)
+# Args: target (device or mount point), mode (silent|verbose)
+# Returns: 0 on success, 1 on failure
+unmount_with_fallback() {
+    local target="$1"
+    local mode="${2:-silent}"   # silent, verbose
+    
+    # Try normal unmount first
+    if unmount_volume "$target" "$mode"; then
+        return 0
+    fi
+    
+    # If normal unmount failed, try force unmount
+    if [[ "$mode" == "verbose" ]]; then
+        print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+    fi
+    
+    if unmount_volume "$target" "$mode" "force"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Mount volume with unified error handling
+# Args: device|volume_name, mount_point, [nobrowse], [silent|verbose]
+# Returns: 0 on success, 1 on failure
+mount_volume() {
+    local device="$1"
+    local mount_point="$2"
+    local nobrowse="${3:-}"     # nobrowse (optional)
+    local mode="${4:-silent}"   # silent, verbose
+    
+    if [[ "$mode" == "verbose" ]]; then
+        print_info "マウント中..."
+    fi
+    
+    # Create mount point if not exists
+    if [[ ! -d "$mount_point" ]]; then
+        /usr/bin/sudo /bin/mkdir -p "$mount_point" 2>/dev/null
+    fi
+    
+    # Mount with or without nobrowse option
+    if [[ "$nobrowse" == "nobrowse" ]]; then
+        # Use /sbin/mount directly with nobrowse option to prevent desktop icon
+        if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$mount_point" >/dev/null 2>&1; then
+            # Mount successful
+            :
+        else
+            if [[ "$mode" == "verbose" ]]; then
+                print_error "マウント失敗"
+            fi
+            return 1
+        fi
+    else
+        if ! /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$mount_point" "$device" >/dev/null 2>&1; then
+            if [[ "$mode" == "verbose" ]]; then
+                print_error "マウント失敗"
+            fi
+            return 1
+        fi
+    fi
+    
+    if [[ "$mode" == "verbose" ]]; then
+        print_success "マウント成功"
+    fi
+    
+    # Set ownership to current user
+    /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$mount_point" 2>/dev/null || true
+    
+    return 0
+}
+
+#######################################################
 # High-Level Volume Operations
 #######################################################
 
