@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.0 - New feature: Auto-mount for removable drives with disk monitoring
+# Version: 4.37.1 - Fix: Enhanced mapping file detection with alternative paths
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.1${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.0
+# Version: 1.0.1
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -3923,10 +3923,32 @@ check_playcover_drive() {
 # Mount all registered volumes using batch_mount logic
 mount_all_volumes() {
     log_message "INFO: マウント処理開始"
+    log_message "INFO: マッピングファイルパス: ${MAPPING_FILE}"
     
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        log_message "ERROR: マッピングファイルが見つかりません"
-        return 1
+        log_message "ERROR: マッピングファイルが見つかりません: ${MAPPING_FILE}"
+        log_message "INFO: ホームディレクトリ: ${HOME}"
+        log_message "INFO: カレントディレクトリ: $(pwd)"
+        
+        # Try to find mapping file in common locations
+        local alt_locations=(
+            "${HOME}/.playcover-volume-mapping.tsv"
+            "${HOME}/Library/Application Support/PlayCover/.playcover-volume-mapping.tsv"
+            "/Volumes/PlayCover/.playcover-volume-mapping.tsv"
+        )
+        
+        for location in "${alt_locations[@]}"; do
+            if [[ -f "$location" ]]; then
+                log_message "INFO: 代替パスでマッピングファイル発見: ${location}"
+                MAPPING_FILE="$location"
+                break
+            fi
+        done
+        
+        if [[ ! -f "$MAPPING_FILE" ]]; then
+            log_message "ERROR: どの場所にもマッピングファイルが見つかりません"
+            return 1
+        fi
     fi
     
     local success_count=0
