@@ -1253,19 +1253,6 @@ perform_external_to_internal_migration() {
     print_success "内蔵ストレージへの切り替えが完了しました"
     print_info "保存場所: ${target_path}"
     
-    echo ""
-    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "${YELLOW}📊 容量表示について${NC}"
-    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "${GREEN}✅ 内蔵ストレージに戻しました${NC}"
-    echo "${ORANGE}⚠️  Finderの「ストレージ」で容量が変化して見える場合がありますが、${NC}"
-    echo "${WHITE}   これはAPFSの仕様による表示です${NC}"
-    echo ""
-    echo "${GRAY}実際の使用量は Macintosh HDの「使用済み」(上部)で確認してください${NC}"
-    echo ""
-    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    
     # Create internal storage flag to mark this as intentional (only if unmount succeeded)
     if create_internal_storage_flag "$target_path"; then
         print_info "内蔵ストレージモードフラグを作成しました"
