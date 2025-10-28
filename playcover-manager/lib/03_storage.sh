@@ -929,6 +929,13 @@ perform_external_to_internal_migration() {
         return 1
     fi
     
+    # Check if app is running before migration
+    if is_app_running "$bundle_id"; then
+        print_error "アプリが実行中です"
+        print_info "アプリを終了してから再度お試しください"
+        return 1
+    fi
+    
     # Check disk space before migration
     print_info "転送前の容量チェック中..."
     
@@ -943,6 +950,11 @@ perform_external_to_internal_migration() {
         temp_check_mount="/tmp/playcover_check_$$"
         /usr/bin/sudo /bin/mkdir -p "$temp_check_mount"
         local volume_device=$(get_volume_device "$volume_name")
+        
+        # Ensure device has /dev/ prefix
+        if [[ ! "$volume_device" =~ ^/dev/ ]]; then
+            volume_device="/dev/$volume_device"
+        fi
         
         if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
             print_error "外部ボリュームの容量チェックに失敗しました"
@@ -1040,6 +1052,12 @@ perform_external_to_internal_migration() {
         local temp_mount="/tmp/playcover_temp_$$"
         /usr/bin/sudo /bin/mkdir -p "$temp_mount"
         local volume_device=$(get_volume_device "$volume_name")
+        
+        # Ensure device has /dev/ prefix
+        if [[ ! "$volume_device" =~ ^/dev/ ]]; then
+            volume_device="/dev/$volume_device"
+        fi
+        
         if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
             print_error "$MSG_MOUNT_FAILED"
             /usr/bin/sudo /bin/rm -rf "$temp_mount"
@@ -1073,6 +1091,12 @@ perform_external_to_internal_migration() {
         
         local temp_mount="/tmp/playcover_temp_$$"
         /usr/bin/sudo /bin/mkdir -p "$temp_mount"
+        
+        # Ensure device has /dev/ prefix
+        if [[ ! "$volume_device" =~ ^/dev/ ]]; then
+            volume_device="/dev/$volume_device"
+        fi
+        
         if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
             print_error "一時マウントに失敗しました"
             /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$target_path" 2>/dev/null || true
