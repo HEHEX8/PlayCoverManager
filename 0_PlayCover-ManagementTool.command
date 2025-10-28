@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.35.3 - Fixed: batch mount failure (missing directory creation)
+# Version: 4.35.4 - Fixed: all mount failures in batch_mount_all (complete fix)
 #######################################################
 
 #######################################################
@@ -2239,8 +2239,9 @@ batch_mount_all() {
                     echo "     ${RED}❌ マウント失敗: ボリュームが見つかりません${NC}"
                     ((fail_count++))
                 else
+                    # Use mount_volume function which creates directory if needed
                     local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache")
-                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+                    if mount_volume "$pc_device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${PLAYCOVER_CONTAINER}${NC}"
                         ((success_count++))
                     else
@@ -2365,8 +2366,9 @@ batch_mount_all() {
                         continue
                     fi
                     
+                    # Use mount_volume function which creates directory if needed
                     local device=$(get_volume_device "$volume_name" "$diskutil_cache")
-                    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+                    if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
                         echo "     ${GREEN}✅ マウント成功: ${target_path}${NC}"
                         ((success_count++))
                     else

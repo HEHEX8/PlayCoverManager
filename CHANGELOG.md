@@ -1,5 +1,83 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.35.4: Complete Fix - All Batch Mount Failures
+
+### Critical Bug: Missed Two More `/sbin/mount` Direct Calls
+
+**Problem:**
+- v4.35.3 only fixed 2 out of 4 `/sbin/mount` direct calls
+- Normal mount path (non-contaminated) still failed
+- PlayCover volume mount also failed
+
+**User Report After v4.35.3:**
+```
+  1. PlayCover
+     ✅ 既にマウント済
+
+  2. ゼンレスゾーンゼロ
+     ❌ マウント失敗: マウントコマンドが失敗
+
+  3. 原神
+     ❌ マウント失敗: マウントコマンドが失敗
+```
+
+Still 100% failure for app volumes (no "internal data detected" prompt shown).
+
+**Root Cause - Additional Locations:**
+1. **Line 2243**: PlayCover volume mount (direct `/sbin/mount`)
+2. **Line 2369**: Normal app volume mount (direct `/sbin/mount`)
+
+**Complete Fix:**
+
+**Location 1 - PlayCover Volume (Lines 2241-2250):**
+```zsh
+# BEFORE:
+local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache")
+if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$pc_device" "$PLAYCOVER_CONTAINER" >/dev/null 2>&1; then
+
+# AFTER:
+# Use mount_volume function which creates directory if needed
+local pc_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" "$diskutil_cache")
+if mount_volume "$pc_device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
+```
+
+**Location 2 - Normal App Volume (Lines 2368-2375):**
+```zsh
+# BEFORE:
+local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$target_path" >/dev/null 2>&1; then
+
+# AFTER:
+# Use mount_volume function which creates directory if needed
+local device=$(get_volume_device "$volume_name" "$diskutil_cache")
+if mount_volume "$device" "$target_path" "nobrowse" "silent"; then
+```
+
+**All 4 Locations Now Fixed:**
+1. ✅ Line 2243: PlayCover volume mount (v4.35.4)
+2. ✅ Line 2309: Contaminated option 1 mount (v4.35.3)
+3. ✅ Line 2337: Contaminated option 2 mount (v4.35.3)
+4. ✅ Line 2369: Normal app volume mount (v4.35.4)
+
+**Impact:**
+- ✅ All mount operations now create directories automatically
+- ✅ Batch mount should work 100% correctly
+- ✅ Both contaminated and clean volumes mount properly
+
+**Git Commit:**
+```bash
+commit [hash]
+"v4.35.4 - batch_mount_allの全マウント失敗を完全修正"
+
+v4.35.3で2箇所修正したが、さらに2箇所残っていた:
+- Line 2243: PlayCoverボリュームのマウント
+- Line 2369: 通常のアプリボリュームマウント
+
+全4箇所で mount_volume 関数を使用するように統一
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.3: Hotfix - Batch Mount Failure
 
 ### Critical Bug Fix: Mount Failure in Batch Mount
