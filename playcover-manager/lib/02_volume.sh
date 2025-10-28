@@ -633,6 +633,22 @@ batch_mount_all() {
     fi
     echo ""
     
+    # Only show storage explanation if at least one volume was mounted
+    if [[ $mounted_count -gt 0 ]]; then
+        echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo "${YELLOW}📊 容量表示について${NC}"
+        echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo "${ORANGE}⚠️  Finderの「ストレージ」で容量が増えて見える場合がありますが、${NC}"
+        echo "${GREEN}✅ 外部ボリューム使用により内蔵ストレージは節約されています${NC}"
+        echo ""
+        echo "${GRAY}詳細: APFSの仕様により論理サイズが重複カウントされます${NC}"
+        echo "${WHITE}実際の効果は Macintosh HDの「使用済み」(上部の数値)で確認してください${NC}"
+        echo ""
+        echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+    fi
+    
     wait_for_enter
 }
 
