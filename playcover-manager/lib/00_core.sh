@@ -367,23 +367,23 @@ bytes_to_human() {
     # Use decimal (1000-based) units like macOS Finder
     # This is a statement against Windows using binary units (1024) but calling them GB!
     if [[ $bytes -ge 1000000000000 ]]; then
-        # TB
+        # TB - Show one decimal place (e.g., 3.6TB)
         local tb=$((bytes / 1000000000000))
         local remainder=$((bytes % 1000000000000))
-        local decimal=$((remainder / 100000000))  # First digit after decimal
+        local decimal=$((remainder / 100000000000))  # First digit after decimal point
         echo "${tb}.${decimal}TB"
     elif [[ $bytes -ge 1000000000 ]]; then
-        # GB
+        # GB - Show one decimal place (e.g., 34.1GB)
         local gb=$((bytes / 1000000000))
         local remainder=$((bytes % 1000000000))
-        local decimal=$((remainder / 100000000))  # First digit after decimal
+        local decimal=$((remainder / 100000000))  # First digit after decimal point
         echo "${gb}.${decimal}GB"
     elif [[ $bytes -ge 1000000 ]]; then
-        # MB
+        # MB - No decimal places needed (e.g., 250MB)
         local mb=$((bytes / 1000000))
         echo "${mb}MB"
     elif [[ $bytes -ge 1000 ]]; then
-        # KB
+        # KB - No decimal places needed (e.g., 512KB)
         local kb=$((bytes / 1000))
         echo "${kb}KB"
     else
