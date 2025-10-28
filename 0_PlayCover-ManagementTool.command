@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.3 - Fix: Disk monitor volume detection and debug logging
+# Version: 4.37.4 - Feature: Sudoers configuration for passwordless auto-mount
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.3${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.4${NC}"
     echo ""
     
     show_quick_status
@@ -4049,6 +4049,63 @@ EOF
 
     print_success "LaunchAgent plistを作成しました"
     
+    # Setup sudoers for passwordless mount operations
+    print_info "sudo権限設定を構成中..."
+    echo ""
+    print_warning "${YELLOW}パスワード不要のマウント操作のためにsudoers設定が必要です${NC}"
+    echo ""
+    echo "以下のコマンドを実行してsudoers設定を追加します："
+    echo ""
+    echo "${CYAN}sudo visudo -f /etc/sudoers.d/playcover-automount${NC}"
+    echo ""
+    echo "以下の内容を追加してください："
+    echo ""
+    echo "${GREEN}# PlayCover Auto-Mount - Allow passwordless mount operations"
+    echo "${USER} ALL=(ALL) NOPASSWD: /bin/rm -rf ${HOME}/Library/Containers/*"
+    echo "${USER} ALL=(ALL) NOPASSWD: /bin/mkdir -p ${HOME}/Library/Containers/*"
+    echo "${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Library/Containers/*${NC}"
+    echo ""
+    print_info "${CYAN}重要:${NC} visudoエディタの使い方"
+    echo "  1. 上記3行をコピー"
+    echo "  2. visudoエディタが開いたら、'i'キーで挿入モード"
+    echo "  3. 3行をペースト"
+    echo "  4. ESCキーを押して、':wq'と入力してEnter（保存して終了）"
+    echo ""
+    
+    if prompt_confirmation "sudoers設定を今すぐ行いますか？" "Y"; then
+        echo ""
+        print_info "sudoersエディタを起動します..."
+        echo ""
+        
+        # Create sudoers file content
+        local sudoers_content="# PlayCover Auto-Mount - Allow passwordless mount operations
+${USER} ALL=(ALL) NOPASSWD: /bin/rm -rf ${HOME}/Library/Containers/*
+${USER} ALL=(ALL) NOPASSWD: /bin/mkdir -p ${HOME}/Library/Containers/*
+${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Library/Containers/*"
+        
+        # Create temporary file
+        local temp_sudoers="/tmp/playcover-automount-sudoers.$$"
+        echo "$sudoers_content" > "$temp_sudoers"
+        
+        print_info "一時ファイル作成: ${temp_sudoers}"
+        echo ""
+        print_info "${BOLD}${YELLOW}次のコマンドを実行してください:${NC}"
+        echo ""
+        echo "${CYAN}sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount${NC}"
+        echo ""
+        echo "${CYAN}sudo visudo -c -f /etc/sudoers.d/playcover-automount${NC}"
+        echo ""
+        print_info "1つ目のコマンド: sudoers設定ファイルをインストール"
+        print_info "2つ目のコマンド: 設定ファイルの文法チェック"
+        echo ""
+        wait_for_enter
+    else
+        print_warning "sudoers設定をスキップしました"
+        echo ""
+        print_info "${ORANGE}注意:${NC} sudoers設定なしではパスワードプロンプトが表示されます"
+        echo ""
+    fi
+    
     # Load LaunchAgent
     print_info "LaunchAgentを読み込み中..."
     if launchctl load "$launch_agent_path" 2>/dev/null; then
@@ -4074,6 +4131,10 @@ EOF
     echo "  1. ドライブを一度取り外し"
     echo "  2. 再接続すると自動的にマウント処理が実行されます"
     echo "  3. 通知が表示され、ログに記録されます"
+    echo ""
+    print_info "${CYAN}sudoers設定について:${NC}"
+    echo "  設定済みの場合: パスワード不要で自動マウント"
+    echo "  未設定の場合: 動作はするがログに警告が記録されます"
     echo ""
     wait_for_enter
 }
@@ -4110,6 +4171,25 @@ uninstall_disk_monitor() {
     [[ -f "$launch_agent_path" ]] && /bin/rm "$launch_agent_path"
     [[ -f "$monitor_script_path" ]] && /bin/rm "$monitor_script_path"
     print_success "ファイルを削除しました"
+    
+    # Ask about sudoers cleanup
+    echo ""
+    if [[ -f "/etc/sudoers.d/playcover-automount" ]]; then
+        print_warning "sudoers設定ファイルが見つかりました"
+        echo ""
+        
+        if prompt_confirmation "sudoers設定も削除しますか？" "Y"; then
+            print_info "sudoers設定を削除中..."
+            echo ""
+            print_info "${BOLD}${YELLOW}次のコマンドを実行してください:${NC}"
+            echo ""
+            echo "${CYAN}sudo rm /etc/sudoers.d/playcover-automount${NC}"
+            echo ""
+            wait_for_enter
+        else
+            print_info "sudoers設定は残されます"
+        fi
+    fi
     
     echo ""
     print_separator
