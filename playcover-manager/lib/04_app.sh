@@ -363,21 +363,304 @@ mount_app_volume() {
 # - Installation progress monitoring (settings file update count)
 # - Crash detection and recovery
 # - Batch mode support
-#
-# TODO: Complete implementation (lines 1358-1662 from original)
 install_ipa_to_playcover() {
     local ipa_file=$1
     
-    print_info "IPA インストール機能は実装中です"
-    print_info "ファイル: $(basename "$ipa_file")"
+    # Check if app is already installed
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    local existing_app_path=""
+    local existing_version=""
+    local overwrite_choice=""
+    local existing_mtime=0
+    
+    if [[ -d "$playcover_apps" ]]; then
+        # Search for app with matching Bundle ID
+        while IFS= read -r app_path; do
+            if [[ -f "${app_path}/Info.plist" ]]; then
+                local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                
+                if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                    existing_app_path="$app_path"
+                    existing_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                    # Record CURRENT modification time BEFORE installation
+                    existing_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
+                    break
+                fi
+            fi
+        done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+        
+        # Check if existing app was found and ask for confirmation OUTSIDE the loop
+        if [[ -n "$existing_app_path" ]]; then
+            print_warning "${APP_NAME} (${existing_version}) は既にインストール済みです"
+            echo -n "上書きしますか？ (Y/n): "
+            read overwrite_choice </dev/tty
+            
+            # Default to Yes if empty
+            overwrite_choice=${overwrite_choice:-Y}
+            
+            if [[ ! "$overwrite_choice" =~ ^[Yy]$ ]]; then
+                print_info "スキップしました"
+                INSTALL_SUCCESS+=("$APP_NAME (スキップ)")
+                
+                # Still update mapping even if skipped
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                
+                echo ""
+                return 0
+            fi
+        fi
+    fi
+    
+    echo ""
+    print_info "PlayCover でインストール中（完了まで待機）..."
     echo ""
     
-    # TODO: Complete implementation with:
-    # - Existing app check and overwrite prompt
-    # - PlayCover launch and monitoring
-    # - Installation progress tracking
-    # - Crash detection and recovery
-    # - Mapping update after success
+    # Open IPA with PlayCover
+    if ! open -a PlayCover "$ipa_file"; then
+        print_error "PlayCover の起動に失敗しました"
+        INSTALL_FAILED+=("$APP_NAME")
+        return 1
+    fi
     
-    return 1  # Placeholder
+    local max_wait=300  # 5 minutes
+    local elapsed=0
+    local check_interval=3
+    local initial_check_done=false
+    
+    # PlayCover app settings path
+    local app_settings_dir="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/App Settings"
+    local app_settings_plist="${app_settings_dir}/${APP_BUNDLE_ID}.plist"
+    
+    # Track settings file updates (v5.0.0: Update count based detection)
+    local settings_update_count=0
+    local last_settings_mtime=0
+    local initial_settings_exists=false
+    
+    # Check if settings file exists before installation starts
+    if [[ -f "$app_settings_plist" ]]; then
+        initial_settings_exists=true
+        last_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
+    fi
+    
+    # Detection Method (v5.0.1 - Settings File Update Count - Unified):
+    # Ultra-simple approach based on real-world observation:
+    # 
+    # BOTH NEW and OVERWRITE INSTALL:
+    #   - Wait for settings file 2nd update → Complete immediately
+    # 
+    # Reasoning:
+    #   - NEW: 1st update happens too early (still processing)
+    #   - OVERWRITE: 1st update is initial, 2nd is completion
+    #   - Unified approach: Always wait for 2nd update
+    # 
+    # No stability checks, no complex conditions.
+    # Just count settings file updates and complete on 2nd update.
+    
+    while [[ $elapsed -lt $max_wait ]]; do
+        # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
+        if ! pgrep -x "PlayCover" > /dev/null; then
+            echo ""
+            echo ""
+            print_error "PlayCover が終了しました"
+            print_warning "インストール中にクラッシュした可能性があります"
+            echo ""
+            
+            # Check if installation actually succeeded despite crash (using robust verification)
+            local installation_succeeded=false
+            if [[ -d "$playcover_apps" ]]; then
+                while IFS= read -r app_path; do
+                    if [[ -f "${app_path}/Info.plist" ]]; then
+                        local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                        if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                            local current_mtime=$(stat -f %m "$app_path" 2>/dev/null || echo 0)
+                            if [[ $current_mtime -gt $existing_mtime ]]; then
+                                # Verify structure integrity
+                                if [[ -d "${app_path}/_CodeSignature" ]]; then
+                                    local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
+                                    if [[ -n "$app_name" ]]; then
+                                        # v4.9.0: Simple check - settings file exists and is stable
+                                        if [[ -f "$app_settings_plist" ]]; then
+                                            installation_succeeded=true
+                                            break
+                                        fi
+                                    fi
+                                fi
+                            fi
+                        fi
+                    fi
+                done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+            fi
+            
+            if [[ "$installation_succeeded" == true ]]; then
+                print_info "ただし、アプリのインストールは完了していました"
+                print_success "インストール成功"
+                INSTALL_SUCCESS+=("$APP_NAME")
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                echo ""
+                
+                # Restart PlayCover for next installation if in batch mode
+                if [[ $BATCH_MODE == true ]] && [[ $CURRENT_IPA_INDEX -lt $TOTAL_IPAS ]]; then
+                    print_info "次のインストールのため PlayCover を準備中..."
+                    /bin/sleep 2
+                fi
+                
+                return 0
+            else
+                print_error "インストールは完了していませんでした"
+                INSTALL_FAILED+=("$APP_NAME (PlayCoverクラッシュ)")
+                echo ""
+                
+                # In batch mode, offer to continue automatically
+                if [[ $BATCH_MODE == true ]] && [[ $CURRENT_IPA_INDEX -lt $TOTAL_IPAS ]]; then
+                    print_warning "残り $((TOTAL_IPAS - CURRENT_IPA_INDEX)) 個のIPAがあります"
+                    echo ""
+                    echo -n "次のIPAに進みますか？ (Y/n): "
+                    read continue_choice </dev/tty
+                    
+                    if [[ "$continue_choice" =~ ^[Nn]$ ]]; then
+                        return 1
+                    else
+                        print_info "次のインストールのため PlayCover を準備中..."
+                        /bin/sleep 2
+                        return 0
+                    fi
+                else
+                    return 1
+                fi
+            fi
+        fi
+        
+        # Check if app was installed
+        if [[ -d "$playcover_apps" ]]; then
+            local found=false
+            local current_app_mtime=0
+            
+            while IFS= read -r app_path; do
+                if [[ -f "${app_path}/Info.plist" ]]; then
+                    local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                    
+                    if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                        # Phase 1: Basic structure validation
+                        local structure_valid=false
+                        
+                        # Check Info.plist validity
+                        if [[ -f "${app_path}/Info.plist" ]]; then
+                            local app_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "${app_path}/Info.plist" 2>/dev/null)
+                            local app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null)
+                            
+                            # Check _CodeSignature directory
+                            if [[ -d "${app_path}/_CodeSignature" ]] && [[ -n "$app_name" ]] && [[ -n "$app_version" ]]; then
+                                structure_valid=true
+                            fi
+                        fi
+                        
+                        if [[ "$structure_valid" == false ]]; then
+                            continue
+                        fi
+                        
+                        # Phase 2: Settings file update count check (v5.0.0)
+                        if [[ -f "$app_settings_plist" ]]; then
+                            local current_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
+                            
+                            if [[ $current_settings_mtime -gt 0 ]]; then
+                                # Check if settings file was updated
+                                if [[ $current_settings_mtime -ne $last_settings_mtime ]]; then
+                                    # Settings file was updated!
+                                    ((settings_update_count++))
+                                    last_settings_mtime=$current_settings_mtime
+                                fi
+                                
+                                # v5.0.1: Unified completion logic - Always wait for 2nd update
+                                if [[ "$structure_valid" == true ]]; then
+                                    # Both NEW and OVERWRITE: Wait for 2nd update = Complete
+                                    if [[ $settings_update_count -ge 2 ]]; then
+                                        found=true
+                                        break
+                                    fi
+                                fi
+                            fi
+                        fi
+                    fi
+                fi
+            done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+            
+            if [[ "$found" == true ]]; then
+                # v4.8.1: Final verification - ensure PlayCover is still running
+                if ! pgrep -x "PlayCover" > /dev/null; then
+                    echo ""
+                    echo ""
+                    print_warning "完了判定直後に PlayCover が終了しました"
+                    print_info "最終確認を実施中..."
+                    /bin/sleep 2
+                    
+                    # Re-verify the installation is truly complete
+                    if [[ -f "${app_path}/Info.plist" ]] && [[ -f "$app_settings_plist" ]]; then
+                        echo ""
+                        print_success "インストールは正常に完了していました"
+                    else
+                        echo ""
+                        print_error "インストールが不完全です"
+                        INSTALL_FAILED+=("$APP_NAME (完了直後にPlayCoverクラッシュ)")
+                        return 1
+                    fi
+                fi
+                
+                echo ""
+                print_success "インストールが完了しました"
+                INSTALL_SUCCESS+=("$APP_NAME")
+                
+                update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                
+                echo ""
+                return 0
+            fi
+        fi
+        
+        initial_check_done=true
+        
+        /bin/sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+        
+        # Show progress indicator with detailed status (v5.0.1 - Unified)
+        if [[ $settings_update_count -ge 2 ]]; then
+            echo -n "✅"  # Complete (shouldn't reach here)
+        elif [[ $settings_update_count -eq 1 ]]; then
+            echo -n "◇"  # 1st update (waiting for 2nd)
+        elif [[ $last_settings_mtime -gt 0 ]]; then
+            echo -n "◆"  # Settings file exists but not updated yet
+        else
+            echo -n "."  # Waiting for 1st update
+        fi
+    done
+    
+    echo ""
+    echo ""
+    print_warning "インストール完了の自動検知がタイムアウトしました"
+    echo ""
+    echo -n "PlayCover でインストールが完了したら Enter キーを押してください: "
+    read </dev/tty
+    
+    # Final verification
+    if [[ -d "$playcover_apps" ]]; then
+        while IFS= read -r app_path; do
+            if [[ -f "${app_path}/Info.plist" ]]; then
+                local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
+                
+                if [[ "$bundle_id" == "$APP_BUNDLE_ID" ]]; then
+                    print_success "インストールが確認されました"
+                    INSTALL_SUCCESS+=("$APP_NAME")
+                    
+                    update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                    
+                    echo ""
+                    return 0
+                fi
+            fi
+        done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    fi
+    
+    print_error "インストールが確認できませんでした"
+    INSTALL_FAILED+=("$APP_NAME")
+    echo ""
+    return 1
 }
