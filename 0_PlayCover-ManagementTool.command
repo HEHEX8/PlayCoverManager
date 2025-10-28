@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.9 - Fix: Sudoers validation using allowed commands
+# Version: 4.38.0 - Feature: Full Disk Access request during installation
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.9${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.38.0${NC}"
     echo ""
     
     show_quick_status
@@ -4200,6 +4200,58 @@ ${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Libra
         echo ""
     fi
     
+    # Request Full Disk Access
+    echo ""
+    print_info "フルディスクアクセス権限の設定..."
+    echo ""
+    print_warning "${YELLOW}⚠️  重要: フルディスクアクセス権限が必要です${NC}"
+    echo ""
+    echo "自動マウント機能が ${BOLD}~/Library/Containers/${NC} にアクセスするため、"
+    echo "macOSのフルディスクアクセス権限が必要です。"
+    echo ""
+    print_info "${CYAN}設定手順:${NC}"
+    echo "  ${BOLD}1.${NC} 「システム設定」を開く"
+    echo "  ${BOLD}2.${NC} 「プライバシーとセキュリティ」→「フルディスクアクセス」"
+    echo "  ${BOLD}3.${NC} 鍵マークをクリックして管理者認証"
+    echo "  ${BOLD}4.${NC} 「+」ボタンをクリック"
+    echo "  ${BOLD}5.${NC} ${CYAN}/bin/zsh${NC} を追加してチェックを入れる"
+    echo ""
+    print_info "${YELLOW}注意:${NC} /bin/zsh が見えない場合は Cmd+Shift+G で直接パス入力"
+    echo ""
+    
+    if prompt_confirmation "システム設定を開いてフルディスクアクセスを設定しますか？" "Y"; then
+        echo ""
+        print_info "システム設定を開いています..."
+        
+        # Open System Settings to Privacy & Security > Full Disk Access
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+        
+        echo ""
+        print_success "システム設定が開きました"
+        echo ""
+        print_info "${BOLD}${CYAN}次の操作を行ってください:${NC}"
+        echo "  1. 左側のリストで「フルディスクアクセス」を選択"
+        echo "  2. 鍵マークをクリックして管理者パスワードを入力"
+        echo "  3. 「+」ボタンをクリック"
+        echo "  4. Cmd+Shift+G を押して ${CYAN}/bin/zsh${NC} と入力"
+        echo "  5. 「開く」をクリック"
+        echo "  6. /bin/zsh の横のチェックボックスをONにする"
+        echo ""
+        print_warning "設定後、一度ログアウト→ログインすると確実に反映されます"
+        echo ""
+        wait_for_enter
+    else
+        echo ""
+        print_warning "フルディスクアクセス設定をスキップしました"
+        echo ""
+        print_info "${RED}警告:${NC} 設定なしでは自動マウントが動作しません"
+        echo ""
+        print_info "${CYAN}後で設定する場合:${NC}"
+        echo "  システム設定 → プライバシーとセキュリティ → フルディスクアクセス"
+        echo "  → ${CYAN}/bin/zsh${NC} を追加"
+        echo ""
+    fi
+    
     # Load LaunchAgent
     print_info "LaunchAgentを読み込み中..."
     if launchctl load "$launch_agent_path" 2>/dev/null; then
@@ -4226,12 +4278,19 @@ ${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Libra
     echo "  2. 再接続すると自動的にマウント処理が実行されます"
     echo "  3. 通知が表示され、ログに記録されます"
     echo ""
-    print_info "${CYAN}sudoers設定について:${NC}"
-    echo "  ${GREEN}設定済みの場合:${NC} パスワード不要で自動マウント"
-    echo "  ${RED}未設定の場合:${NC} 自動マウントは動作しません（sudo認証エラー）"
+    print_info "${CYAN}必要な設定（2つ）:${NC}"
+    echo "  ${BOLD}1. sudoers設定${NC}"
+    echo "     ${GREEN}✅ 設定済み:${NC} パスワード不要で自動マウント"
+    echo "     ${RED}❌ 未設定:${NC} sudo認証エラー"
+    echo "     確認: ${CYAN}sudo cat /etc/sudoers.d/playcover-automount${NC}"
     echo ""
-    print_info "${CYAN}sudoers設定の確認:${NC}"
-    echo "  コマンド: ${CYAN}sudo cat /etc/sudoers.d/playcover-automount${NC}"
+    echo "  ${BOLD}2. フルディスクアクセス${NC}"
+    echo "     ${GREEN}✅ 設定済み:${NC} ~/Library/Containers/ にアクセス可能"
+    echo "     ${RED}❌ 未設定:${NC} Operation not permitted エラー (終了コード77)"
+    echo "     確認: システム設定 → プライバシーとセキュリティ → フルディスクアクセス"
+    echo "     対象: ${CYAN}/bin/zsh${NC}"
+    echo ""
+    print_warning "${YELLOW}両方の設定が必要です！${NC}"
     echo ""
     wait_for_enter
 }
