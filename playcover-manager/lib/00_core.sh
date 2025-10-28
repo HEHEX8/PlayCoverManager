@@ -161,6 +161,8 @@ TOTAL_IPAS=0
 NEED_XCODE_TOOLS=false
 NEED_HOMEBREW=false
 NEED_PLAYCOVER=false
+SELECTED_EXTERNAL_DISK=""
+SELECTED_CONTAINER=""
 
 #######################################################
 # Basic Print Functions

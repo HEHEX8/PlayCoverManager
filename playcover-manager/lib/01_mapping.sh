@@ -41,14 +41,8 @@ release_mapping_lock() {
 check_mapping_file() {
     if [[ ! -f "$MAPPING_FILE" ]]; then
         print_warning "マッピングファイルが見つかりません"
-        
-        if [[ -x "$INITIAL_SETUP_SCRIPT" ]]; then
-            print_info "初期セットアップスクリプトを実行してください"
-            print_info "実行: $INITIAL_SETUP_SCRIPT"
-        else
-            print_info "空のマッピングファイルを作成します"
-            touch "$MAPPING_FILE"
-        fi
+        print_info "空のマッピングファイルを作成します"
+        touch "$MAPPING_FILE"
         
         echo ""
         return 1
