@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.1 - Fix: Enhanced mapping file detection with alternative paths
+# Version: 4.37.2 - Fix: Unified mapping file location to fixed path
 #######################################################
 
 #######################################################
@@ -101,7 +101,7 @@ readonly PLAYCOVER_VOLUME_NAME="PlayCover"
 readonly PLAYCOVER_APP_NAME="PlayCover.app"
 readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-readonly MAPPING_FILE="${SCRIPT_DIR}/playcover-map.txt"
+readonly MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
 readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
 
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.1${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.2${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.1
+# Version: 1.0.2
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -3923,32 +3923,12 @@ check_playcover_drive() {
 # Mount all registered volumes using batch_mount logic
 mount_all_volumes() {
     log_message "INFO: マウント処理開始"
-    log_message "INFO: マッピングファイルパス: ${MAPPING_FILE}"
+    log_message "INFO: マッピングファイル: ${MAPPING_FILE}"
     
     if [[ ! -f "$MAPPING_FILE" ]]; then
         log_message "ERROR: マッピングファイルが見つかりません: ${MAPPING_FILE}"
-        log_message "INFO: ホームディレクトリ: ${HOME}"
-        log_message "INFO: カレントディレクトリ: $(pwd)"
-        
-        # Try to find mapping file in common locations
-        local alt_locations=(
-            "${HOME}/.playcover-volume-mapping.tsv"
-            "${HOME}/Library/Application Support/PlayCover/.playcover-volume-mapping.tsv"
-            "/Volumes/PlayCover/.playcover-volume-mapping.tsv"
-        )
-        
-        for location in "${alt_locations[@]}"; do
-            if [[ -f "$location" ]]; then
-                log_message "INFO: 代替パスでマッピングファイル発見: ${location}"
-                MAPPING_FILE="$location"
-                break
-            fi
-        done
-        
-        if [[ ! -f "$MAPPING_FILE" ]]; then
-            log_message "ERROR: どの場所にもマッピングファイルが見つかりません"
-            return 1
-        fi
+        log_message "INFO: マッピングファイルを作成してください"
+        return 1
     fi
     
     local success_count=0
