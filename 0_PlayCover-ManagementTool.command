@@ -3842,7 +3842,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.38.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.43.0${NC}"
     echo ""
     
     show_quick_status
@@ -3868,10 +3868,9 @@ show_menu() {
     fi
     
     echo "  ${LIGHT_GREEN}4.${NC} ${eject_label}"
-    echo "  ${LIGHT_GREEN}5.${NC} 🔥 超強力クリーンアップ（完全リセット）"
     echo "  ${LIGHT_GREEN}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-5):${NC} "
+    echo -n "${CYAN}選択 (0-4):${NC} "
 }
 
 show_mapping_info() {
@@ -5350,14 +5349,17 @@ main() {
             4)
                 eject_disk
                 ;;
-            5)
-                nuclear_cleanup
-                ;;
             0)
                 echo ""
                 print_info "終了します"
                 /bin/sleep 1
                 /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+                ;;
+            X|x|RESET|reset)
+                echo ""
+                print_warning "隠しオプション: 超強力クリーンアップ"
+                /bin/sleep 1
+                nuclear_cleanup
                 ;;
             *)
                 echo ""
