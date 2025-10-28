@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.5 - Fix: Proper mount verification and sudo error detection
+# Version: 4.37.6 - Feature: Automatic sudoers configuration during install
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.5${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.6${NC}"
     echo ""
     
     show_quick_status
@@ -4085,27 +4085,8 @@ EOF
     echo ""
     print_warning "${YELLOW}パスワード不要のマウント操作のためにsudoers設定が必要です${NC}"
     echo ""
-    echo "以下のコマンドを実行してsudoers設定を追加します："
-    echo ""
-    echo "${CYAN}sudo visudo -f /etc/sudoers.d/playcover-automount${NC}"
-    echo ""
-    echo "以下の内容を追加してください："
-    echo ""
-    echo "${GREEN}# PlayCover Auto-Mount - Allow passwordless mount operations"
-    echo "${USER} ALL=(ALL) NOPASSWD: /bin/rm -rf ${HOME}/Library/Containers/*"
-    echo "${USER} ALL=(ALL) NOPASSWD: /bin/mkdir -p ${HOME}/Library/Containers/*"
-    echo "${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Library/Containers/*${NC}"
-    echo ""
-    print_info "${CYAN}重要:${NC} visudoエディタの使い方"
-    echo "  1. 上記3行をコピー"
-    echo "  2. visudoエディタが開いたら、'i'キーで挿入モード"
-    echo "  3. 3行をペースト"
-    echo "  4. ESCキーを押して、':wq'と入力してEnter（保存して終了）"
-    echo ""
     
-    if prompt_confirmation "sudoers設定を今すぐ行いますか？" "Y"; then
-        echo ""
-        print_info "sudoersエディタを起動します..."
+    if prompt_confirmation "sudoers設定を自動で行いますか？" "Y"; then
         echo ""
         
         # Create sudoers file content
@@ -4119,21 +4100,50 @@ ${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Libra
         echo "$sudoers_content" > "$temp_sudoers"
         
         print_info "一時ファイル作成: ${temp_sudoers}"
+        
+        # Install sudoers file
+        print_info "sudoers設定をインストール中..."
         echo ""
-        print_info "${BOLD}${YELLOW}次のコマンドを実行してください:${NC}"
+        echo "${CYAN}パスワードを入力してください:${NC}"
+        
+        if /usr/bin/sudo /usr/bin/install -o root -g wheel -m 0440 "$temp_sudoers" /etc/sudoers.d/playcover-automount 2>/dev/null; then
+            print_success "sudoers設定ファイルをインストールしました"
+            
+            # Verify syntax
+            print_info "設定ファイルの文法を検証中..."
+            if /usr/bin/sudo /usr/sbin/visudo -c -f /etc/sudoers.d/playcover-automount >/dev/null 2>&1; then
+                print_success "sudoers設定の検証完了 ✅"
+                
+                # Test if sudoers works
+                print_info "sudo権限をテスト中..."
+                if /usr/bin/sudo -n /bin/echo "test" >/dev/null 2>&1; then
+                    print_success "sudo認証テスト成功 - パスワード不要で動作します"
+                else
+                    print_warning "sudo認証テストに失敗しました"
+                    print_info "システムを再起動すると有効になる場合があります"
+                fi
+            else
+                print_error "sudoers設定に文法エラーがあります"
+                print_info "設定ファイルを削除中..."
+                /usr/bin/sudo /bin/rm /etc/sudoers.d/playcover-automount 2>/dev/null
+            fi
+            
+            # Clean up temporary file
+            /bin/rm "$temp_sudoers" 2>/dev/null
+        else
+            print_error "sudoers設定のインストールに失敗しました"
+            print_info "手動でインストールする場合のコマンド:"
+            echo ""
+            echo "${CYAN}sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount${NC}"
+            echo "${CYAN}sudo visudo -c -f /etc/sudoers.d/playcover-automount${NC}"
+            echo ""
+        fi
         echo ""
-        echo "${CYAN}sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount${NC}"
-        echo ""
-        echo "${CYAN}sudo visudo -c -f /etc/sudoers.d/playcover-automount${NC}"
-        echo ""
-        print_info "1つ目のコマンド: sudoers設定ファイルをインストール"
-        print_info "2つ目のコマンド: 設定ファイルの文法チェック"
-        echo ""
-        wait_for_enter
     else
         print_warning "sudoers設定をスキップしました"
         echo ""
-        print_info "${ORANGE}注意:${NC} sudoers設定なしではパスワードプロンプトが表示されます"
+        print_info "${ORANGE}注意:${NC} sudoers設定なしでは自動マウントが動作しません"
+        print_info "後で設定するには、メインメニュー → 6 → 1 から再インストールしてください"
         echo ""
     fi
     
