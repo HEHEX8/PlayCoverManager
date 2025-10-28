@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.4 - Feature: Sudoers configuration for passwordless auto-mount
+# Version: 4.37.5 - Fix: Proper mount verification and sudo error detection
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.4${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.5${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.3
+# Version: 1.0.4
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -3978,11 +3978,36 @@ mount_all_volumes() {
         
         # Mount with nobrowse option (use same logic as mount_volume function)
         log_message "DEBUG: マウント実行: /dev/${volume_device} → ${target_path}"
-        if sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>&1 | tee -a "$LOG_FILE"; then
-            log_message "SUCCESS: '${volume_name}' をマウント成功"
-            ((success_count++))
+        
+        # Capture both stdout and stderr, then check exit code
+        local mount_output
+        mount_output=$(sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>&1)
+        local mount_exitcode=$?
+        
+        # Log the output
+        if [[ -n "$mount_output" ]]; then
+            log_message "DEBUG: mount output: ${mount_output}"
+        fi
+        
+        # Check if mount was successful
+        if [[ $mount_exitcode -eq 0 ]]; then
+            # Verify mount actually succeeded
+            if mount | grep -q " on ${target_path} "; then
+                log_message "SUCCESS: '${volume_name}' をマウント成功"
+                ((success_count++))
+            else
+                log_message "ERROR: '${volume_name}' のマウントコマンドは成功したが、実際にマウントされていません"
+                ((fail_count++))
+            fi
         else
-            log_message "ERROR: '${volume_name}' のマウント失敗 (デバイス: /dev/${volume_device})"
+            log_message "ERROR: '${volume_name}' のマウント失敗 (終了コード: ${mount_exitcode}, デバイス: /dev/${volume_device})"
+            
+            # Check if sudo authentication is the issue
+            if echo "$mount_output" | grep -q "a terminal is required\|a password is required"; then
+                log_message "ERROR: sudo認証が必要です - sudoers設定を行ってください"
+                log_message "INFO: 設定方法: メインメニュー → 6 → 1 → 再インストール"
+            fi
+            
             ((fail_count++))
         fi
         
@@ -3993,6 +4018,12 @@ mount_all_volumes() {
     # Send notification
     if [[ $success_count -gt 0 ]]; then
         osascript -e "display notification \"PlayCoverボリューム ${success_count}個をマウントしました\" with title \"PlayCover 自動マウント\" sound name \"Glass\"" 2>/dev/null
+    elif [[ $fail_count -gt 0 ]]; then
+        # Check if sudoers is configured
+        if ! sudo -n /bin/echo "test" >/dev/null 2>&1; then
+            osascript -e "display notification \"マウント失敗: sudoers設定が必要です\" with title \"PlayCover 自動マウント\" sound name \"Basso\"" 2>/dev/null
+            log_message "ERROR: sudoers設定が必要です - 手動で設定してください"
+        fi
     fi
 }
 
