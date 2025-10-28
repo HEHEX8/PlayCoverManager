@@ -298,28 +298,24 @@ get_storage_mode() {
             echo "external"
             ;;
         "internal")
-            # Check if has actual data or just flag file
-            # Exclude macOS system files AND flag file to determine if real data exists
-            # macOS automatically creates these in Containers directories:
-            # - .DS_Store (Finder metadata)
-            # - .com.apple.containermanagerd.metadata.plist (container metadata)
-            local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | \
-                /usr/bin/grep -v -x -F '.DS_Store' | \
-                /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist' | \
-                /usr/bin/grep -v -x -F "${INTERNAL_STORAGE_FLAG}")
+            # Check if has actual user data (not just macOS container structure)
+            # macOS creates complex container structure with symlinks and empty dirs:
+            # - Symlinks to ~/Desktop, ~/Documents, etc.
+            # - Empty Library/ subdirectories
+            # - .DS_Store files
+            # We need to count ACTUAL FILES only (not symlinks, not directories)
             
-            # If only "Data" directory remains, check if it's empty
-            if [[ "$content_check" == "Data" ]]; then
-                # Check if Data directory is empty (or only contains .DS_Store)
-                local data_content=$(/bin/ls -A1 "${container_path}/Data" 2>/dev/null | \
-                    /usr/bin/grep -v -x -F '.DS_Store')
-                if [[ -z "$data_content" ]]; then
-                    # Data directory is empty - treat as no real data
-                    content_check=""
-                fi
-            fi
+            # Count real files (excluding system files and our flag):
+            local real_file_count=$(/usr/bin/find "$container_path" -type f \
+                ! -name '.DS_Store' \
+                ! -name '.com.apple.containermanagerd.metadata.plist' \
+                ! -name '.CFUserTextEncoding' \
+                ! -name 'com.apple.security*.plist' \
+                ! -name "${INTERNAL_STORAGE_FLAG}" \
+                2>/dev/null | /usr/bin/wc -l | /usr/bin/xargs)
             
-            if [[ -z "$content_check" ]]; then
+            # If no real files exist, container has only structure (no user data)
+            if [[ "$real_file_count" -eq 0 ]]; then
                 # Only flag file (and/or metadata) exists, no real data
                 if has_internal_storage_flag "$container_path"; then
                     # Flag exists = intentional internal mode, but empty
