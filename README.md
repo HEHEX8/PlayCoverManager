@@ -7,6 +7,20 @@ macOS Sequoia 15.1+ (Tahoe 26.0.1) 対応の統合管理ツール
 PlayCoverを外部ストレージで運用するための**オールインワン管理ツール**です。
 初期セットアップからアプリインストール、ボリューム管理、完全リセットまで、すべての機能を統合しています。
 
+## 🚀 バージョン情報
+
+### 安定版: v4.43.0（推奨）
+- **ファイル**: `0_PlayCover-ManagementTool.command`
+- **状態**: ✅ 安定版・本番利用可能
+- **サイズ**: 約5,380行の統合スクリプト
+
+### 開発版: v5.0.0-alpha1（実験的）
+- **ディレクトリ**: `playcover-manager/`
+- **状態**: 🚧 開発中・モジュール化構造
+- **詳細**: [playcover-manager/README.md](playcover-manager/README.md)
+
+**推奨**: 本番環境では安定版（v4.43.0）を使用してください。
+
 ## 📦 メインツール
 
 ### `0_PlayCover-ManagementTool.command`
@@ -285,15 +299,27 @@ brew uninstall --cask playcover-community
 
 ```
 webapp/
-├── 0_PlayCover-ManagementTool.command  # メイン統合ツール
-├── verify_volume_operations.sh         # ボリューム操作検証ツール（開発用）
-├── volume_operations_test_plan.md      # 詳細な検証計画書（開発用）
+├── 0_PlayCover-ManagementTool.command  # ✅ メイン統合ツール（安定版 v4.43.0）
+├── playcover-manager/                   # 🚧 モジュール化版（開発中 v5.0.0-alpha1）
+│   ├── playcover-manager.command       #    メインエントリーポイント
+│   ├── lib/                            #    モジュールライブラリ
+│   │   ├── 00_core.sh                 #    ✅ コア機能（完成）
+│   │   ├── 01_mapping.sh              #    🚧 マッピング管理
+│   │   ├── 02_volume.sh               #    🚧 ボリューム操作
+│   │   ├── 03_storage.sh              #    🚧 ストレージ管理
+│   │   ├── 04_app.sh                  #    🚧 アプリ管理
+│   │   ├── 05_cleanup.sh              #    🚧 クリーンアップ
+│   │   ├── 06_setup.sh                #    🚧 初期セットアップ
+│   │   └── 07_ui.sh                   #    🚧 UIとメニュー
+│   ├── tests/                          #    テストディレクトリ
+│   └── README.md                       #    モジュール版README
 ├── README.md                            # このファイル
 ├── CHANGELOG.md                         # 詳細な更新履歴
 ├── docs/                                # ドキュメント
 │   ├── archive/                         # 古いバグ修正・変更履歴
 │   ├── guides/                          # ユーザー向けガイド
 │   └── development/                     # 開発用ドキュメント
+│       └── testing.md                   # ボリューム操作検証計画
 ├── debug/                               # デバッグツール・ログファイル
 └── archive/                             # 古いリリース・バックアップ
 ```
@@ -302,7 +328,24 @@ webapp/
 
 ## 🔄 更新履歴（最近の主要版）
 
-### v4.43.0 (最新) - Hidden Option for Nuclear Cleanup + Volume Operations Verification Tools
+### v5.0.0-alpha1 (開発中) - Modular Architecture
+- 🏗️ **モジュール化構造の導入**: 5,380行を7つのモジュールに分割
+  * フェーズ1完了: 基本構造とコアモジュール
+  * playcover-manager/ ディレクトリに新構造を作成
+  * 既存版（v4.43.0）は引き続き利用可能
+- 📦 **モジュール構成**:
+  * 00_core.sh - コア機能（完成）
+  * 01_mapping.sh - マッピング管理（スケルトン）
+  * 02_volume.sh - ボリューム操作（スケルトン）
+  * 03_storage.sh - ストレージ管理（スケルトン）
+  * 04_app.sh - アプリ管理（スケルトン）
+  * 05_cleanup.sh - クリーンアップ（スケルトン）
+  * 06_setup.sh - 初期セットアップ（スケルトン）
+  * 07_ui.sh - UIとメニュー（スケルトン）
+- ✅ **メリット**: 可読性・保守性・テスト容易性・再利用性の向上
+- 🔗 **GitHub**: https://github.com/HEHEX8/PlayCoverManager
+
+### v4.43.0 (安定版) - Hidden Option for Nuclear Cleanup + Volume Operations Verification Tools
 - 🔒 **超強力クリーンアップの隠しオプション化**: 誤操作防止のためメニューから非表示に
   * メニュー表示から「5. 超強力クリーンアップ」を削除
   * 選択範囲を (0-5) から (0-4) に変更
@@ -706,4 +749,4 @@ webapp/
 
 ---
 
-**最終更新:** 2025年10月28日（macOS Sequoia 15.1対応、v4.43.0）
+**最終更新:** 2025年10月28日（macOS Sequoia 15.1対応、v5.0.0-alpha1開発中、v4.43.0安定版）
