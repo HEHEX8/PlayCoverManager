@@ -260,6 +260,11 @@ extract_ipa_info() {
     APP_NAME_EN="$app_name_en"
     APP_VOLUME_NAME=$(echo "$APP_NAME_EN" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | /usr/bin/sed 's/[^a-zA-Z0-9]//g' || echo "$APP_NAME_EN" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
     
+    # Fallback: If volume name is empty (e.g., Japanese-only app name), use Bundle ID
+    if [[ -z "$APP_VOLUME_NAME" ]]; then
+        APP_VOLUME_NAME=$(echo "$APP_BUNDLE_ID" | /usr/bin/sed 's/[^a-zA-Z0-9]//g')
+    fi
+    
     /bin/rm -rf "$temp_dir"
     
     print_info "${APP_NAME} (${APP_VERSION})"
@@ -344,7 +349,15 @@ create_app_volume_install() {
 mount_app_volume_install() {
     local target_path="${HOME}/Library/Containers/${APP_BUNDLE_ID}"
     
-    if mount_volume "$APP_VOLUME_NAME" "$target_path"; then
+    # Get device path for the volume
+    local device=$(get_volume_device "$APP_VOLUME_NAME")
+    if [[ -z "$device" ]]; then
+        print_error "デバイスの取得に失敗しました"
+        return 1
+    fi
+    
+    # Mount with nobrowse option
+    if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
         return 0
     else
         print_error "$MSG_MOUNT_FAILED"

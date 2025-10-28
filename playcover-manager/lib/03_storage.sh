@@ -731,14 +731,16 @@ perform_internal_to_external_migration() {
     if [[ -n "$existing_mount" ]] && [[ "$existing_mount" != "Not applicable (no file system)" ]]; then
         # Volume already mounted - need to unmount it first for fresh mount later
         print_info "外部ボリュームは既にマウントされています: $existing_mount"
-        available_bytes=$(get_available_space "$existing_mount")
+        local available_kb=$(get_available_space "$existing_mount")
+        available_bytes=$((available_kb * 1024))
         mount_cleanup_needed=true
     else
         # Volume not mounted - mount it temporarily for capacity check
         print_info "外部ボリュームをマウント中..."
         if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_check_mount" 2>/dev/null; then
             print_success "マウント成功"
-            available_bytes=$(get_available_space "$temp_check_mount")
+            local available_kb=$(get_available_space "$temp_check_mount")
+            available_bytes=$((available_kb * 1024))
             existing_mount="$temp_check_mount"
             mount_cleanup_needed=true
         else
@@ -765,9 +767,9 @@ perform_internal_to_external_migration() {
     fi
     cleanup_temp_dir "$temp_check_mount" true
     
-    # Convert to human readable
-    local source_size_mb=$((source_size_bytes / 1024))
-    local available_mb=$((available_bytes / 1024))
+    # Convert to human readable (bytes to MB)
+    local source_size_mb=$((source_size_bytes / 1024 / 1024))
+    local available_mb=$((available_bytes / 1024 / 1024))
     local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
     
     echo ""
@@ -992,11 +994,12 @@ perform_external_to_internal_migration() {
         internal_disk_path=$(dirname "$internal_disk_path")
     done
     
-    local available_bytes=$(get_available_space "$internal_disk_path")
+    local available_kb=$(get_available_space "$internal_disk_path")
+    local available_bytes=$((available_kb * 1024))
     
-    # Convert to human readable
-    local source_size_mb=$((source_size_bytes / 1024))
-    local available_mb=$((available_bytes / 1024))
+    # Convert to human readable (bytes to MB)
+    local source_size_mb=$((source_size_bytes / 1024 / 1024))
+    local available_mb=$((available_bytes / 1024 / 1024))
     local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
     
     echo ""
