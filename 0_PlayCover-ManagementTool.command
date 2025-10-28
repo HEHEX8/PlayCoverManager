@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.6 - Feature: Automatic sudoers configuration during install
+# Version: 4.37.7 - Fix: LaunchAgent environment and sudoers validation
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.6${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.7${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.4
+# Version: 1.0.5
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -4030,6 +4030,20 @@ mount_all_volumes() {
 # Main execution
 log_message "=========================================="
 log_message "INFO: PlayCoverドライブ監視開始"
+log_message "DEBUG: 実行ユーザー: $(whoami)"
+log_message "DEBUG: HOME: ${HOME}"
+log_message "DEBUG: PATH: ${PATH}"
+
+# Check sudoers configuration
+if ! sudo -n /bin/echo "sudoers test" >/dev/null 2>&1; then
+    log_message "ERROR: sudoers設定が見つかりません"
+    log_message "ERROR: sudo権限がないため自動マウントできません"
+    log_message "INFO: メインメニュー → 6 → 1 から再インストールしてsudoers設定を行ってください"
+    osascript -e "display notification \"sudoers設定が必要です\" with title \"PlayCover 自動マウント エラー\" sound name \"Basso\"" 2>/dev/null
+    exit 1
+fi
+
+log_message "INFO: sudoers設定確認 OK"
 
 # Check if PlayCover drive is connected
 if check_playcover_drive; then
@@ -4048,6 +4062,7 @@ EOF
     print_info "LaunchAgent plistを作成中..."
     
     # Create LaunchAgent plist (WatchPaths for /Volumes)
+    # Use /bin/zsh to ensure proper shell environment and sudo access
     cat > "$launch_agent_path" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -4058,6 +4073,8 @@ EOF
     
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/zsh</string>
+        <string>-c</string>
         <string>${monitor_script_path}</string>
     </array>
     
@@ -4074,6 +4091,14 @@ EOF
     
     <key>RunAtLoad</key>
     <true/>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>${HOME}</string>
+    </dict>
 </dict>
 </plist>
 EOF
