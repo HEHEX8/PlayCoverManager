@@ -243,18 +243,8 @@ mount_app_volume() {
     local mount_path=$2
     local bundle_id="${3:-}"
     
-    # Check if volume exists
-    if ! volume_exists "$volume_name"; then
-        print_error "ボリューム '${volume_name}' が見つかりません"
-        return 1
-    fi
-    
-    # Get volume device
-    local device=$(get_volume_device "$volume_name")
-    if [[ -z "$device" ]]; then
-        print_error "デバイスの取得に失敗しました"
-        return 1
-    fi
+    # Get volume device (with existence check and error handling)
+    local device=$(get_volume_device_or_fail "$volume_name") || return 1
     
     # Check if already mounted at correct location
     local current_mount=$(get_mount_point "$volume_name")
@@ -317,16 +307,14 @@ create_app_volume() {
 delete_app_volume() {
     local volume_name=$1
     
+    # Check if volume exists first (early exit for non-existent volumes)
     if ! volume_exists "$volume_name"; then
         print_warning "ボリューム '${volume_name}' は存在しません"
         return 0
     fi
     
-    local device=$(get_volume_device "$volume_name")
-    if [[ -z "$device" ]]; then
-        print_error "デバイスの取得に失敗しました"
-        return 1
-    fi
+    # Get volume device (with error handling)
+    local device=$(get_volume_device_or_fail "$volume_name") || return 1
     
     print_info "ボリュームを削除中: ${volume_name}"
     
@@ -385,18 +373,13 @@ eject_disk() {
     clear
     
     # Get current PlayCover volume device dynamically
-    local playcover_device=""
-    if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
-        local volume_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-        if [[ -n "$volume_device" ]]; then
-            playcover_device="/dev/${volume_device}"
-        fi
-    fi
-    
-    if [[ -z "$playcover_device" ]]; then
+    local volume_device=$(get_volume_device_or_fail "$PLAYCOVER_VOLUME_NAME")
+    if [[ $? -ne 0 ]]; then
         print_header "ディスク取り外し"
         handle_error_and_return "PlayCoverボリュームが見つかりません"
     fi
+    
+    local playcover_device="/dev/${volume_device}"
     
     local disk_id=$(echo "$playcover_device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
     local drive_name=$(get_drive_name "$playcover_device")

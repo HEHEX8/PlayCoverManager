@@ -10,16 +10,17 @@ macOS用PlayCover統合管理ツール - モジュラーアーキテクチャ版
 
 ## 🚀 バージョン情報
 
-### モジュラー版: v5.0.0-alpha4（Phase 7完了）
+### モジュラー版: v5.0.0-alpha5（Phase 8完了）
 - **ディレクトリ**: `playcover-manager/`
-- **状態**: ✅ Phase 7完了（diskutil/volume/print/logging完全最適化）
-- **統計**: 5,470行、107関数、8モジュール + main.sh
-- **テスト**: 17テスト全パス（test-phase7.sh）
+- **状態**: ✅ Phase 8完了（volume操作の高レベル統一）
+- **統計**: 5,455行、107関数、8モジュール + main.sh
+- **テスト**: 18テスト全パス（test-phase8.sh）
 - **言語**: 日本語のみ
 - **最適化**: 
   - Phase 5: エラーハンドリング・確認プロンプトの共通化（約110行削減）
   - Phase 6: 容量チェック・一時ディレクトリ管理の統一（5箇所で使用）
   - Phase 7: diskutil/volume/print/logging統一（+13関数、15箇所最適化）
+  - Phase 8: volume操作の高レベル統一（4箇所を置き換え、約15行削減）
 
 ### 統合版: v4.43.0（安定版・推奨）
 - **ファイル**: `0_PlayCover-ManagementTool.command`
@@ -60,7 +61,7 @@ PlayCover Managerは、macOS上でiOSゲームを動作させる「PlayCover」�
 
 ## 🏗️ モジュラーアーキテクチャ（v5.0.0-alpha1）
 
-### Phase 7完了状態
+### Phase 8完了状態
 
 ✅ **Phase 1**: 基本構造とコアモジュール  
 ✅ **Phase 2**: 全モジュール実装（8モジュール + main.sh）  
@@ -68,18 +69,19 @@ PlayCover Managerは、macOS上でiOSゲームを動作させる「PlayCover」�
 ✅ **Phase 4**: 自動テストスイート（61テスト、100%パス率）  
 ✅ **Phase 5**: 関数共通化（重複パターンの統一・コード最適化）  
 ✅ **Phase 6**: 容量チェック・一時ディレクトリ管理の統一  
-✅ **Phase 7**: diskutil/volume/print/logging完全最適化
+✅ **Phase 7**: diskutil/volume/print/logging完全最適化  
+✅ **Phase 8**: volume操作の高レベル統一
 
 ### モジュール構成
 
 ```
 playcover-manager/
 ├── main.sh (101行)              # メインエントリーポイント
-├── test-phase7.sh               # テストスイート（17テスト）
+├── test-phase8.sh               # テストスイート（18テスト）
 └── lib/
     ├── 00_core.sh (772行)      # コア機能（41関数）← Phase 7: +13関数
     ├── 01_mapping.sh (166行)   # マッピング管理（8関数）
-    ├── 02_volume.sh (504行)    # ボリューム操作（14関数）
+    ├── 02_volume.sh (493行)    # ボリューム操作（14関数）← Phase 8: 最適化
     ├── 03_storage.sh (1169行)  # ストレージ管理（14関数）
     ├── 04_app.sh (1090行)      # アプリ管理（11関数）
     ├── 05_cleanup.sh (402行)   # クリーンアップ（1関数）
@@ -152,6 +154,31 @@ playcover-manager/
 - `test-phase7.sh`: 17テスト全パス
 - 13個の新関数すべて検証済み
 - 使用箇所カウント、パターン削減、構文チェック
+
+### Phase 8の改善内容
+
+**`get_volume_device_or_fail()` の活用拡大:**
+
+Phase 7で実装した `get_volume_device_or_fail()` を更に4箇所で活用し、ボリューム操作の一貫性を向上させました。
+
+**置き換え箇所（4箇所）:**
+1. **mount_app_volume()**: 11行 → 2行（ボリューム存在確認 + デバイス取得 + エラーチェック）
+2. **delete_app_volume()**: 9行 → 4行（早期リターン用の意図的なvolume_exists保持）
+3. **eject_disk()**: 9行 → 4行（ネストしたif文を簡潔に）
+4. **setup_external_storage()**: デバッグ情報のため既存実装を維持（変更なし）
+
+**コード削減の成果:**
+- `get_volume_device_or_fail` 使用回数: 1回 → 4回（4倍に拡大）
+- 02_volume.shのコード削減: 504行 → 493行（11行削減）
+- 古いパターン（volume_exists + get_volume_device + 空チェック）の削減
+
+**設計判断:**
+- delete_app_volume: 早期リターン最適化のためvolume_existsを保持（意図的）
+- setup_external_storage: デバッグ情報保持のため既存実装を維持
+
+**テストスイート:**
+- `test-phase8.sh`: 18テスト全パス
+- 使用箇所の増加確認、パターン削減検証、構文チェック
 
 ### テストスイート
 
@@ -240,4 +267,4 @@ playcover-manager/main.sh
 
 ---
 
-**最終更新**: 2025年10月28日（v5.0.0-alpha4 Phase 7完了、v4.43.0安定版）
+**最終更新**: 2025年10月28日（v5.0.0-alpha5 Phase 8完了、v4.43.0安定版）
