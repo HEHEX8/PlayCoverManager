@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.39.3 - Fix: Use sudo test for system path checks
+# Version: 4.40.0 - Fix: Remove sudo from LaunchDaemon script, remove duplicate function
 #######################################################
 
 #######################################################
@@ -3903,7 +3903,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 2.0.0 - LaunchDaemon (system-level, no sudoers required)
+# Version: 2.1.0 - LaunchDaemon (runs as root, no sudo needed in script)
 
 # Use specific user's home directory (not root's home)
 USER_HOME="${user_home}"
@@ -3969,23 +3969,23 @@ mount_all_volumes() {
                 ((fail_count++))
                 continue
             else
-                # Clean up small initial data
+                # Clean up small initial data (no sudo needed, running as root)
                 log_message "INFO: '${volume_name}' - 小容量データをクリーンアップ (${dir_size}KB)"
-                sudo /bin/rm -rf "$target_path" 2>/dev/null
+                /bin/rm -rf "$target_path" 2>/dev/null
             fi
         fi
         
-        # Create mount point if not exists
+        # Create mount point if not exists (no sudo needed, running as root)
         if [[ ! -d "$target_path" ]]; then
-            sudo /bin/mkdir -p "$target_path" 2>/dev/null
+            /bin/mkdir -p "$target_path" 2>/dev/null
         fi
         
-        # Mount with nobrowse option (use same logic as mount_volume function)
+        # Mount with nobrowse option (no sudo needed, running as root)
         log_message "DEBUG: マウント実行: /dev/${volume_device} → ${target_path}"
         
         # Capture both stdout and stderr, then check exit code
         local mount_output
-        mount_output=$(sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>&1)
+        mount_output=$(/sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>&1)
         local mount_exitcode=$?
         
         # Log the output
@@ -4005,13 +4005,6 @@ mount_all_volumes() {
             fi
         else
             log_message "ERROR: '${volume_name}' のマウント失敗 (終了コード: ${mount_exitcode}, デバイス: /dev/${volume_device})"
-            
-            # Check if sudo authentication is the issue
-            if echo "$mount_output" | grep -q "a terminal is required\|a password is required"; then
-                log_message "ERROR: sudo認証が必要です - sudoers設定を行ってください"
-                log_message "INFO: 設定方法: メインメニュー → 6 → 1 → 再インストール"
-            fi
-            
             ((fail_count++))
         fi
         
@@ -4023,11 +4016,7 @@ mount_all_volumes() {
     if [[ $success_count -gt 0 ]]; then
         osascript -e "display notification \"PlayCoverボリューム ${success_count}個をマウントしました\" with title \"PlayCover 自動マウント\" sound name \"Glass\"" 2>/dev/null
     elif [[ $fail_count -gt 0 ]]; then
-        # Check if sudoers is configured
-        if ! sudo -n /bin/echo "test" >/dev/null 2>&1; then
-            osascript -e "display notification \"マウント失敗: sudoers設定が必要です\" with title \"PlayCover 自動マウント\" sound name \"Basso\"" 2>/dev/null
-            log_message "ERROR: sudoers設定が必要です - 手動で設定してください"
-        fi
+        osascript -e "display notification \"マウント失敗: ${fail_count}個のボリューム\" with title \"PlayCover 自動マウント\" sound name \"Basso\"" 2>/dev/null
     fi
 }
 
@@ -4541,95 +4530,6 @@ uninstall_disk_monitor() {
     wait_for_enter
 }
 
-# Check disk monitor status
-check_disk_monitor_status() {
-    clear
-    print_header "リムーバブルドライブ自動マウント - 動作確認"
-    
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
-    local monitor_script_path="${HOME}/.playcover-disk-monitor.sh"
-    local log_file="${HOME}/Library/Logs/playcover-disk-monitor.log"
-    
-    # Installation status
-    echo "${CYAN}インストール状態:${NC}"
-    echo ""
-    
-    if [[ -f "$monitor_script_path" ]]; then
-        print_success "監視スクリプト: インストール済み"
-    else
-        print_error "監視スクリプト: 未インストール"
-    fi
-    
-    if [[ -f "$launch_agent_path" ]]; then
-        print_success "LaunchAgent: インストール済み"
-    else
-        print_error "LaunchAgent: 未インストール"
-    fi
-    
-    echo ""
-    
-    # LaunchAgent status
-    echo "${CYAN}LaunchAgent状態:${NC}"
-    echo ""
-    
-    if launchctl list | grep -q "com.playcover.diskmount"; then
-        print_success "LaunchAgent: 読み込み済み ✅"
-        local agent_info=$(launchctl list | grep "com.playcover.diskmount")
-        echo "  詳細: $agent_info"
-    else
-        print_error "LaunchAgent: 未読み込み"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Recent logs
-    echo "${CYAN}最近のログ（最新15行）:${NC}"
-    echo ""
-    
-    if [[ -f "$log_file" ]]; then
-        tail -15 "$log_file" | while IFS= read -r line; do
-            if echo "$line" | grep -q "ERROR"; then
-                echo "${RED}${line}${NC}"
-            elif echo "$line" | grep -q "SUCCESS"; then
-                echo "${GREEN}${line}${NC}"
-            elif echo "$line" | grep -q "WARNING"; then
-                echo "${ORANGE}${line}${NC}"
-            elif echo "$line" | grep -q "INFO"; then
-                echo "${SKY_BLUE}${line}${NC}"
-            else
-                echo "$line"
-            fi
-        done
-    else
-        print_warning "ログファイルが見つかりません"
-    fi
-    
-    echo ""
-    print_separator
-    echo ""
-    
-    # Manual test
-    echo -n "${CYAN}スクリプトを手動実行してテストしますか？ (y/N):${NC} "
-    read test_confirm
-    
-    if [[ "$test_confirm" =~ ^[Yy]$ ]]; then
-        echo ""
-        print_info "監視スクリプトを実行中..."
-        echo ""
-        
-        if [[ -x "$monitor_script_path" ]]; then
-            "$monitor_script_path"
-            echo ""
-            print_success "実行完了（ログファイルを確認してください）"
-        else
-            print_error "スクリプトが実行可能ではありません"
-        fi
-    fi
-    
-    wait_for_enter
-}
 
 # Show auto-mount menu
 show_auto_mount_menu() {
