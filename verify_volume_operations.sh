@@ -311,8 +311,7 @@ verify_rsync_behavior() {
     print_info "テスト 1: rsync WITHOUT --delete"
     rsync -a "$source_dir/" "$dest_dir/" 2>/dev/null
     echo "  結果: $(ls $dest_dir)"
-    local has_old_file=$(ls "$dest_dir" | grep -c "old_file.txt")
-    if [[ $has_old_file -eq 1 ]]; then
+    if [[ -f "$dest_dir/old_file.txt" ]]; then
         print_success "古いファイルが保持される（期待通り）"
     else
         print_error "古いファイルが削除された（予期しない動作）"
@@ -328,8 +327,7 @@ verify_rsync_behavior() {
     print_info "テスト 2: rsync WITH --delete"
     rsync -a --delete "$source_dir/" "$dest_dir/" 2>/dev/null
     echo "  結果: $(ls $dest_dir)"
-    local has_old_file=$(ls "$dest_dir" | grep -c "old_file.txt" || echo "0")
-    if [[ $has_old_file -eq 0 ]]; then
+    if [[ ! -f "$dest_dir/old_file.txt" ]]; then
         print_success "古いファイルが削除される（期待通り）"
     else
         print_error "古いファイルが残っている（予期しない動作）"
