@@ -1,5 +1,121 @@
 # PlayCover Scripts Changelog
 
+## 2025-01-28 - Version 4.36.0: Feature Improvements - Desktop Icon Fix & Detailed Error Messages
+
+### Improvement 1: Fixed Desktop Icon Display Issue
+
+**User Report:**
+> "マウントしたボリュームがデスクトップに表示されるようになってるね"
+
+**Problem:**
+- Mounted volumes appeared as desktop icons despite `nobrowse` option
+- Previous implementation: `diskutil mount` → `mount -u -o nobrowse` (remount)
+- Remount approach didn't work reliably
+
+**Root Cause (Line 401-410):**
+```zsh
+# Old approach - didn't work
+if /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$mount_point" "$device" >/dev/null 2>&1; then
+    /usr/bin/sudo /sbin/mount -u -o nobrowse "$mount_point" >/dev/null 2>&1  # ❌ Didn't prevent icon
+```
+
+**Solution:**
+Use `/sbin/mount` directly with `nobrowse` option from the start.
+
+**Fixed Code (Line 401-409):**
+```zsh
+# New approach - works correctly
+if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$mount_point" >/dev/null 2>&1; then
+    # Mount successful with nobrowse - no desktop icon
+    :
+```
+
+**Impact:**
+- ✅ Mounted volumes no longer show desktop icons
+- ✅ Cleaner desktop experience
+- ✅ Consistent with original script behavior
+
+---
+
+### Improvement 2: Detailed Missing Data Detection in App Management
+
+**User Request:**
+> "データが見つからなかった時、具体的に何が見つからないのか表示するように"
+
+**Before (Line 4349):**
+```
+❌ 原神 (見つかりません)
+```
+Not helpful - what's missing?
+
+**After (Lines 4348-4366):**
+```
+❌ 原神 (ボリュームが見つかりません)
+❌ 原神 (アプリ本体.appが見つかりません)
+❌ 原神 (ボリュームとアプリ本体が見つかりません - マッピングデータが古い可能性)
+```
+
+**Implementation:**
+```zsh
+# Check what exactly is missing for detailed error message
+local volume_exists_check=$(volume_exists "$volume_name" 2>/dev/null && echo "yes" || echo "no")
+local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
+
+local missing_reason=""
+if [[ "$volume_exists_check" == "no" ]] && [[ "$container_exists_check" == "no" ]]; then
+    missing_reason="${RED}(ボリュームとアプリ本体が見つかりません - マッピングデータが古い可能性)${NC}"
+elif [[ "$volume_exists_check" == "no" ]]; then
+    missing_reason="${RED}(ボリュームが見つかりません)${NC}"
+else
+    missing_reason="${RED}(アプリ本体.appが見つかりません)${NC}"
+fi
+
+echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${GRAY}${display_name}${NC} ${BOLD}${missing_reason}"
+```
+
+**Benefits:**
+- ✅ **Volume missing**: User knows to create/attach external drive
+- ✅ **App missing**: User knows to reinstall app
+- ✅ **Both missing**: User knows mapping data is outdated (can delete mapping)
+
+**Use Cases:**
+1. **Volume unplugged**: "ボリュームが見つかりません"
+2. **App deleted**: "アプリ本体.appが見つかりません"
+3. **Old mapping after cleanup**: "ボリュームとアプリ本体が見つかりません - マッピングデータが古い可能性"
+
+---
+
+### Summary of Changes
+
+**Files Modified:**
+- `0_PlayCover-ManagementTool.command`
+
+**Lines Changed:**
+- Desktop icon fix: Lines 401-409 (mount_volume function)
+- Detailed errors: Lines 4348-4366 (show_installed_apps function)
+
+**Impact:**
+- ✅ Better UX: No desktop clutter from mounted volumes
+- ✅ Better diagnostics: Users know exactly what's wrong
+- ✅ Better workflow: Clear action items for each error type
+
+**Git Commit:**
+```bash
+commit [hash]
+"v4.36.0 - デスクトップアイコン表示修正・詳細エラーメッセージ追加"
+
+1. nobrowseオプション修正
+   - diskutil mount → mount -u では効かなかった
+   - /sbin/mount -o nobrowse を最初から使用
+
+2. アプリ管理画面のエラー詳細化
+   - ボリューム不在
+   - アプリ本体不在
+   - 両方不在（マッピングデータ古い可能性）
+```
+
+---
+
 ## 2025-01-28 - Version 4.35.5: Root Cause Fixed - Duplicate Function Definition
 
 ### Critical Discovery: Two mount_volume() Functions Existed

@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.35.5 - Fixed: removed duplicate mount_volume function (root cause)
+# Version: 4.36.0 - Improvements: nobrowse fix, detailed missing data detection
 #######################################################
 
 #######################################################
@@ -399,9 +399,10 @@ mount_volume() {
     
     # Mount with or without nobrowse option
     if [[ "$nobrowse" == "nobrowse" ]]; then
-        # First mount with diskutil, then remount with nobrowse
-        if /usr/bin/sudo /usr/sbin/diskutil mount -mountPoint "$mount_point" "$device" >/dev/null 2>&1; then
-            /usr/bin/sudo /sbin/mount -u -o nobrowse "$mount_point" >/dev/null 2>&1
+        # Use /sbin/mount directly with nobrowse option to prevent desktop icon
+        if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$device" "$mount_point" >/dev/null 2>&1; then
+            # Mount successful
+            :
         else
             if [[ "$mode" == "verbose" ]]; then
                 print_error "マウント失敗"
@@ -4345,7 +4346,20 @@ show_installed_apps() {
             ((installed_count++))
         else
             if [[ "$display_only" == "true" ]]; then
-                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${GRAY}${display_name}${NC} ${BOLD}${RED}(見つかりません)${NC}"
+                # Check what exactly is missing for detailed error message
+                local volume_exists_check=$(volume_exists "$volume_name" 2>/dev/null && echo "yes" || echo "no")
+                local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
+                
+                local missing_reason=""
+                if [[ "$volume_exists_check" == "no" ]] && [[ "$container_exists_check" == "no" ]]; then
+                    missing_reason="${RED}(ボリュームとアプリ本体が見つかりません - マッピングデータが古い可能性)${NC}"
+                elif [[ "$volume_exists_check" == "no" ]]; then
+                    missing_reason="${RED}(ボリュームが見つかりません)${NC}"
+                else
+                    missing_reason="${RED}(アプリ本体.appが見つかりません)${NC}"
+                fi
+                
+                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${GRAY}${display_name}${NC} ${BOLD}${missing_reason}"
             fi
             ((missing_count++))
         fi
