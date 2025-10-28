@@ -485,3 +485,206 @@ eject_disk() {
         wait_for_enter
     fi
 }
+
+#######################################################
+# Batch Volume Operations
+#######################################################
+
+# Mount all registered volumes
+# Reads from MAPPING_FILE and mounts all unmounted volumes
+batch_mount_all() {
+    clear
+    print_header "全ボリュームをマウント"
+    
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_error "マッピングファイルが見つかりません: $MAPPING_FILE"
+        wait_for_enter
+        return 1
+    fi
+    
+    # Request sudo upfront
+    /usr/bin/sudo -v
+    
+    local mounted_count=0
+    local skipped_count=0
+    local failed_count=0
+    
+    echo ""
+    print_info "登録されたボリュームをスキャン中..."
+    echo ""
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Check if volume exists
+        if ! volume_exists "$volume_name"; then
+            echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Get mount point and target path
+        local actual_mount=$(get_mount_point "$volume_name")
+        local target_path="${PLAYCOVER_BASE}/${bundle_id}"
+        
+        # Skip if already mounted at correct location
+        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
+            echo "  ✅ ${display_name}: 既にマウント済"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Skip if app is running
+        if is_app_running "$bundle_id"; then
+            echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Check storage mode
+        local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+        if [[ "$storage_mode" == "internal_intentional" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+            echo "  🏠 ${display_name}: 内蔵ストレージモード（スキップ）"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Unmount if mounted elsewhere
+        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
+            echo -n "  📍 ${display_name}: マウント位置調整中..."
+            if unmount_volume "$volume_name" "silent"; then
+                echo " ✓"
+            else
+                echo " ✗"
+                ((failed_count++))
+                continue
+            fi
+        fi
+        
+        # Mount the volume
+        echo -n "  🔄 ${display_name}: マウント中..."
+        
+        # Get device
+        local device=$(get_volume_device "$volume_name")
+        if [[ -z "$device" ]]; then
+            echo " ✗ (デバイス取得失敗)"
+            ((failed_count++))
+            continue
+        fi
+        
+        # Create mount point
+        /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+        
+        # Mount with nobrowse
+        if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+            echo " ✓"
+            ((mounted_count++))
+        else
+            echo " ✗ (マウント失敗)"
+            ((failed_count++))
+        fi
+        
+    done < "$MAPPING_FILE"
+    
+    echo ""
+    print_header "マウント完了"
+    echo ""
+    echo "  ${GREEN}✓ マウント成功: ${mounted_count}件${NC}"
+    echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
+    if [[ $failed_count -gt 0 ]]; then
+        echo "  ${RED}✗ 失敗: ${failed_count}件${NC}"
+    fi
+    echo ""
+    
+    wait_for_enter
+}
+
+# Unmount all registered volumes
+# Reads from MAPPING_FILE and unmounts all mounted volumes
+batch_unmount_all() {
+    clear
+    print_header "全ボリュームをアンマウント"
+    
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_error "マッピングファイルが見つかりません: $MAPPING_FILE"
+        wait_for_enter
+        return 1
+    fi
+    
+    # Request sudo upfront
+    /usr/bin/sudo -v
+    
+    local unmounted_count=0
+    local skipped_count=0
+    local failed_count=0
+    
+    echo ""
+    print_info "登録されたボリュームをスキャン中..."
+    echo ""
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Check if volume exists
+        if ! volume_exists "$volume_name"; then
+            echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Get mount point
+        local actual_mount=$(get_mount_point "$volume_name")
+        
+        # Skip if not mounted
+        if [[ -z "$actual_mount" ]]; then
+            echo "  ⚪️ ${display_name}: 既にアンマウント済"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Skip if app is running
+        if is_app_running "$bundle_id"; then
+            echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
+            ((skipped_count++))
+            continue
+        fi
+        
+        # Check if PlayCover app files are in use
+        local target_path="${PLAYCOVER_BASE}/${bundle_id}"
+        if [[ -d "${target_path}/Wrapper" ]]; then
+            # This is an app storage volume
+            local running_apps=$(get_running_apps_in_directory "$target_path")
+            if [[ -n "$running_apps" ]]; then
+                echo "  🔥 ${display_name}: 配下アプリ実行中（スキップ）"
+                ((skipped_count++))
+                continue
+            fi
+        fi
+        
+        # Unmount the volume
+        echo -n "  🔄 ${display_name}: アンマウント中..."
+        
+        if unmount_with_fallback "$volume_name" "silent"; then
+            echo " ✓"
+            ((unmounted_count++))
+        else
+            echo " ✗ (アンマウント失敗)"
+            ((failed_count++))
+        fi
+        
+    done < "$MAPPING_FILE"
+    
+    echo ""
+    print_header "アンマウント完了"
+    echo ""
+    echo "  ${GREEN}✓ アンマウント成功: ${unmounted_count}件${NC}"
+    echo "  ${GRAY}⊘ スキップ: ${skipped_count}件${NC}"
+    if [[ $failed_count -gt 0 ]]; then
+        echo "  ${RED}✗ 失敗: ${failed_count}件${NC}"
+    fi
+    echo ""
+    
+    wait_for_enter
+}
