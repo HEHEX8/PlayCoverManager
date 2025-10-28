@@ -148,11 +148,10 @@ get_external_drive_free_space() {
 # zsh has a special 'path' array variable that syncs with PATH environment variable
 get_storage_type() {
     local container_path=$1
-    local debug=${2:-false}
+    # Debug parameter removed in stable release
     
     # If path doesn't exist, return unknown
     if [[ ! -e "$container_path" ]]; then
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Path does not exist: $container_path" >&2
         echo "unknown"
         return
     fi
@@ -162,7 +161,6 @@ get_storage_type() {
     local mount_check=$(/sbin/mount | /usr/bin/grep " on ${container_path} ")
     if [[ -n "$mount_check" ]] && [[ "$mount_check" =~ "apfs" ]]; then
         # This path is mounted as an APFS volume = external storage
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Detected as mount point (external)" >&2
         echo "external"
         return
     fi
@@ -173,17 +171,13 @@ get_storage_type() {
         # Note: Do NOT exclude flag file here - that's handled in get_storage_mode()
         # Use /bin/ls -A1 to ensure one item per line (not multi-column output)
         local content_check=$(/bin/ls -A1 "$container_path" 2>/dev/null | /usr/bin/grep -v -x -F '.DS_Store' | /usr/bin/grep -v -x -F '.Spotlight-V100' | /usr/bin/grep -v -x -F '.Trashes' | /usr/bin/grep -v -x -F '.fseventsd' | /usr/bin/grep -v -x -F '.TemporaryItems' | /usr/bin/grep -v -F '.com.apple.containermanagerd.metadata.plist')
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Content check (filtered): '$content_check'" >&2
-        [[ "$debug" == "true" ]] && echo "[DEBUG] Content length: ${#content_check}" >&2
         
         if [[ -z "$content_check" ]]; then
             # Directory exists but is empty (or only has metadata) = no actual data
             # This is just an empty mount point directory left after unmount
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory is empty or only has metadata (none)" >&2
             echo "none"
             return
         else
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Directory has actual content, checking disk location..." >&2
         fi
     fi
     
@@ -192,12 +186,10 @@ get_storage_type() {
     local device=$(/bin/df "$container_path" | /usr/bin/tail -1 | /usr/bin/awk '{print $1}')
     local disk_id=$(echo "$device" | /usr/bin/sed -E 's|/dev/(disk[0-9]+).*|\1|')
     
-    [[ "$debug" == "true" ]] && echo "[DEBUG] Device: $device, Disk ID: $disk_id" >&2
     
     # Check the disk location
     local disk_location=$(get_disk_location "/dev/$disk_id")
     
-    [[ "$debug" == "true" ]] && echo "[DEBUG] Disk location: $disk_location" >&2
     
     if [[ "$disk_location" == "Internal" ]]; then
         echo "internal"
@@ -206,10 +198,8 @@ get_storage_type() {
     else
         # Fallback: check if it's on the main system disk (disk0 or disk1 usually)
         if [[ "$disk_id" == "disk0" ]] || [[ "$disk_id" == "disk1" ]] || [[ "$disk_id" == "disk3" ]]; then
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Fallback to internal (system disk)" >&2
             echo "internal"
         else
-            [[ "$debug" == "true" ]] && echo "[DEBUG] Fallback to external (non-system disk)" >&2
             echo "external"
         fi
     fi

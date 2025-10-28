@@ -243,19 +243,7 @@ print_highlight_ln() {
 }
 
 # Debug and verbose output functions (controlled by environment variables)
-# Usage: DEBUG=1 ./script.sh (to enable debug output)
-#        VERBOSE=1 ./script.sh (to enable verbose output)
-print_debug() {
-    if [[ "${DEBUG:-0}" == "1" ]]; then
-        echo "${DIM}${GRAY}[DEBUG] $1${NC}" >&2
-    fi
-}
 
-print_verbose() {
-    if [[ "${VERBOSE:-0}" == "1" ]]; then
-        echo "${CYAN}[VERBOSE] $1${NC}"
-    fi
-}
 
 print_batch_progress() {
     local current=$1
@@ -784,28 +772,31 @@ check_full_disk_access() {
 #######################################################
 
 # Check if PlayCover environment is ready (volume, mapping file, app)
-# Args: debug_mode (optional, default: false)
 # Returns: 0 if ready, 1 if not ready
 is_playcover_environment_ready() {
-    local debug_mode="${1:-false}"
-    
     # Check if PlayCover is installed
     if [[ ! -d "/Applications/PlayCover.app" ]]; then
-        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] PlayCover not found at /Applications/PlayCover.app" >&2
         return 1
     fi
     
     # Check if PlayCover volume exists (use volume_exists function)
     if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
-        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] Volume '${PLAYCOVER_VOLUME_NAME}' not found" >&2
-        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] diskutil list output:" >&2
-        [[ "$debug_mode" == "true" ]] && /usr/sbin/diskutil list | /usr/bin/grep -i playcover >&2
         return 1
     fi
     
     # Check if mapping file exists
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        [[ "$debug_mode" == "true" ]] && echo "[DEBUG] Mapping file not found: $MAPPING_FILE" >&2
+        return 1
+    fi
+    
+    return 0
+}
+p -i playcover >&2
+        return 1
+    fi
+    
+    # Check if mapping file exists
+    if [[ ! -f "$MAPPING_FILE" ]]; then
         return 1
     fi
     

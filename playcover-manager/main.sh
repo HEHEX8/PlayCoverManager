@@ -3,7 +3,7 @@
 # PlayCover Volume Manager - Main Entry Point
 # File: main.sh
 # Description: Load modules and start main execution loop
-# Version: 5.0.0-alpha1
+# Version: 5.0.0
 #
 
 # Get script directory (absolute path)
@@ -31,12 +31,12 @@ main() {
     if ! is_playcover_environment_ready; then
         run_initial_setup
         
-        # Re-check after setup with debug mode
-        if ! is_playcover_environment_ready "true"; then
+        # Re-check after setup
+        if ! is_playcover_environment_ready; then
             echo ""
             print_error "初期セットアップが完了しましたが、環境が正しく構成されていません"
+            print_info "PlayCoverが正しくインストールされているか確認してください"
             echo ""
-            echo "${ORANGE}デバッグ情報（上記を確認してください）${NC}"
             wait_for_enter
             exit 1
         fi
