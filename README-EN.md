@@ -46,7 +46,25 @@ PlayCover Manager is a macOS tool for migrating and managing iOS app data runnin
 - PlayCover 3.0 or later
 - External storage (APFS compatible)
 
-### Installation
+### Installation Method 1: Application Bundle (Recommended)
+
+1. **Download Latest Release**
+   - Download `PlayCover Manager-5.0.0.zip` from [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases)
+
+2. **Extract and Install**
+   ```bash
+   # Extract ZIP (or double-click in Finder)
+   unzip "PlayCover Manager-5.0.0.zip"
+   
+   # Move to Applications folder
+   mv "PlayCover Manager.app" /Applications/
+   ```
+
+3. **First Launch**
+   - Right-click the app → Select "Open"
+   - If Gatekeeper warning appears, click "Open"
+
+### Installation Method 2: From Source
 
 ```bash
 # Clone repository
@@ -54,10 +72,24 @@ git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
 # Grant execution permission
-chmod +x playcover-manager.command
+chmod +x main.sh
 
 # Launch
-./playcover-manager.command
+./main.sh
+```
+
+### Installation Method 3: Build Yourself
+
+```bash
+# Clone repository
+git clone https://github.com/HEHEX8/PlayCoverManager.git
+cd PlayCoverManager
+
+# Build application
+./build-app.sh
+
+# Install built app
+mv "build/PlayCover Manager.app" /Applications/
 ```
 
 ### Initial Setup

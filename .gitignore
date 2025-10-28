@@ -46,6 +46,11 @@ test-*.sh
 debug/
 archive/
 
+# Build output
+build/
+*.zip
+*.dmg
+
 # Backup files
 *.bak
 *.backup

@@ -46,7 +46,25 @@ PlayCover Manager は、PlayCover で実行する iOS アプリのデータを�
 - PlayCover 3.0 以降
 - 外部ストレージ（APFS 対応）
 
-### インストール
+### インストール方法1: アプリケーション版（推奨）
+
+1. **最新リリースをダウンロード**
+   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases) から `PlayCover Manager-5.0.0.zip` をダウンロード
+
+2. **ZIPを解凍してアプリをインストール**
+   ```bash
+   # ZIPを解凍（Finderでダブルクリックまたは）
+   unzip "PlayCover Manager-5.0.0.zip"
+   
+   # Applicationsフォルダに移動
+   mv "PlayCover Manager.app" /Applications/
+   ```
+
+3. **初回起動**
+   - アプリを右クリック → 「開く」を選択
+   - Gatekeeper警告が出た場合は「開く」をクリック
+
+### インストール方法2: ソースコードから
 
 ```bash
 # リポジトリをクローン
@@ -54,10 +72,24 @@ git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
 # 実行権限を付与
-chmod +x playcover-manager.command
+chmod +x main.sh
 
 # 起動
-./playcover-manager.command
+./main.sh
+```
+
+### インストール方法3: 自分でビルド
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/HEHEX8/PlayCoverManager.git
+cd PlayCoverManager
+
+# アプリケーションをビルド
+./build-app.sh
+
+# ビルドされたアプリをインストール
+mv "build/PlayCover Manager.app" /Applications/
 ```
 
 ### 初回セットアップ
