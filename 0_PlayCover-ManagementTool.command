@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.7 - Fix: LaunchAgent environment and sudoers validation
+# Version: 4.37.8 - Fix: Sudoers installation error handling and transparency
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.7${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.8${NC}"
     echo ""
     
     show_quick_status
@@ -4130,37 +4130,60 @@ ${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Libra
         print_info "sudoers設定をインストール中..."
         echo ""
         echo "${CYAN}パスワードを入力してください:${NC}"
+        echo ""
         
-        if /usr/bin/sudo /usr/bin/install -o root -g wheel -m 0440 "$temp_sudoers" /etc/sudoers.d/playcover-automount 2>/dev/null; then
+        # Show command for transparency
+        print_info "実行コマンド: sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount"
+        echo ""
+        
+        if /usr/bin/sudo /usr/bin/install -o root -g wheel -m 0440 "$temp_sudoers" /etc/sudoers.d/playcover-automount; then
+            echo ""
             print_success "sudoers設定ファイルをインストールしました"
             
             # Verify syntax
             print_info "設定ファイルの文法を検証中..."
-            if /usr/bin/sudo /usr/sbin/visudo -c -f /etc/sudoers.d/playcover-automount >/dev/null 2>&1; then
+            if /usr/bin/sudo /usr/sbin/visudo -c -f /etc/sudoers.d/playcover-automount 2>&1 | grep -q "parsed OK"; then
                 print_success "sudoers設定の検証完了 ✅"
                 
                 # Test if sudoers works
                 print_info "sudo権限をテスト中..."
                 if /usr/bin/sudo -n /bin/echo "test" >/dev/null 2>&1; then
-                    print_success "sudo認証テスト成功 - パスワード不要で動作します"
+                    print_success "sudo認証テスト成功 - パスワード不要で動作します ✅"
                 else
                     print_warning "sudo認証テストに失敗しました"
-                    print_info "システムを再起動すると有効になる場合があります"
+                    echo ""
+                    print_info "${YELLOW}原因の可能性:${NC}"
+                    echo "  1. sudoのタイムスタンプがまだ有効（正常）"
+                    echo "  2. システムを再起動すると有効になる"
+                    echo ""
+                    print_info "ドライブを再接続してテストしてください"
                 fi
             else
                 print_error "sudoers設定に文法エラーがあります"
+                echo ""
+                /usr/bin/sudo /usr/sbin/visudo -c -f /etc/sudoers.d/playcover-automount
+                echo ""
                 print_info "設定ファイルを削除中..."
-                /usr/bin/sudo /bin/rm /etc/sudoers.d/playcover-automount 2>/dev/null
+                /usr/bin/sudo /bin/rm /etc/sudoers.d/playcover-automount
             fi
             
             # Clean up temporary file
             /bin/rm "$temp_sudoers" 2>/dev/null
         else
-            print_error "sudoers設定のインストールに失敗しました"
-            print_info "手動でインストールする場合のコマンド:"
             echo ""
-            echo "${CYAN}sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount${NC}"
-            echo "${CYAN}sudo visudo -c -f /etc/sudoers.d/playcover-automount${NC}"
+            print_error "sudoers設定のインストールに失敗しました"
+            echo ""
+            print_info "${YELLOW}失敗の原因:${NC}"
+            echo "  • パスワード入力がキャンセルされた"
+            echo "  • 管理者権限がない"
+            echo "  • /etc/sudoers.d/ ディレクトリが存在しない"
+            echo ""
+            print_info "${CYAN}手動でインストールする場合:${NC}"
+            echo ""
+            echo "  ${CYAN}sudo install -o root -g wheel -m 0440 ${temp_sudoers} /etc/sudoers.d/playcover-automount${NC}"
+            echo "  ${CYAN}sudo visudo -c -f /etc/sudoers.d/playcover-automount${NC}"
+            echo ""
+            print_warning "一時ファイルは残されています: ${temp_sudoers}"
             echo ""
         fi
         echo ""
@@ -4199,8 +4222,11 @@ ${USER} ALL=(ALL) NOPASSWD: /sbin/mount -t apfs -o nobrowse /dev/* ${HOME}/Libra
     echo "  3. 通知が表示され、ログに記録されます"
     echo ""
     print_info "${CYAN}sudoers設定について:${NC}"
-    echo "  設定済みの場合: パスワード不要で自動マウント"
-    echo "  未設定の場合: 動作はするがログに警告が記録されます"
+    echo "  ${GREEN}設定済みの場合:${NC} パスワード不要で自動マウント"
+    echo "  ${RED}未設定の場合:${NC} 自動マウントは動作しません（sudo認証エラー）"
+    echo ""
+    print_info "${CYAN}sudoers設定の確認:${NC}"
+    echo "  コマンド: ${CYAN}sudo cat /etc/sudoers.d/playcover-automount${NC}"
     echo ""
     wait_for_enter
 }
@@ -4247,11 +4273,15 @@ uninstall_disk_monitor() {
         if prompt_confirmation "sudoers設定も削除しますか？" "Y"; then
             print_info "sudoers設定を削除中..."
             echo ""
-            print_info "${BOLD}${YELLOW}次のコマンドを実行してください:${NC}"
-            echo ""
-            echo "${CYAN}sudo rm /etc/sudoers.d/playcover-automount${NC}"
-            echo ""
-            wait_for_enter
+            
+            if /usr/bin/sudo /bin/rm /etc/sudoers.d/playcover-automount 2>/dev/null; then
+                print_success "sudoers設定を削除しました"
+            else
+                print_error "sudoers設定の削除に失敗しました"
+                echo ""
+                print_info "手動で削除する場合:"
+                echo "  ${CYAN}sudo rm /etc/sudoers.d/playcover-automount${NC}"
+            fi
         else
             print_info "sudoers設定は残されます"
         fi
