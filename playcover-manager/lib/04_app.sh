@@ -78,7 +78,7 @@ check_playcover_volume_mount_install() {
     
     PLAYCOVER_VOLUME_DEVICE="/dev/${volume_device}"
     
-    local current_mount=$(/usr/sbin/diskutil info "$PLAYCOVER_VOLUME_DEVICE" 2>/dev/null | /usr/bin/grep "Mount Point" | /usr/bin/sed 's/.*: *//')
+    local current_mount=$(get_volume_mount_point "$PLAYCOVER_VOLUME_DEVICE")
     
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
         if ! unmount_volume "$PLAYCOVER_VOLUME_DEVICE" "silent" "force"; then
@@ -321,7 +321,7 @@ select_installation_disk() {
 
 create_app_volume_install() {
     local existing_volume=""
-    existing_volume=$(/usr/sbin/diskutil info "${APP_VOLUME_NAME}" 2>/dev/null | /usr/bin/awk '/Device Node:/ {gsub(/\/dev\//, "", $NF); print $NF}')
+    existing_volume=$(get_volume_device_node "${APP_VOLUME_NAME}")
     
     if [[ -z "$existing_volume" ]]; then
         existing_volume=$(get_volume_device "${APP_VOLUME_NAME}")

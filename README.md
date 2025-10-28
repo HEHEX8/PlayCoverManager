@@ -10,15 +10,16 @@ macOS用PlayCover統合管理ツール - モジュラーアーキテクチャ版
 
 ## 🚀 バージョン情報
 
-### モジュラー版: v5.0.0-alpha3（Phase 6完了）
+### モジュラー版: v5.0.0-alpha4（Phase 7完了）
 - **ディレクトリ**: `playcover-manager/`
-- **状態**: ✅ Phase 6完了（容量チェック・一時ディレクトリ管理の共通化完了）
-- **統計**: 5,253行、94関数、8モジュール + main.sh
-- **テスト**: 13テスト全パス（test-phase6.sh）
+- **状態**: ✅ Phase 7完了（diskutil/volume/print/logging完全最適化）
+- **統計**: 5,470行、107関数、8モジュール + main.sh
+- **テスト**: 17テスト全パス（test-phase7.sh）
 - **言語**: 日本語のみ
 - **最適化**: 
   - Phase 5: エラーハンドリング・確認プロンプトの共通化（約110行削減）
   - Phase 6: 容量チェック・一時ディレクトリ管理の統一（5箇所で使用）
+  - Phase 7: diskutil/volume/print/logging統一（+13関数、15箇所最適化）
 
 ### 統合版: v4.43.0（安定版・推奨）
 - **ファイル**: `0_PlayCover-ManagementTool.command`
@@ -59,25 +60,26 @@ PlayCover Managerは、macOS上でiOSゲームを動作させる「PlayCover」�
 
 ## 🏗️ モジュラーアーキテクチャ（v5.0.0-alpha1）
 
-### Phase 6完了状態
+### Phase 7完了状態
 
 ✅ **Phase 1**: 基本構造とコアモジュール  
 ✅ **Phase 2**: 全モジュール実装（8モジュール + main.sh）  
 ✅ **Phase 3**: 包括的検証（11段階すべてクリア）  
 ✅ **Phase 4**: 自動テストスイート（61テスト、100%パス率）  
 ✅ **Phase 5**: 関数共通化（重複パターンの統一・コード最適化）  
-✅ **Phase 6**: 容量チェック・一時ディレクトリ管理の統一
+✅ **Phase 6**: 容量チェック・一時ディレクトリ管理の統一  
+✅ **Phase 7**: diskutil/volume/print/logging完全最適化
 
 ### モジュール構成
 
 ```
 playcover-manager/
 ├── main.sh (101行)              # メインエントリーポイント
-├── test-phase6.sh               # テストスイート（13テスト）
+├── test-phase7.sh               # テストスイート（17テスト）
 └── lib/
-    ├── 00_core.sh (556行)      # コア機能（28関数）← Phase 6: +3関数
+    ├── 00_core.sh (772行)      # コア機能（41関数）← Phase 7: +13関数
     ├── 01_mapping.sh (166行)   # マッピング管理（8関数）
-    ├── 02_volume.sh (503行)    # ボリューム操作（14関数）
+    ├── 02_volume.sh (504行)    # ボリューム操作（14関数）
     ├── 03_storage.sh (1169行)  # ストレージ管理（14関数）
     ├── 04_app.sh (1090行)      # アプリ管理（11関数）
     ├── 05_cleanup.sh (402行)   # クリーンアップ（1関数）
@@ -115,6 +117,41 @@ playcover-manager/
 **テストスイート:**
 - `test-phase6.sh`: 13テスト全パス
 - 関数存在チェック、使用箇所確認、構文チェック
+
+### Phase 7の改善内容
+
+**新規追加関数（13関数）:**
+
+1. **diskutil infoラッパー関数（4関数）**:
+   - `get_volume_mount_point()`: マウントポイント取得
+   - `get_volume_device_node()`: デバイスノード取得
+   - `get_disk_name()`: ディスク名取得
+   - `get_disk_location()`: ディスク位置（Internal/External）取得
+
+2. **高レベルvolume操作（2関数）**:
+   - `get_volume_device_or_fail()`: ボリューム存在確認 + デバイス取得を統合
+   - `ensure_volume_mounted()`: ボリュームのマウント状態を保証
+
+3. **print関数の改良（5関数）**:
+   - `print_success_ln()`: 成功メッセージ + 自動改行
+   - `print_error_ln()`: エラーメッセージ + 自動改行
+   - `print_warning_ln()`: 警告メッセージ + 自動改行
+   - `print_info_ln()`: 情報メッセージ + 自動改行
+   - `print_highlight_ln()`: ハイライトメッセージ + 自動改行
+
+4. **ログ出力関数（2関数）**:
+   - `print_debug()`: DEBUG=1時のみ出力
+   - `print_verbose()`: VERBOSE=1時のみ出力
+
+**コード統一の成果:**
+- diskutilパース処理: 17箇所 → 2箇所（88%削減）
+- 新関数の使用回数: 20回（5モジュールで活用）
+- 戦略的な置き換え: リスク評価により11箇所を厳選して最適化
+
+**テストスイート:**
+- `test-phase7.sh`: 17テスト全パス
+- 13個の新関数すべて検証済み
+- 使用箇所カウント、パターン削減、構文チェック
 
 ### テストスイート
 
@@ -203,4 +240,4 @@ playcover-manager/main.sh
 
 ---
 
-**最終更新**: 2025年10月28日（v5.0.0-alpha3 Phase 6完了、v4.43.0安定版）
+**最終更新**: 2025年10月28日（v5.0.0-alpha4 Phase 7完了、v4.43.0安定版）

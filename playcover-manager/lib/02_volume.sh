@@ -55,7 +55,8 @@ get_mount_point() {
         return 1
     fi
     
-    /usr/sbin/diskutil info "$device" 2>/dev/null | /usr/bin/grep "Mount Point:" | /usr/bin/sed 's/.*Mount Point: *//;s/ *$//'
+    # Use new get_volume_mount_point function
+    get_volume_mount_point "$device"
 }
 
 # Check volume existence with automatic error handling and callback
@@ -358,8 +359,8 @@ get_drive_name() {
     # Extract disk identifier (e.g., disk3 from disk3s1)
     local disk_id=$(echo "$device" | /usr/bin/sed 's|/dev/||;s|s[0-9]*$||')
     
-    # Get drive name from diskutil info
-    /usr/sbin/diskutil info "$disk_id" 2>/dev/null | /usr/bin/grep "Device / Media Name:" | /usr/bin/sed 's/.*Device \/ Media Name: *//' | /usr/bin/sed 's/ *$//'
+    # Use new get_disk_name function
+    get_disk_name "$disk_id"
 }
 
 # Check if PlayCover main volume is mounted

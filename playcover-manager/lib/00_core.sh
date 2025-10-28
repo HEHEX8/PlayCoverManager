@@ -215,6 +215,47 @@ print_underline() {
     echo "${UNDERLINE}$1${NC}"
 }
 
+# Print functions with newline (ln versions)
+print_success_ln() {
+    echo "${SUCCESS}✅ $1${NC}"
+    echo ""
+}
+
+print_error_ln() {
+    echo "${ERROR}❌ $1${NC}"
+    echo ""
+}
+
+print_warning_ln() {
+    echo "${WARNING}⚠️  $1${NC}"
+    echo ""
+}
+
+print_info_ln() {
+    echo "${INFO}ℹ️  $1${NC}"
+    echo ""
+}
+
+print_highlight_ln() {
+    echo "${HIGHLIGHT}▶ $1${NC}"
+    echo ""
+}
+
+# Debug and verbose output functions (controlled by environment variables)
+# Usage: DEBUG=1 ./script.sh (to enable debug output)
+#        VERBOSE=1 ./script.sh (to enable verbose output)
+print_debug() {
+    if [[ "${DEBUG:-0}" == "1" ]]; then
+        echo "${DIM}${GRAY}[DEBUG] $1${NC}" >&2
+    fi
+}
+
+print_verbose() {
+    if [[ "${VERBOSE:-0}" == "1" ]]; then
+        echo "${CYAN}[VERBOSE] $1${NC}"
+    fi
+}
+
 print_batch_progress() {
     local current=$1
     local total=$2
@@ -323,6 +364,181 @@ create_temp_dir() {
     
     echo "$temp_dir"
     return 0
+}
+
+# Get volume mount point from diskutil
+# Args: device_or_volume (device path or volume name)
+# Returns: Mount point path, or empty string if not mounted
+# Usage: local mount_point=$(get_volume_mount_point "/dev/disk3s2")
+get_volume_mount_point() {
+    local target="$1"
+    
+    if [[ -z "$target" ]]; then
+        return 1
+    fi
+    
+    local mount_point=$(/usr/sbin/diskutil info "$target" 2>/dev/null | \
+        /usr/bin/grep "Mount Point:" | \
+        /usr/bin/sed 's/.*Mount Point: *//;s/ *$//')
+    
+    # Filter out "Not applicable" responses
+    if [[ "$mount_point" == "Not applicable"* ]]; then
+        return 1
+    fi
+    
+    if [[ -n "$mount_point" ]]; then
+        echo "$mount_point"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get device node from diskutil
+# Args: device_or_volume (device path or volume name)
+# Returns: Device node (without /dev/), or empty string on error
+# Usage: local device=$(get_volume_device_node "PlayCover")
+get_volume_device_node() {
+    local target="$1"
+    
+    if [[ -z "$target" ]]; then
+        return 1
+    fi
+    
+    local device_node=$(/usr/sbin/diskutil info "$target" 2>/dev/null | \
+        /usr/bin/awk '/Device Node:/ {gsub(/\/dev\//, "", $NF); print $NF}')
+    
+    if [[ -n "$device_node" ]]; then
+        echo "$device_node"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get disk name from diskutil
+# Args: device_or_disk (device path or disk identifier)
+# Returns: Disk name (e.g., "External SSD"), or empty string on error
+# Usage: local name=$(get_disk_name "/dev/disk3")
+get_disk_name() {
+    local target="$1"
+    
+    if [[ -z "$target" ]]; then
+        return 1
+    fi
+    
+    local disk_name=$(/usr/sbin/diskutil info "$target" 2>/dev/null | \
+        /usr/bin/grep "Device / Media Name:" | \
+        /usr/bin/sed 's/.*Device \/ Media Name: *//;s/ *$//')
+    
+    if [[ -n "$disk_name" ]]; then
+        echo "$disk_name"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get disk location (Internal/External)
+# Args: device_or_disk (device path or disk identifier)
+# Returns: "Internal" or "External", or empty string on error
+# Usage: local location=$(get_disk_location "/dev/disk3")
+get_disk_location() {
+    local target="$1"
+    
+    if [[ -z "$target" ]]; then
+        return 1
+    fi
+    
+    local location=$(/usr/sbin/diskutil info "$target" 2>/dev/null | \
+        /usr/bin/awk -F: '/Device Location:/ {gsub(/^ */, "", $2); print $2}')
+    
+    if [[ -n "$location" ]]; then
+        echo "$location"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Get volume device with existence check (high-level wrapper)
+# Args: volume_name
+# Returns: Device identifier (e.g., disk3s2) or exits with error
+# Usage: local device=$(get_volume_device_or_fail "PlayCover") || return 1
+get_volume_device_or_fail() {
+    local volume_name="$1"
+    
+    if [[ -z "$volume_name" ]]; then
+        print_error "ボリューム名が指定されていません"
+        return 1
+    fi
+    
+    # Check if volume exists using existing volume_exists function
+    if ! volume_exists "$volume_name"; then
+        print_error "ボリューム '${volume_name}' が見つかりません"
+        return 1
+    fi
+    
+    # Get device using existing get_volume_device function
+    local device=$(get_volume_device "$volume_name")
+    
+    if [[ -z "$device" ]]; then
+        print_error "ボリューム '${volume_name}' のデバイス情報を取得できません"
+        return 1
+    fi
+    
+    echo "$device"
+    return 0
+}
+
+# Ensure volume is mounted (mount if not mounted, get mount point)
+# Args: volume_name, [mount_point], [nobrowse]
+# Returns: Mount point path
+# Usage: local mount=$(ensure_volume_mounted "PlayCover" "/tmp/mnt" "nobrowse") || return 1
+ensure_volume_mounted() {
+    local volume_name="$1"
+    local desired_mount="$2"
+    local nobrowse="${3:-}"
+    
+    if [[ -z "$volume_name" ]]; then
+        return 1
+    fi
+    
+    # Check if volume exists
+    local device=$(get_volume_device_or_fail "$volume_name") || return 1
+    
+    # Check current mount point
+    local current_mount=$(get_volume_mount_point "$device")
+    
+    # If already mounted at desired location, return it
+    if [[ -n "$current_mount" ]] && [[ -n "$desired_mount" ]] && [[ "$current_mount" == "$desired_mount" ]]; then
+        echo "$current_mount"
+        return 0
+    fi
+    
+    # If mounted elsewhere but no desired mount specified, return current
+    if [[ -n "$current_mount" ]] && [[ -z "$desired_mount" ]]; then
+        echo "$current_mount"
+        return 0
+    fi
+    
+    # If not mounted, or mounted at wrong location, need to mount
+    if [[ -n "$desired_mount" ]]; then
+        # Unmount if mounted elsewhere
+        if [[ -n "$current_mount" ]]; then
+            unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force" || return 1
+        fi
+        
+        # Mount to desired location
+        if mount_volume "$device" "$desired_mount" "$nobrowse" "silent"; then
+            echo "$desired_mount"
+            return 0
+        else
+            return 1
+        fi
+    fi
+    
+    return 1
 }
 
 # Clean up temporary directory with error handling

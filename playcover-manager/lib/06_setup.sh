@@ -204,7 +204,7 @@ install_playcover() {
 select_external_disk() {
     print_header "コンテナボリューム作成先の選択"
     
-    local root_device=$(diskutil info / | grep "Device Node:" | awk '{print $3}')
+    local root_device=$(get_volume_device_node "/")
     local internal_disk=$(echo "$root_device" | sed -E 's/disk([0-9]+).*/disk\1/')
     
     print_info "利用可能な外部ストレージを検索中..."
@@ -246,7 +246,7 @@ select_external_disk() {
                 continue
             fi
             
-            local device_name=$(diskutil info "/dev/$disk_id" | grep "Device / Media Name:" | sed 's/.*: *//')
+            local device_name=$(get_disk_name "/dev/$disk_id")
             local total_size=$(diskutil info "/dev/$disk_id" | grep "Disk Size:" | sed 's/.*: *//' | awk '{print $1, $2}')
             
             if [[ -z "$device_name" ]] || [[ -z "$total_size" ]]; then
@@ -255,7 +255,7 @@ select_external_disk() {
             
             local is_removable=$(diskutil info "/dev/$disk_id" | grep "Removable Media:" | grep "Yes")
             local protocol=$(diskutil info "/dev/$disk_id" | grep "Protocol:" | sed 's/.*: *//')
-            local location=$(diskutil info "/dev/$disk_id" | grep "Device Location:" | sed 's/.*: *//')
+            local location=$(get_disk_location "/dev/$disk_id")
             
             if [[ -n "$is_removable" ]] || \
                [[ "$protocol" =~ (USB|Thunderbolt|PCI-Express) ]] || \

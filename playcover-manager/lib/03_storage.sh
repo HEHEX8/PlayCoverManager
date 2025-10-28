@@ -191,7 +191,7 @@ get_storage_type() {
     [[ "$debug" == "true" ]] && echo "[DEBUG] Device: $device, Disk ID: $disk_id" >&2
     
     # Check the disk location
-    local disk_location=$(diskutil info "/dev/$disk_id" 2>/dev/null | /usr/bin/awk -F: '/Device Location:/ {gsub(/^ */, "", $2); print $2}')
+    local disk_location=$(get_disk_location "/dev/$disk_id")
     
     [[ "$debug" == "true" ]] && echo "[DEBUG] Disk location: $disk_location" >&2
     
@@ -724,7 +724,7 @@ perform_internal_to_external_migration() {
     /usr/bin/sudo /bin/mkdir -p "$temp_check_mount"
     
     # Check if volume is already mounted
-    local existing_mount=$(diskutil info "$volume_device" 2>/dev/null | grep "Mount Point" | sed 's/.*: *//')
+    local existing_mount=$(get_volume_mount_point "$volume_device")
     local available_bytes=0
     local mount_cleanup_needed=false
     
