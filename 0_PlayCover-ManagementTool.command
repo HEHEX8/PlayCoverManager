@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.40.1 - Fix: Remove old backup function with unmatched quotes
+# Version: 4.40.2 - Fix: Monitor script errors and uninstall check
 #######################################################
 
 #######################################################
@@ -3879,8 +3879,8 @@ install_disk_monitor() {
     local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
     local log_file="/var/log/playcover-disk-monitor.log"
     
-    # Check if already installed (need sudo for system paths)
-    if /usr/bin/sudo test -f "$launch_daemon_path"; then
+    # Check if already installed (use ls instead of test for system paths)
+    if /usr/bin/sudo ls "$launch_daemon_path" >/dev/null 2>&1; then
         print_warning "自動マウント機能は既にインストールされています"
         echo ""
         
@@ -3911,8 +3911,10 @@ LOG_FILE="/var/log/playcover-disk-monitor.log"
 MAPPING_FILE="\${USER_HOME}/.playcover-volume-mapping.tsv"
 PLAYCOVER_VOLUME_NAME="PlayCover"
 
-# Ensure log directory exists
-mkdir -p "$(dirname "$LOG_FILE")"
+# Ensure log directory and file exist with proper permissions
+/bin/mkdir -p "$(dirname "$LOG_FILE")"
+/usr/bin/touch "$LOG_FILE" 2>/dev/null
+/bin/chmod 644 "$LOG_FILE" 2>/dev/null
 
 # Log function
 log_message() {
@@ -3964,6 +3966,8 @@ mount_all_volumes() {
         # Check for internal data
         if [[ -d "$target_path" ]]; then
             local dir_size=$(du -sk "$target_path" 2>/dev/null | awk '{print $1}')
+            # Ensure dir_size has a value (default to 0 if empty)
+            dir_size=${dir_size:-0}
             if [[ $dir_size -gt 100 ]]; then
                 log_message "WARNING: '${volume_name}' - 内蔵データが存在するためスキップ (${dir_size}KB)"
                 ((fail_count++))
@@ -4154,11 +4158,14 @@ uninstall_disk_monitor() {
     local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
     local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
     
-    # Check if LaunchDaemon exists (need sudo for system paths)
-    if ! /usr/bin/sudo test -f "$launch_daemon_path"; then
-        print_warning "自動マウント機能はインストールされていません"
-        wait_for_enter
-        return
+    # Check if LaunchDaemon is loaded (more reliable than file check)
+    if ! /usr/bin/sudo launchctl list 2>/dev/null | grep -q "com.playcover.diskmount"; then
+        # Double check with file existence
+        if ! /usr/bin/sudo ls "$launch_daemon_path" >/dev/null 2>&1; then
+            print_warning "自動マウント機能はインストールされていません"
+            wait_for_enter
+            return
+        fi
     fi
     
     if ! prompt_confirmation "${RED}自動マウント機能をアンインストールしますか？${NC}" "Y"; then
@@ -4210,8 +4217,8 @@ check_disk_monitor_status() {
         print_error "監視スクリプト: 未インストール"
     fi
     
-    # LaunchDaemon plist needs sudo to check (system path)
-    if /usr/bin/sudo test -f "$launch_daemon_path"; then
+    # LaunchDaemon plist needs sudo to check (use ls instead of test)
+    if /usr/bin/sudo ls "$launch_daemon_path" >/dev/null 2>&1; then
         print_success "LaunchDaemon: インストール済み"
     else
         print_error "LaunchDaemon: 未インストール"
@@ -4363,8 +4370,8 @@ show_auto_mount_menu() {
         local is_loaded=false
         
         # Check if installed (both plist and script must exist)
-        # Use sudo test for system paths that require elevated privileges to read
-        if /usr/bin/sudo test -f "$launch_daemon_path" && [[ -x "$monitor_script_path" ]]; then
+        # Use sudo ls for system paths that require elevated privileges to read
+        if /usr/bin/sudo ls "$launch_daemon_path" >/dev/null 2>&1 && [[ -x "$monitor_script_path" ]]; then
             is_installed=true
             # Check if loaded (use sudo launchctl for system-level daemon)
             if /usr/bin/sudo launchctl list 2>/dev/null | grep -q "com.playcover.diskmount"; then
