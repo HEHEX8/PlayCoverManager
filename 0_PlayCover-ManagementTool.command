@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.37.2 - Fix: Unified mapping file location to fixed path
+# Version: 4.37.3 - Fix: Disk monitor volume detection and debug logging
 #######################################################
 
 #######################################################
@@ -3798,7 +3798,7 @@ show_menu() {
     clear
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.2${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 4.37.3${NC}"
     echo ""
     
     show_quick_status
@@ -3901,7 +3901,7 @@ install_disk_monitor() {
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.2
+# Version: 1.0.3
 
 LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
 MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
@@ -3938,12 +3938,14 @@ mount_all_volumes() {
         # Skip empty lines
         [[ -z "$volume_name" ]] && continue
         
-        # Check if volume exists
-        local volume_device=$(diskutil list 2>/dev/null | grep "$volume_name" | awk '{print $NF}')
+        # Check if volume exists (use same logic as main script)
+        local volume_device=$(diskutil list 2>/dev/null | grep -i "APFS Volume" | grep "${volume_name}" | awk '{print $NF}')
         if [[ -z "$volume_device" ]]; then
             log_message "WARNING: ボリューム '${volume_name}' が見つかりません（ドライブ未接続の可能性）"
             continue
         fi
+        
+        log_message "DEBUG: ボリューム '${volume_name}' のデバイス: ${volume_device}"
         
         # Target mount point
         local target_path="${HOME}/Library/Containers/${bundle_id}"
@@ -3969,15 +3971,18 @@ mount_all_volumes() {
             fi
         fi
         
-        # Create mount point
-        sudo /bin/mkdir -p "$target_path" 2>/dev/null
+        # Create mount point if not exists
+        if [[ ! -d "$target_path" ]]; then
+            sudo /bin/mkdir -p "$target_path" 2>/dev/null
+        fi
         
-        # Mount with nobrowse option
-        if sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>/dev/null; then
+        # Mount with nobrowse option (use same logic as mount_volume function)
+        log_message "DEBUG: マウント実行: /dev/${volume_device} → ${target_path}"
+        if sudo /sbin/mount -t apfs -o nobrowse "/dev/${volume_device}" "$target_path" 2>&1 | tee -a "$LOG_FILE"; then
             log_message "SUCCESS: '${volume_name}' をマウント成功"
             ((success_count++))
         else
-            log_message "ERROR: '${volume_name}' のマウント失敗"
+            log_message "ERROR: '${volume_name}' のマウント失敗 (デバイス: /dev/${volume_device})"
             ((fail_count++))
         fi
         
