@@ -125,7 +125,7 @@ select_ipa_files() {
 try
     tell application "System Events"
         activate
-        set theFiles to choose file with prompt "インストールする IPA ファイルを選択してください（複数選択可）:" of type {"ipa", "public.archive", "public.data"} with multiple selections allowed
+        set theFiles to choose file with prompt "インストールする IPA ファイルを選択してください（複数選択可）:" of type {"ipa"} with multiple selections allowed
         
         set posixPaths to {}
         repeat with aFile in theFiles

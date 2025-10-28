@@ -607,8 +607,27 @@ individual_volume_control() {
         if [[ "$current_mount" == "$target_path" ]]; then
             # Correctly mounted -> Unmount
             
-            # Quit app first
-            quit_app_if_running "$bundle_id"
+            # Re-check if app is running (race condition prevention)
+            local app_is_running=false
+            if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+                # Special check for PlayCover itself
+                is_playcover_running && app_is_running=true
+            else
+                # Normal app check
+                is_app_running "$bundle_id" && app_is_running=true
+            fi
+            
+            if [[ "$app_is_running" == true ]]; then
+                clear
+                print_header "${display_name} の操作"
+                echo ""
+                print_error "アンマウント失敗: アプリが実行中です"
+                echo ""
+                print_info "アプリを終了してから再度お試しください"
+                wait_for_enter
+                individual_volume_control
+                return
+            fi
             
             local device=$(get_volume_device "$volume_name")
             if unmount_volume "$device" "silent"; then
@@ -632,8 +651,27 @@ individual_volume_control() {
         else
             # Mounted at wrong location -> Remount to correct location
             
-            # Quit app first
-            quit_app_if_running "$bundle_id"
+            # Re-check if app is running (race condition prevention)
+            local app_is_running=false
+            if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+                # Special check for PlayCover itself
+                is_playcover_running && app_is_running=true
+            else
+                # Normal app check
+                is_app_running "$bundle_id" && app_is_running=true
+            fi
+            
+            if [[ "$app_is_running" == true ]]; then
+                clear
+                print_header "${display_name} の操作"
+                echo ""
+                print_error "再マウント失敗: アプリが実行中です"
+                echo ""
+                print_info "アプリを終了してから再度お試しください"
+                wait_for_enter
+                individual_volume_control
+                return
+            fi
             
             local device=$(get_volume_device "$volume_name")
             
