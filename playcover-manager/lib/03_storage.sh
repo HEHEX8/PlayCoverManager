@@ -26,7 +26,7 @@
 # Container Size Calculation
 #######################################################
 
-# Get container size in human-readable format
+# Get container size in human-readable format (decimal/1000-based like macOS Finder)
 get_container_size() {
     local container_path=$1
     
@@ -35,14 +35,16 @@ get_container_size() {
         return
     fi
     
-    # Use du -sh for total size (no /usr/bin/sudo needed for user's own files)
-    local size=$(/usr/bin/du -sh "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
+    # Get size in bytes first, then use our bytes_to_human function for consistent decimal units
+    local size_kb=$(/usr/bin/du -sk "$container_path" 2>/dev/null | /usr/bin/awk '{print $1}')
     
-    if [[ -z "$size" ]]; then
+    if [[ -z "$size_kb" ]] || [[ ! "$size_kb" =~ ^[0-9]+$ ]]; then
         echo "0B"
-    else
-        echo "$size"
+        return
     fi
+    
+    local size_bytes=$((size_kb * 1024))
+    bytes_to_human "$size_bytes"
 }
 
 # Get container size with styled formatting (bold number + normal unit)
@@ -98,18 +100,20 @@ get_storage_free_space_bytes() {
 }
 
 # Get storage free space (APFS volumes share space in same container)
-# Uses df -H for decimal units (MB, GB, TB) instead of binary (MiB, GiB, TiB)
+# Uses decimal units (1000-based: KB/MB/GB/TB) like macOS Finder
 get_storage_free_space() {
     local target_path="${1:-$HOME}"  # Default to home directory if no path provided
     
-    # Get free space using df -H (decimal units: 10^n)
-    local free_space=$(/bin/df -H "$target_path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
+    # Get free space in KB, then convert to bytes and use our bytes_to_human function
+    local free_kb=$(/bin/df -k "$target_path" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/awk '{print $4}')
     
-    if [[ -z "$free_space" ]]; then
+    if [[ -z "$free_kb" ]] || [[ ! "$free_kb" =~ ^[0-9]+$ ]]; then
         echo "不明"
-    else
-        echo "$free_space"
+        return
     fi
+    
+    local free_bytes=$((free_kb * 1024))
+    bytes_to_human "$free_bytes"
 }
 
 # Get external drive free space using PlayCover volume
@@ -767,22 +771,27 @@ perform_internal_to_external_migration() {
     fi
     cleanup_temp_dir "$temp_check_mount" true
     
-    # Convert to human readable (bytes to MB)
-    local source_size_mb=$((source_size_bytes / 1024 / 1024))
-    local available_mb=$((available_bytes / 1024 / 1024))
-    local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+    # Calculate required space with 10% safety margin
+    local required_bytes=$((source_size_bytes * 110 / 100))
+    
+    # Convert to human-readable format (decimal/1000-based like macOS Finder)
+    local source_size_human=$(bytes_to_human "$source_size_bytes")
+    local available_human=$(bytes_to_human "$available_bytes")
+    local required_human=$(bytes_to_human "$required_bytes")
     
     echo ""
     print_info "容量チェック結果:"
-    echo "  コピー元サイズ: ${source_size_mb} MB"
-    echo "  転送先空き容量: ${available_mb} MB"
-    echo "  必要容量（余裕込み）: ${required_mb} MB"
+    echo "  コピー元サイズ: ${source_size_human}"
+    echo "  転送先空き容量: ${available_human}"
+    echo "  必要容量（余裕込み）: ${required_human}"
     echo ""
     
-    if [[ $available_mb -lt $required_mb ]]; then
+    if [[ $available_bytes -lt $required_bytes ]]; then
         print_error "容量不足: 転送先の空き容量が不足しています"
         echo ""
-        echo "不足分: $((required_mb - available_mb)) MB"
+        local shortage_bytes=$((required_bytes - available_bytes))
+        local shortage_human=$(bytes_to_human "$shortage_bytes")
+        echo "不足分: ${shortage_human}"
         echo ""
         print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
         echo ""
@@ -966,7 +975,8 @@ perform_external_to_internal_migration() {
     
     # Get directory size (no sudo needed - du can read mounted volumes)
     local source_size_kb=$(get_directory_size "$check_mount_point")
-    local source_size_bytes=$((source_size_kb * 1024))  # Convert KB to bytes
+    # Convert from df's 1024-based KB to actual bytes, then use decimal (1000-based) units
+    local source_size_bytes=$((source_size_kb * 1024))
     
     # Unmount temporary check mount if created
     if [[ -n "$temp_check_mount" ]]; then
@@ -1013,24 +1023,30 @@ perform_external_to_internal_migration() {
     done
     
     local available_kb=$(get_available_space "$internal_disk_path")
+    # Convert from df's 1024-based KB to actual bytes
     local available_bytes=$((available_kb * 1024))
     
-    # Convert to human readable (bytes to MB)
-    local source_size_mb=$((source_size_bytes / 1024 / 1024))
-    local available_mb=$((available_bytes / 1024 / 1024))
-    local required_mb=$((source_size_mb * 110 / 100))  # Add 10% safety margin
+    # Calculate required space with 10% safety margin
+    local required_bytes=$((source_size_bytes * 110 / 100))
+    
+    # Convert to human-readable format (decimal/1000-based like macOS Finder)
+    local source_size_human=$(bytes_to_human "$source_size_bytes")
+    local available_human=$(bytes_to_human "$available_bytes")
+    local required_human=$(bytes_to_human "$required_bytes")
     
     echo ""
     print_info "容量チェック結果:"
-    echo "  コピー元サイズ: ${source_size_mb} MB"
-    echo "  転送先空き容量: ${available_mb} MB"
-    echo "  必要容量（余裕込み）: ${required_mb} MB"
+    echo "  コピー元サイズ: ${source_size_human}"
+    echo "  転送先空き容量: ${available_human}"
+    echo "  必要容量（余裕込み）: ${required_human}"
     echo ""
     
-    if [[ $available_mb -lt $required_mb ]]; then
+    if [[ $available_bytes -lt $required_bytes ]]; then
         print_error "容量不足: 転送先の空き容量が不足しています"
         echo ""
-        echo "不足分: $((required_mb - available_mb)) MB"
+        local shortage_bytes=$((required_bytes - available_bytes))
+        local shortage_human=$(bytes_to_human "$shortage_bytes")
+        echo "不足分: ${shortage_human}"
         echo ""
         print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
         echo ""
@@ -1119,7 +1135,7 @@ perform_external_to_internal_migration() {
     # Debug: Show source path and content
     print_info "コピー元: ${source_mount}"
     local file_count=$(sudo /usr/bin/find "$source_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    local total_size=$(sudo /usr/bin/du -sh "$source_mount" 2>/dev/null | /usr/bin/awk '{print $1}')
+    local total_size=$(get_container_size "$source_mount")
     print_info "  ファイル数: ${file_count}"
     print_info "  データサイズ: ${total_size}"
     

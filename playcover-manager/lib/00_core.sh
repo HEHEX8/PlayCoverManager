@@ -351,6 +351,46 @@ get_directory_size() {
     fi
 }
 
+# Convert bytes to human-readable format (decimal units: 1000-based like macOS Finder)
+# Args: bytes
+# Returns: Human-readable string (e.g., "1.5GB", "250MB", "5.2KB")
+# Usage: local size=$(bytes_to_human 1500000000)  # Returns "1.5GB"
+bytes_to_human() {
+    local bytes=$1
+    
+    if [[ -z "$bytes" ]] || [[ ! "$bytes" =~ ^[0-9]+$ ]]; then
+        echo "0B"
+        return 1
+    fi
+    
+    # Use decimal (1000-based) units like macOS Finder
+    # This is a statement against Windows using binary units (1024) but calling them GB!
+    if [[ $bytes -ge 1000000000000 ]]; then
+        # TB
+        local tb=$((bytes / 1000000000000))
+        local remainder=$((bytes % 1000000000000))
+        local decimal=$((remainder / 100000000))  # First digit after decimal
+        echo "${tb}.${decimal}TB"
+    elif [[ $bytes -ge 1000000000 ]]; then
+        # GB
+        local gb=$((bytes / 1000000000))
+        local remainder=$((bytes % 1000000000))
+        local decimal=$((remainder / 100000000))  # First digit after decimal
+        echo "${gb}.${decimal}GB"
+    elif [[ $bytes -ge 1000000 ]]; then
+        # MB
+        local mb=$((bytes / 1000000))
+        echo "${mb}MB"
+    elif [[ $bytes -ge 1000 ]]; then
+        # KB
+        local kb=$((bytes / 1000))
+        echo "${kb}KB"
+    else
+        # Bytes
+        echo "${bytes}B"
+    fi
+}
+
 # Create temporary directory with automatic cleanup on error
 # Returns: temp directory path
 # Usage: local temp_dir=$(create_temp_dir) || return 1
