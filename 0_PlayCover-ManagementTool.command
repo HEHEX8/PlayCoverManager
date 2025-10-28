@@ -3,7 +3,7 @@
 #######################################################
 # PlayCover Complete Manager
 # macOS Tahoe 26.0.1 Compatible
-# Version: 4.38.0 - Feature: Full Disk Access request during installation
+# Version: 4.39.0 - Feature: LaunchDaemon (system-level) auto-mount
 #######################################################
 
 #######################################################
@@ -3874,12 +3874,13 @@ install_disk_monitor() {
     clear
     print_header "リムーバブルドライブ自動マウント - インストール"
     
-    local launch_agent_path="${HOME}/Library/LaunchAgents/com.playcover.diskmount.plist"
-    local monitor_script_path="${HOME}/.playcover-disk-monitor.sh"
-    local log_file="${HOME}/Library/Logs/playcover-disk-monitor.log"
+    # Use LaunchDaemon (system-level) instead of LaunchAgent (user-level)
+    local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
+    local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
+    local log_file="/var/log/playcover-disk-monitor.log"
     
     # Check if already installed
-    if [[ -f "$launch_agent_path" ]]; then
+    if [[ -f "$launch_daemon_path" ]]; then
         print_warning "自動マウント機能は既にインストールされています"
         echo ""
         
@@ -3887,24 +3888,27 @@ install_disk_monitor() {
             return
         fi
         
-        # Unload existing LaunchAgent
-        if launchctl list | grep -q "com.playcover.diskmount"; then
-            print_info "既存のLaunchAgentをアンロード中..."
-            launchctl unload "$launch_agent_path" 2>/dev/null
+        # Unload existing LaunchDaemon
+        if /usr/bin/sudo launchctl list | grep -q "com.playcover.diskmount"; then
+            print_info "既存のLaunchDaemonをアンロード中..."
+            /usr/bin/sudo launchctl unload "$launch_daemon_path" 2>/dev/null
         fi
     fi
     
     print_info "監視スクリプトを作成中..."
     
-    # Create monitoring script
-    cat > "$monitor_script_path" << 'EOF'
+    # Create monitoring script with embedded user home path
+    local user_home="${HOME}"
+    cat > /tmp/playcover-disk-monitor.sh.$$ << EOF
 #!/bin/zsh
 
 # PlayCover Disk Monitor - Auto-mount all volumes when PlayCover drive detected
-# Version: 1.0.6
+# Version: 2.0.0 - LaunchDaemon (system-level, no sudoers required)
 
-LOG_FILE="${HOME}/Library/Logs/playcover-disk-monitor.log"
-MAPPING_FILE="${HOME}/.playcover-volume-mapping.tsv"
+# Use specific user's home directory (not root's home)
+USER_HOME="${user_home}"
+LOG_FILE="/var/log/playcover-disk-monitor.log"
+MAPPING_FILE="\${USER_HOME}/.playcover-volume-mapping.tsv"
 PLAYCOVER_VOLUME_NAME="PlayCover"
 
 # Ensure log directory exists
@@ -3948,7 +3952,7 @@ mount_all_volumes() {
         log_message "DEBUG: ボリューム '${volume_name}' のデバイス: ${volume_device}"
         
         # Target mount point
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        local target_path="\${USER_HOME}/Library/Containers/${bundle_id}"
         
         # Check if already mounted
         if mount | grep -q " on ${target_path} "; then
@@ -4029,26 +4033,13 @@ mount_all_volumes() {
 
 # Main execution
 log_message "=========================================="
-log_message "INFO: PlayCoverドライブ監視開始"
-log_message "DEBUG: 実行ユーザー: $(whoami)"
-log_message "DEBUG: HOME: ${HOME}"
-log_message "DEBUG: PATH: ${PATH}"
+log_message "INFO: PlayCoverドライブ監視開始（システム権限）"
+log_message "DEBUG: 実行ユーザー: \$(whoami)"
+log_message "DEBUG: USER_HOME: \${USER_HOME}"
+log_message "DEBUG: PATH: \${PATH}"
 
-# Check sudoers configuration by testing an allowed command
-# Use mkdir with a test path that won't cause issues
-local test_path="${HOME}/Library/Containers/.playcover-sudo-test-$$"
-if sudo -n /bin/mkdir -p "$test_path" >/dev/null 2>&1; then
-    log_message "INFO: sudoers設定確認 OK"
-    # Clean up test directory
-    sudo /bin/rm -rf "$test_path" 2>/dev/null
-else
-    log_message "ERROR: sudoers設定が正しく動作していません"
-    log_message "ERROR: sudo権限がないため自動マウントできません"
-    log_message "INFO: sudoersファイル確認: sudo cat /etc/sudoers.d/playcover-automount"
-    log_message "INFO: メインメニュー → 6 → 1 から再インストールしてsudoers設定を行ってください"
-    osascript -e "display notification \"sudoers設定が必要です\" with title \"PlayCover 自動マウント エラー\" sound name \"Basso\"" 2>/dev/null
-    exit 1
-fi
+# Running as root (LaunchDaemon), no sudoers check needed
+log_message "INFO: システム権限で実行中（sudoチェック不要）"
 
 # Check if PlayCover drive is connected
 if check_playcover_drive; then
@@ -4061,14 +4052,20 @@ fi
 log_message "INFO: 監視処理終了"
 EOF
 
-    chmod +x "$monitor_script_path"
-    print_success "監視スクリプトを作成しました"
+    # Install script to /usr/local/bin with sudo
+    print_info "監視スクリプトをインストール中..."
+    if /usr/bin/sudo /usr/bin/install -m 755 /tmp/playcover-disk-monitor.sh.$$ "$monitor_script_path"; then
+        print_success "監視スクリプトをインストールしました: ${monitor_script_path}"
+        /bin/rm /tmp/playcover-disk-monitor.sh.$$
+    else
+        print_error "監視スクリプトのインストールに失敗しました"
+        return
+    fi
     
-    print_info "LaunchAgent plistを作成中..."
+    print_info "LaunchDaemon plistを作成中..."
     
-    # Create LaunchAgent plist (WatchPaths for /Volumes)
-    # Use /bin/zsh to ensure proper shell environment and sudo access
-    cat > "$launch_agent_path" << EOF
+    # Create LaunchDaemon plist (system-level, WatchPaths for /Volumes)
+    cat > /tmp/com.playcover.diskmount.plist.$$ << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -4078,8 +4075,6 @@ EOF
     
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/zsh</string>
-        <string>-c</string>
         <string>${monitor_script_path}</string>
     </array>
     
@@ -4096,26 +4091,190 @@ EOF
     
     <key>RunAtLoad</key>
     <true/>
-    
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-        <key>HOME</key>
-        <string>${HOME}</string>
-    </dict>
 </dict>
 </plist>
 EOF
 
-    print_success "LaunchAgent plistを作成しました"
+    # Install LaunchDaemon plist with sudo
+    print_info "LaunchDaemon plistをインストール中..."
+    if /usr/bin/sudo /usr/bin/install -m 644 -o root -g wheel /tmp/com.playcover.diskmount.plist.$$ "$launch_daemon_path"; then
+        print_success "LaunchDaemon plistをインストールしました"
+        /bin/rm /tmp/com.playcover.diskmount.plist.$$
+    else
+        print_error "LaunchDaemon plistのインストールに失敗しました"
+        return
+    fi
     
-    # Setup sudoers for passwordless mount operations
-    print_info "sudo権限設定を構成中..."
+    # Load LaunchDaemon (system-level, no sudoers or Full Disk Access needed)
+    print_info "LaunchDaemonを読み込み中..."
+    if /usr/bin/sudo launchctl load "$launch_daemon_path" 2>/dev/null; then
+        print_success "LaunchDaemonを読み込みました"
+    else
+        print_warning "LaunchDaemonの読み込みに失敗しました（既に読み込まれている可能性）"
+    fi
+    
     echo ""
-    print_warning "${YELLOW}パスワード不要のマウント操作のためにsudoers設定が必要です${NC}"
+    print_separator
+    echo ""
+    print_success "リムーバブルドライブ自動マウント機能のインストールが完了しました！"
+    echo ""
+    print_info "${CYAN}動作仕様:${NC}"
+    echo "  • ${BOLD}システム権限${NC}で動作（sudoers不要、フルディスクアクセス不要）"
+    echo "  • PlayCoverボリュームを含むドライブを接続すると自動検知"
+    echo "  • 登録されている全ボリュームを自動マウント"
+    echo "  • 内蔵データが存在する場合はスキップ（安全設計）"
+    echo "  • 小容量の初期データは自動クリーンアップ"
+    echo ""
+    print_info "${CYAN}ログファイル:${NC} ${log_file}"
+    echo ""
+    print_info "${CYAN}テスト方法:${NC}"
+    echo "  1. ドライブを一度取り外し"
+    echo "  2. 再接続すると自動的にマウント処理が実行されます"
+    echo "  3. 通知が表示され、ログに記録されます"
+    echo ""
+    print_info "${CYAN}LaunchDaemonの確認:${NC}"
+    echo "  状態確認: ${CYAN}sudo launchctl list | grep playcover${NC}"
+    echo "  ログ確認: ${CYAN}sudo tail -f ${log_file}${NC}"
+    echo ""
+    wait_for_enter
+}
+
+# Uninstall disk monitoring LaunchDaemon
+uninstall_disk_monitor() {
+    clear
+    print_header "リムーバブルドライブ自動マウント - アンインストール"
+    
+    local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
+    local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
+    
+    if [[ ! -f "$launch_daemon_path" ]]; then
+        print_warning "自動マウント機能はインストールされていません"
+        wait_for_enter
+        return
+    fi
+    
+    if ! prompt_confirmation "${RED}自動マウント機能をアンインストールしますか？${NC}" "Y"; then
+        print_info "アンインストールをキャンセルしました"
+        wait_for_enter
+        return
+    fi
+    
+    # Unload LaunchDaemon
+    if /usr/bin/sudo launchctl list | grep -q "com.playcover.diskmount"; then
+        print_info "LaunchDaemonをアンロード中..."
+        /usr/bin/sudo launchctl unload "$launch_daemon_path" 2>/dev/null
+        print_success "LaunchDaemonをアンロードしました"
+    fi
+    
+    # Remove files
+    print_info "ファイルを削除中..."
+    [[ -f "$launch_daemon_path" ]] && /usr/bin/sudo /bin/rm "$launch_daemon_path"
+    [[ -f "$monitor_script_path" ]] && /usr/bin/sudo /bin/rm "$monitor_script_path"
+    print_success "ファイルを削除しました"
+    
+    echo ""
+    print_separator
+    echo ""
+    print_success "自動マウント機能のアンインストールが完了しました"
+    echo ""
+    print_info "${CYAN}ログファイルは残されています:${NC}"
+    echo "  /var/log/playcover-disk-monitor.log"
+    wait_for_enter
+}
+
+# Check disk monitor status
+check_disk_monitor_status() {
+    clear
+    print_header "リムーバブルドライブ自動マウント - 動作確認"
+    
+    local launch_daemon_path="/Library/LaunchDaemons/com.playcover.diskmount.plist"
+    local monitor_script_path="/usr/local/bin/playcover-disk-monitor.sh"
+    local log_file="/var/log/playcover-disk-monitor.log"
+    
+    # Installation status
+    echo "${CYAN}インストール状態:${NC}"
     echo ""
     
+    if [[ -f "$monitor_script_path" ]]; then
+        print_success "監視スクリプト: インストール済み"
+    else
+        print_error "監視スクリプト: 未インストール"
+    fi
+    
+    if [[ -f "$launch_daemon_path" ]]; then
+        print_success "LaunchDaemon: インストール済み"
+    else
+        print_error "LaunchDaemon: 未インストール"
+    fi
+    
+    echo ""
+    
+    # LaunchDaemon status
+    echo "${CYAN}LaunchDaemon状態:${NC}"
+    echo ""
+    
+    if /usr/bin/sudo launchctl list | grep -q "com.playcover.diskmount"; then
+        print_success "LaunchDaemon: 読み込み済み ✅"
+        local daemon_info=$(/usr/bin/sudo launchctl list | grep "com.playcover.diskmount")
+        echo "  詳細: $daemon_info"
+    else
+        print_error "LaunchDaemon: 未読み込み"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    
+    # Recent logs
+    echo "${CYAN}最近のログ（最新15行）:${NC}"
+    echo ""
+    
+    if [[ -f "$log_file" ]]; then
+        /usr/bin/sudo tail -15 "$log_file" | while IFS= read -r line; do
+            if echo "$line" | grep -q "ERROR"; then
+                echo "${RED}${line}${NC}"
+            elif echo "$line" | grep -q "SUCCESS"; then
+                echo "${GREEN}${line}${NC}"
+            elif echo "$line" | grep -q "WARNING"; then
+                echo "${ORANGE}${line}${NC}"
+            elif echo "$line" | grep -q "INFO"; then
+                echo "${SKY_BLUE}${line}${NC}"
+            else
+                echo "$line"
+            fi
+        done
+    else
+        print_warning "ログファイルが見つかりません"
+    fi
+    
+    echo ""
+    print_separator
+    echo ""
+    
+    # Manual test
+    echo -n "${CYAN}スクリプトを手動実行してテストしますか？ (y/N):${NC} "
+    read test_confirm
+    
+    if [[ "$test_confirm" =~ ^[Yy]$ ]]; then
+        echo ""
+        print_info "監視スクリプトを実行中（sudo権限が必要）..."
+        echo ""
+        
+        if [[ -x "$monitor_script_path" ]]; then
+            /usr/bin/sudo "$monitor_script_path"
+            echo ""
+            print_success "実行完了（ログファイルを確認してください）"
+        else
+            print_error "スクリプトが実行可能ではありません"
+        fi
+    fi
+    
+    wait_for_enter
+}
+
+# Show auto-mount menu (remove old LaunchAgent/sudoers/FDA parts)
+show_auto_mount_menu_OLD_BACKUP() {
+    # This function contains old code, keeping for reference
     if prompt_confirmation "sudoers設定を自動で行いますか？" "Y"; then
         echo ""
         
