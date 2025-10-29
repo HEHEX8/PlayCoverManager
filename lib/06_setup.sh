@@ -283,10 +283,12 @@ select_external_disk() {
     echo -n "選択してください (1-${#external_disks}): "
     read disk_choice
     
+    # Validate input
     if [[ ! "$disk_choice" =~ ^[0-9]+$ ]] || [[ $disk_choice -lt 1 ]] || [[ $disk_choice -gt ${#external_disks} ]]; then
-        print_error "無効な選択です"
-        wait_for_enter
-        exit 1
+        echo ""
+        print_error "無効な選択です（1〜${#external_disks} の数字を入力してください）"
+        SELECTED_EXTERNAL_DISK=""  # Clear selection to trigger retry
+        return 1
     fi
     
     SELECTED_EXTERNAL_DISK="${external_disks[$disk_choice]}"
@@ -437,11 +439,11 @@ run_initial_setup() {
     
     # Step 1: Architecture check
     check_architecture
-    wait_for_enter "Enterキーで続行..."
     
     # Step 2: Xcode tools check
     check_xcode_tools
     if [[ $NEED_XCODE_TOOLS == true ]]; then
+        echo ""
         if ! prompt_confirmation "Xcode Command Line Tools をインストールしますか？" "Y/n"; then
             print_error "Xcode Command Line Tools は必須です"
             wait_for_enter
@@ -449,11 +451,11 @@ run_initial_setup() {
         fi
         install_xcode_tools
     fi
-    wait_for_enter "Enterキーで続行..."
     
     # Step 3: Homebrew check
     check_homebrew
     if [[ $NEED_HOMEBREW == true ]]; then
+        echo ""
         if ! prompt_confirmation "Homebrew をインストールしますか？" "Y/n"; then
             print_error "Homebrew は必須です"
             wait_for_enter
@@ -461,11 +463,11 @@ run_initial_setup() {
         fi
         install_homebrew
     fi
-    wait_for_enter "Enterキーで続行..."
     
     # Step 4: PlayCover check
     check_playcover_installation
     if [[ $NEED_PLAYCOVER == true ]]; then
+        echo ""
         if ! prompt_confirmation "PlayCover をインストールしますか？" "Y/n"; then
             print_error "PlayCover は必須です"
             wait_for_enter
@@ -473,19 +475,30 @@ run_initial_setup() {
         fi
         install_playcover
     fi
-    wait_for_enter "Enterキーで続行..."
     
-    # Step 5: External disk selection
-    select_external_disk
-    wait_for_enter "Enterキーで続行..."
+    # Step 5: External disk selection (with retry loop)
+    while true; do
+        select_external_disk
+        if [[ -n "$SELECTED_EXTERNAL_DISK" ]]; then
+            break
+        fi
+        echo ""
+        print_warning "もう一度選択してください"
+        /bin/sleep 2
+        clear
+        print_separator "=" "$CYAN"
+        echo ""
+        echo "${BOLD}${CYAN}PlayCover Volume Manager - 初期セットアップ${NC}"
+        echo ""
+        print_separator "=" "$CYAN"
+        echo ""
+    done
     
     # Step 6: APFS container detection
     find_apfs_container_setup
-    wait_for_enter "Enterキーで続行..."
     
     # Step 7: PlayCover volume creation
     create_playcover_volume_setup
-    wait_for_enter "Enterキーで続行..."
     
     # Step 8: Initial mapping
     create_initial_mapping

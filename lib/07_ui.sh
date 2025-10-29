@@ -30,7 +30,8 @@ show_quick_status() {
         
         ((total_count++))
         
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        # Use display_name (volume name) not bundle_id for path
+        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
         local storage_type=$(get_storage_type "$target_path")
         
         case "$storage_type" in
@@ -242,7 +243,7 @@ show_installed_apps() {
             if [[ "$display_only" == "true" ]]; then
                 # Check what exactly is missing for detailed error message
                 local volume_exists_check=$(volume_exists "$volume_name" 2>/dev/null && echo "yes" || echo "no")
-                local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
+                local container_exists_check=$([[ -d "${PLAYCOVER_CONTAINER}/${display_name}" ]] && echo "yes" || echo "no")
                 
                 local missing_reason=""
                 if [[ "$volume_exists_check" == "no" ]] && [[ "$container_exists_check" == "no" ]]; then
@@ -444,7 +445,8 @@ individual_volume_control() {
     for ((i=1; i<=${#mappings_array}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        # Use display_name (volume name) not bundle_id for path
+        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
         local status_line=""
         local extra_info=""
         local is_locked=false
@@ -594,7 +596,8 @@ individual_volume_control() {
     local selected_mapping="${selectable_array[$choice]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
-    local target_path="${HOME}/Library/Containers/${bundle_id}"
+    # Use display_name (volume name) not bundle_id for path
+    local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
     local current_mount=$(get_mount_point "$volume_name")
     
     # Quick switch without confirmation

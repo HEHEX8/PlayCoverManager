@@ -158,8 +158,9 @@ get_storage_type() {
     
     # CRITICAL: First check if this path is a mount point for an APFS volume
     # This is the most reliable way to detect external storage
-    local mount_check=$(/sbin/mount | /usr/bin/grep " on ${container_path} ")
-    if [[ -n "$mount_check" ]] && [[ "$mount_check" =~ "apfs" ]]; then
+    # Use exact match with trailing space to avoid partial matches
+    local mount_check=$(/sbin/mount | /usr/bin/grep " on ${container_path} " | /usr/bin/grep "apfs")
+    if [[ -n "$mount_check" ]]; then
         # This path is mounted as an APFS volume = external storage
         echo "external"
         return
@@ -366,7 +367,8 @@ switch_storage_location() {
             
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
             
-            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            # Use display_name (volume name) not bundle_id for path
+            local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
             
             # Get storage mode (includes flag check and external volume mount status)
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
@@ -448,7 +450,8 @@ switch_storage_location() {
         echo ""
         print_header "${display_name} のストレージ切替"
         
-        local target_path="${HOME}/Library/Containers/${bundle_id}"
+        # Use display_name (volume name) not bundle_id for path
+        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
         
         # Check current storage mode (enhanced with external volume mount check)
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
