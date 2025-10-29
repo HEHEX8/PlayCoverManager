@@ -50,6 +50,18 @@ main() {
     # Clean up duplicate entries in mapping file
     deduplicate_mappings
     
+    # Show quick launcher if launchable apps exist
+    local -a launchable_apps=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && launchable_apps+=("$line")
+    done < <(get_launchable_apps)
+    
+    if [[ ${#launchable_apps[@]} -gt 0 ]]; then
+        # Quick launcher mode: show app list first
+        show_quick_launcher
+        # If returned (user pressed 'm' or launch failed), continue to main menu below
+    fi
+    
     while true; do
         show_menu
         read choice

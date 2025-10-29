@@ -1250,3 +1250,422 @@ uninstall_all_apps() {
     /bin/sleep 2
     /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
 }
+
+#######################################################
+# Quick Launcher Functions
+#######################################################
+
+# Get list of launchable apps (apps with .app files in PlayCover)
+# Output: app_name|bundle_id|app_path (one per line)
+# Returns: 0 if apps found, 1 if no apps
+get_launchable_apps() {
+    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
+    
+    if [[ ! -d "$playcover_apps" ]]; then
+        return 1
+    fi
+    
+    local -a app_list=()
+    
+    while IFS= read -r app_path; do
+        local app_name=$(basename "$app_path" .app)
+        local bundle_id=$(get_bundle_id_from_app "$app_path")
+        
+        if [[ -n "$bundle_id" ]]; then
+            echo "${app_name}|${bundle_id}|${app_path}"
+        fi
+    done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    
+    return 0
+}
+
+# Check if app is registered as external storage in mapping file
+# Args: bundle_id
+# Returns: 0 if registered as external, 1 if not
+is_app_registered_as_external() {
+    local bundle_id=$1
+    
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
+    fi
+    
+    local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    
+    if [[ -n "$volume_name" ]]; then
+        return 0  # External storage registered
+    else
+        return 1  # Not registered (internal)
+    fi
+}
+
+# Check if sudo is required for app launch
+# Args: bundle_id, storage_mode
+# Returns: 0 if sudo needed, 1 if not needed
+needs_sudo_for_launch() {
+    local bundle_id=$1
+    local storage_mode=$2
+    
+    # Internal mode never needs sudo
+    if [[ "$storage_mode" == "internal_intentional"* ]]; then
+        return 1  # No sudo needed
+    fi
+    
+    # External mode with correct mount doesn't need sudo
+    if [[ "$storage_mode" == "external" ]]; then
+        local container_path=$(get_container_path "$bundle_id")
+        if [[ -e "$container_path" ]]; then
+            return 1  # No sudo needed
+        fi
+    fi
+    
+    # Otherwise (unmounted, wrong location), sudo is needed
+    return 0  # Sudo needed
+}
+
+# Launch app with appropriate storage mounting
+# Args: app_path, app_name, bundle_id, storage_mode
+# Returns: 0 on success, 1 on failure
+launch_app() {
+    local app_path=$1
+    local app_name=$2
+    local bundle_id=$3
+    local storage_mode=$4
+    
+    local container_path=$(get_container_path "$bundle_id")
+    local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    
+    # Determine if sudo is needed
+    local needs_sudo=false
+    if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
+        needs_sudo=true
+    fi
+    
+    # Handle external storage mode
+    if [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
+        # Check if external volume exists
+        if ! volume_exists "$volume_name"; then
+            print_error "外部ボリュームが見つかりません"
+            print_info "ボリューム名: $volume_name"
+            print_warning "外部ストレージを接続してから再度実行してください"
+            return 1
+        fi
+        
+        # Handle wrong location (需要再挂载)
+        if [[ "$storage_mode" == "external_wrong_location" ]]; then
+            print_info "${app_name}のボリュームを再マウント中..."
+            
+            if [[ "$needs_sudo" == true ]]; then
+                print_info "管理者権限が必要です"
+                sudo -v || {
+                    print_error "管理者権限の取得に失敗しました"
+                    return 1
+                }
+            fi
+            
+            local current_mount=$(get_mount_point "$volume_name")
+            if ! unmount_with_fallback "$current_mount" "silent"; then
+                print_error "既存マウントの解除に失敗しました"
+                return 1
+            fi
+            sleep 1
+        fi
+        
+        # Handle unmounted volume
+        if [[ -z "$(get_mount_point "$volume_name")" ]]; then
+            print_info "${app_name}のボリュームをマウント中..."
+            
+            if [[ "$needs_sudo" == true ]]; then
+                print_info "管理者権限が必要です"
+                sudo -v || {
+                    print_error "管理者権限の取得に失敗しました"
+                    return 1
+                }
+            fi
+            
+            if ! mount_app_volume "$volume_name" "$bundle_id"; then
+                print_error "マウントに失敗しました"
+                return 1
+            fi
+        fi
+        
+        # Verify mount success
+        if [[ ! -e "$container_path" ]]; then
+            print_error "コンテナパスが見つかりません"
+            print_info "パス: $container_path"
+            return 1
+        fi
+        
+        # Warning if internal data also exists (not critical)
+        local internal_path="/Users/$(whoami)/Library/Containers/${bundle_id}"
+        if [[ -e "$internal_path" ]] && [[ "$container_path" != "$internal_path" ]]; then
+            print_warning "⚠️ 内蔵側にもデータが存在します（現在使用: 外部ストレージ）"
+        fi
+    fi
+    
+    # For internal mode, just verify path exists
+    if [[ "$storage_mode" == "internal_intentional"* ]]; then
+        if [[ ! -e "$container_path" ]]; then
+            print_error "内蔵コンテナパスが見つかりません"
+            return 1
+        fi
+    fi
+    
+    # Launch the app
+    echo ""
+    print_info "${app_name}を起動しています..."
+    open "$app_path"
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "起動しました"
+        
+        # Record as recently used
+        record_recent_app "$bundle_id" "$app_name"
+        
+        return 0
+    else
+        print_error "起動に失敗しました"
+        return 1
+    fi
+}
+
+# Open PlayCover application for settings
+# Returns: 0 on success, 1 on failure
+open_playcover_settings() {
+    print_info "PlayCoverを起動しています..."
+    
+    open -a PlayCover
+    
+    if [[ $? -eq 0 ]]; then
+        echo ""
+        print_success "PlayCoverを起動しました"
+        print_info "アプリ設定を変更できます："
+        echo "  • キーマッピング"
+        echo "  • 解像度・画質設定"
+        echo "  • その他PlayCover設定"
+        echo ""
+        print_warning "設定変更後、このツールから再度アプリを起動してください"
+        return 0
+    else
+        print_error "PlayCoverの起動に失敗しました"
+        return 1
+    fi
+}
+
+#######################################################
+# Quick Launcher Functions
+#######################################################
+
+# Get list of launchable apps (.app files in PlayCover Applications directory)
+# Output: TSV format (app_name|bundle_id|app_path)
+# Returns: 0 if apps found, 1 if none
+get_launchable_apps() {
+    # Check if PlayCover Apps directory exists
+    if [[ ! -d "$PLAYCOVER_APPS_DIR" ]]; then
+        return 1
+    fi
+    
+    # Find all .app bundles
+    local -a app_paths=()
+    while IFS= read -r app_path; do
+        [[ -n "$app_path" ]] && app_paths+=("$app_path")
+    done < <(find "$PLAYCOVER_APPS_DIR" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    
+    if [[ ${#app_paths[@]} -eq 0 ]]; then
+        return 1
+    fi
+    
+    # Extract app info and output
+    for app_path in "${app_paths[@]}"; do
+        local app_name=$(basename "$app_path" .app)
+        local info_plist="${app_path}/Info.plist"
+        
+        # Get bundle ID from Info.plist
+        local bundle_id=""
+        if [[ -f "$info_plist" ]]; then
+            bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$info_plist" 2>/dev/null)
+        fi
+        
+        # Skip if no bundle ID found
+        if [[ -z "$bundle_id" ]]; then
+            continue
+        fi
+        
+        # Output in TSV format
+        echo "${app_name}|${bundle_id}|${app_path}"
+    done
+    
+    return 0
+}
+
+# Check if app needs sudo for launch (based on storage mode)
+# Args: bundle_id, storage_mode
+# Returns: 0 if sudo needed, 1 if not
+needs_sudo_for_launch() {
+    local bundle_id=$1
+    local storage_mode=$2
+    
+    # Internal mode never needs sudo
+    if [[ "$storage_mode" == "internal_intentional"* ]]; then
+        return 1  # sudo不要
+    fi
+    
+    # External mode with correct mount doesn't need sudo
+    if [[ "$storage_mode" == "external" ]]; then
+        local container_path=$(get_container_path "$bundle_id")
+        if [[ -e "$container_path" ]]; then
+            return 1  # sudo不要
+        fi
+    fi
+    
+    # All other cases (unmounted, wrong location) need sudo
+    return 0  # sudo必要
+}
+
+# Check if app is registered as external storage
+# Args: bundle_id
+# Returns: 0 if external, 1 if not
+is_app_registered_as_external() {
+    local bundle_id=$1
+    
+    # Check if mapping exists
+    local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    
+    if [[ -n "$volume_name" ]]; then
+        return 0  # External
+    else
+        return 1  # Not registered (internal)
+    fi
+}
+
+# Launch app with automatic mount handling
+# Args: app_path, app_name, bundle_id, storage_mode
+# Returns: 0 on success, 1 on failure
+launch_app() {
+    local app_path=$1
+    local app_name=$2
+    local bundle_id=$3
+    local storage_mode=$4
+    
+    local container_path=$(get_container_path "$bundle_id")
+    local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    
+    # sudo necessity check
+    local needs_sudo=false
+    if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
+        needs_sudo=true
+    fi
+    
+    # External storage mode handling
+    if [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
+        # Check external volume exists
+        if ! volume_exists "$volume_name"; then
+            print_error "外部ボリュームが見つかりません"
+            print_info "ボリューム名: $volume_name"
+            print_warning "外部ストレージを接続してから再度実行してください"
+            return 1
+        fi
+        
+        # Handle wrong location (remount needed)
+        if [[ "$storage_mode" == "external_wrong_location" ]]; then
+            print_info "${app_name}のボリュームを再マウント中..."
+            
+            # Request sudo if needed
+            if [[ "$needs_sudo" == true ]]; then
+                print_info "管理者権限が必要です"
+                sudo -v || {
+                    print_error "管理者権限の取得に失敗しました"
+                    return 1
+                }
+            fi
+            
+            local current_mount=$(get_mount_point "$volume_name")
+            if ! unmount_with_fallback "$current_mount" "silent"; then
+                print_error "既存マウントの解除に失敗しました"
+                return 1
+            fi
+            sleep 1
+        fi
+        
+        # Handle unmounted (mount needed)
+        if [[ -z "$(get_mount_point "$volume_name")" ]]; then
+            print_info "${app_name}のボリュームをマウント中..."
+            
+            # Request sudo if needed
+            if [[ "$needs_sudo" == true ]]; then
+                print_info "管理者権限が必要です"
+                sudo -v || {
+                    print_error "管理者権限の取得に失敗しました"
+                    return 1
+                }
+            fi
+            
+            if ! mount_app_volume "$volume_name" "$bundle_id"; then
+                print_error "マウントに失敗しました"
+                return 1
+            fi
+        fi
+        
+        # Verify container path exists after mount
+        if [[ ! -e "$container_path" ]]; then
+            print_error "コンテナパスが見つかりません"
+            print_info "パス: $container_path"
+            return 1
+        fi
+        
+        # Warn if internal data also exists (collision warning)
+        local internal_path="/Users/$(whoami)/Library/Containers/${bundle_id}"
+        if [[ -e "$internal_path" ]] && [[ "$container_path" != "$internal_path" ]]; then
+            print_warning "⚠️ 内蔵側にもデータが存在します"
+            print_info "現在使用: 外部ストレージ"
+        fi
+    fi
+    
+    # Internal mode handling
+    if [[ "$storage_mode" == "internal_intentional"* ]]; then
+        if [[ ! -e "$container_path" ]]; then
+            print_error "内蔵コンテナパスが見つかりません"
+            return 1
+        fi
+    fi
+    
+    # Launch app (no sudo needed)
+    echo ""
+    print_info "${app_name}を起動しています..."
+    open "$app_path"
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "起動しました"
+        
+        # Record as recent app
+        record_recent_app "$bundle_id" "$app_name"
+        
+        return 0
+    else
+        print_error "起動に失敗しました"
+        return 1
+    fi
+}
+
+# Open PlayCover app for settings configuration
+# Returns: 0 on success, 1 on failure
+open_playcover_settings() {
+    print_info "PlayCoverを起動しています..."
+    
+    # Launch PlayCover application
+    open -a PlayCover
+    
+    if [[ $? -eq 0 ]]; then
+        echo ""
+        print_success "PlayCoverを起動しました"
+        print_info "アプリ設定を変更できます："
+        echo "  • キーマッピング"
+        echo "  • 解像度・画質設定"
+        echo "  • その他PlayCover設定"
+        echo ""
+        print_warning "設定変更後、このツールから再度アプリを起動してください"
+        return 0
+    else
+        print_error "PlayCoverの起動に失敗しました"
+        return 1
+    fi
+}

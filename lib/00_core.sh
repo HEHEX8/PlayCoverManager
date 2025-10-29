@@ -94,6 +94,7 @@ readonly PLAYCOVER_CONTAINER="${PLAYCOVER_BASE}/${PLAYCOVER_BUNDLE_ID}"
 readonly PLAYCOVER_VOLUME_NAME="PlayCover"
 readonly PLAYCOVER_APP_NAME="PlayCover.app"
 readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
+readonly PLAYCOVER_APPS_DIR="${PLAYCOVER_CONTAINER}/Applications"
 
 # Get script directory (works even when sourced)
 if [[ -n "${BASH_SOURCE[0]}" ]]; then

@@ -899,3 +899,411 @@ show_mapping_info() {
     echo -n "Enterキーで続行..."
     read
 }
+
+#######################################################
+# Quick Launcher UI
+#######################################################
+
+# Show quick launcher menu (app selection and launch)
+# Returns: 0 to continue to main menu, exits on quit
+show_quick_launcher() {
+    while true; do
+        clear
+        print_header "🚀 PlayCover Quick Launcher"
+        
+        # Get launchable apps
+        local -a apps_info=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && apps_info+=("$line")
+        done < <(get_launchable_apps)
+        
+        if [[ ${#apps_info[@]} -eq 0 ]]; then
+            print_warning "起動可能なアプリがありません"
+            echo ""
+            print_info "管理メニューからIPAをインストールしてください"
+            echo ""
+            prompt_continue
+            return 0  # Go to main menu
+        fi
+        
+        # Get recent apps for priority sorting
+        local -a recent_bundle_ids=()
+        while IFS='|' read -r timestamp bundle_id app_name; do
+            [[ -n "$bundle_id" ]] && recent_bundle_ids+=("$bundle_id")
+        done < <(get_recent_apps 2>/dev/null)
+        
+        # Sort apps: recent first, then others
+        local -a sorted_apps_info=()
+        
+        # Add recent apps first
+        for recent_id in "${recent_bundle_ids[@]}"; do
+            for app_info in "${apps_info[@]}"; do
+                IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+                if [[ "$bundle_id" == "$recent_id" ]]; then
+                    sorted_apps_info+=("$app_info")
+                    break
+                fi
+            done
+        done
+        
+        # Add remaining apps
+        for app_info in "${apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            local found=false
+            for recent_id in "${recent_bundle_ids[@]}"; do
+                if [[ "$bundle_id" == "$recent_id" ]]; then
+                    found=true
+                    break
+                fi
+            done
+            if [[ "$found" == false ]]; then
+                sorted_apps_info+=("$app_info")
+            fi
+        done
+        
+        # Display app list
+        local index=1
+        local -a app_names=()
+        local -a bundle_ids=()
+        local -a app_paths=()
+        local recent_count=0
+        
+        for app_info in "${sorted_apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            app_names+=("$app_name")
+            bundle_ids+=("$bundle_id")
+            app_paths+=("$app_path")
+            
+            # Check if recent
+            local recent_mark=""
+            if is_recent_app "$bundle_id"; then
+                recent_mark=" ⭐"
+                ((recent_count++))
+            fi
+            
+            # Get storage state
+            local container_path=$(get_container_path "$bundle_id")
+            local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+            
+            # Check sudo necessity
+            local sudo_mark=""
+            if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
+                sudo_mark=" 🔐"
+            fi
+            
+            # Status icons and messages
+            local location_icon status_icon status_msg
+            case "$storage_mode" in
+                "external")
+                    location_icon="🔌"
+                    status_icon="●"
+                    status_msg="Ready"
+                    ;;
+                "external_wrong_location")
+                    location_icon="🔌"
+                    status_icon="🔄"
+                    status_msg="要再マウント"
+                    ;;
+                "internal_intentional"|"internal_contaminated")
+                    location_icon="🏠"
+                    status_icon="●"
+                    status_msg="Ready"
+                    ;;
+                "internal_intentional_empty")
+                    location_icon="🏠"
+                    status_icon="📭"
+                    status_msg="初期状態"
+                    ;;
+                "none")
+                    if is_app_registered_as_external "$bundle_id"; then
+                        location_icon="🔌"
+                        status_icon="📦"
+                        status_msg="未マウント"
+                    else
+                        location_icon="⚠️"
+                        status_icon="❓"
+                        status_msg="状態不明"
+                    fi
+                    ;;
+            esac
+            
+            printf "  %d. %-25s [%s] %s %-12s%s%s\n" \
+                "$index" "$app_name" "$location_icon" "$status_icon" "$status_msg" "$recent_mark" "$sudo_mark"
+            ((index++))
+        done
+        
+        echo ""
+        if [[ $recent_count -gt 0 ]]; then
+            echo "  ⭐ 最近使用したアプリ    🔐 管理者権限が必要"
+            echo ""
+        fi
+        print_separator
+        echo "  [1-${#sorted_apps_info[@]}] : アプリを起動"
+        echo "  [p]   : PlayCoverを起動（設定変更用）"
+        echo "  [m]   : 管理メニュー"
+        echo "  [0]   : 終了"
+        print_separator
+        echo ""
+        
+        # User input
+        read "choice?選択: "
+        
+        case "$choice" in
+            0)
+                exit 0
+                ;;
+            [pP])
+                echo ""
+                open_playcover_settings
+                echo ""
+                prompt_continue
+                continue  # Redisplay quick launcher
+                ;;
+            [mM])
+                return 0  # Go to main menu
+                ;;
+            [1-9]|[1-9][0-9])
+                if [[ $choice -ge 1 ]] && [[ $choice -le ${#sorted_apps_info[@]} ]]; then
+                    local selected_index=$((choice - 1))
+                    local selected_name="${app_names[$selected_index]}"
+                    local selected_bundle_id="${bundle_ids[$selected_index]}"
+                    local selected_path="${app_paths[$selected_index]}"
+                    
+                    echo ""
+                    local container_path=$(get_container_path "$selected_bundle_id")
+                    local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
+                    local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                    
+                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                        # Success - return to quick launcher
+                        echo ""
+                        sleep 1
+                        continue
+                    else
+                        # Failure - go to main menu for troubleshooting
+                        echo ""
+                        print_warning "起動に失敗しました"
+                        print_info "管理メニューで状態を確認してください"
+                        echo ""
+                        prompt_continue
+                        return 0  # Go to main menu
+                    fi
+                else
+                    print_error "無効な選択です"
+                    sleep 1
+                    continue
+                fi
+                ;;
+            *)
+                print_error "無効な選択です"
+                sleep 1
+                continue
+                ;;
+        esac
+    done
+}
+
+#######################################################
+# Quick Launcher UI
+#######################################################
+
+# Show quick launcher interface
+# Returns: 0 to proceed to main menu, non-zero to exit
+show_quick_launcher() {
+    while true; do
+        clear
+        print_header "🚀 PlayCover Quick Launcher"
+        
+        # Get list of launchable apps
+        local -a apps_info=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && apps_info+=("$line")
+        done < <(get_launchable_apps)
+        
+        if [[ ${#apps_info[@]} -eq 0 ]]; then
+            print_warning "起動可能なアプリがありません"
+            echo ""
+            print_info "管理メニューからIPAをインストールしてください"
+            echo ""
+            prompt_continue
+            return 0  # Go to main menu
+        fi
+        
+        # Get recent apps for priority display
+        local -a recent_bundle_ids=()
+        while IFS='|' read -r timestamp bundle_id app_name; do
+            [[ -n "$bundle_id" ]] && recent_bundle_ids+=("$bundle_id")
+        done < <(get_recent_apps)
+        
+        # Sort apps: recent first, then others
+        local -a sorted_apps_info=()
+        
+        # Add recent apps first
+        for recent_id in "${recent_bundle_ids[@]}"; do
+            for app_info in "${apps_info[@]}"; do
+                IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+                if [[ "$bundle_id" == "$recent_id" ]]; then
+                    sorted_apps_info+=("$app_info")
+                    break
+                fi
+            done
+        done
+        
+        # Add remaining apps
+        for app_info in "${apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            local found=false
+            for recent_id in "${recent_bundle_ids[@]}"; do
+                if [[ "$bundle_id" == "$recent_id" ]]; then
+                    found=true
+                    break
+                fi
+            done
+            if [[ "$found" == false ]]; then
+                sorted_apps_info+=("$app_info")
+            fi
+        done
+        
+        # Display app list
+        local index=1
+        local -a app_names=()
+        local -a bundle_ids=()
+        local -a app_paths=()
+        local recent_count=0
+        
+        for app_info in "${sorted_apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            app_names+=("$app_name")
+            bundle_ids+=("$bundle_id")
+            app_paths+=("$app_path")
+            
+            # Recent app marker
+            local recent_mark=""
+            if is_recent_app "$bundle_id"; then
+                recent_mark=" ⭐"
+                ((recent_count++))
+            fi
+            
+            # Get storage status
+            local container_path=$(get_container_path "$bundle_id")
+            local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+            
+            # Sudo requirement marker
+            local sudo_mark=""
+            if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
+                sudo_mark=" 🔐"
+            fi
+            
+            # Status icons and messages
+            local location_icon status_icon status_msg
+            case "$storage_mode" in
+                "external")
+                    location_icon="🔌"
+                    status_icon="●"
+                    status_msg="Ready"
+                    ;;
+                "external_wrong_location")
+                    location_icon="🔌"
+                    status_icon="🔄"
+                    status_msg="要再マウント"
+                    ;;
+                "internal_intentional"|"internal_contaminated")
+                    location_icon="🏠"
+                    status_icon="●"
+                    status_msg="Ready"
+                    ;;
+                "internal_intentional_empty")
+                    location_icon="🏠"
+                    status_icon="📭"
+                    status_msg="初期状態"
+                    ;;
+                "none")
+                    if is_app_registered_as_external "$bundle_id"; then
+                        location_icon="🔌"
+                        status_icon="📦"
+                        status_msg="未マウント"
+                    else
+                        location_icon="⚠️"
+                        status_icon="❓"
+                        status_msg="状態不明"
+                    fi
+                    ;;
+            esac
+            
+            printf "  %d. %-25s [%s] %s %-12s%s%s\n" \
+                "$index" "$app_name" "$location_icon" "$status_icon" "$status_msg" "$recent_mark" "$sudo_mark"
+            ((index++))
+        done
+        
+        echo ""
+        if [[ $recent_count -gt 0 ]]; then
+            echo "  ⭐ 最近使用したアプリ    🔐 管理者権限が必要"
+            echo ""
+        fi
+        print_separator
+        echo "  [1-${#sorted_apps_info[@]}] : アプリを起動"
+        echo "  [p]   : PlayCoverを起動（設定変更用）"
+        echo "  [m]   : 管理メニュー"
+        echo "  [0]   : 終了"
+        print_separator
+        echo ""
+        
+        # User input
+        read "choice?選択: "
+        
+        case "$choice" in
+            0)
+                exit 0
+                ;;
+            [pP])
+                echo ""
+                open_playcover_settings
+                echo ""
+                prompt_continue
+                continue  # Redisplay quick launcher
+                ;;
+            [mM])
+                return 0  # Go to main menu
+                ;;
+            [1-9]|[1-9][0-9])
+                if [[ $choice -ge 1 ]] && [[ $choice -le ${#sorted_apps_info[@]} ]]; then
+                    local selected_index=$((choice - 1))
+                    local selected_name="${app_names[$selected_index]}"
+                    local selected_bundle_id="${bundle_ids[$selected_index]}"
+                    local selected_path="${app_paths[$selected_index]}"
+                    
+                    echo ""
+                    local container_path=$(get_container_path "$selected_bundle_id")
+                    local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
+                    local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                    
+                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                        # Success - return to quick launcher
+                        echo ""
+                        sleep 1
+                        continue
+                    else
+                        # Failure - go to main menu for troubleshooting
+                        echo ""
+                        print_warning "起動に失敗しました"
+                        print_info "管理メニューで状態を確認してください"
+                        echo ""
+                        prompt_continue
+                        return 0  # Go to main menu
+                    fi
+                else
+                    print_error "無効な選択です"
+                    sleep 1
+                    continue
+                fi
+                ;;
+            *)
+                print_error "無効な選択です"
+                sleep 1
+                continue
+                ;;
+        esac
+    done
+}
