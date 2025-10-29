@@ -588,7 +588,7 @@ batch_mount_all() {
             echo "    ${LIGHT_GREEN}3.${NC} スキップ（後で個別に処理）"
             echo ""
             echo -n "  選択 (1-3): "
-            read contamination_choice
+            read contamination_choice </dev/tty
             echo ""
             
             case "$contamination_choice" in
