@@ -379,7 +379,7 @@ switch_storage_location() {
         
         declare -a mappings_array=()
         local index=1
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
             if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
                 continue
             fi

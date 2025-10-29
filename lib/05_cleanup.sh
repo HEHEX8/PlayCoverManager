@@ -45,7 +45,7 @@ nuclear_cleanup() {
     local mapped_containers=()
     
     if [[ -f "$MAPPING_FILE" ]]; then
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
             [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]] && continue
             
             # Check if volume exists

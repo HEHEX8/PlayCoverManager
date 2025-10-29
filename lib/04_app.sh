@@ -1098,7 +1098,7 @@ uninstall_all_apps() {
     local -a bundles_list=()
     local index=1
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         apps_list+=("$display_name")
         volumes_list+=("$volume_name")
         bundles_list+=("$bundle_id")

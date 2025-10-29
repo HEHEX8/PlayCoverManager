@@ -22,7 +22,7 @@ show_quick_status() {
     local unmounted_count=0
     local total_count=0
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip PlayCover itself
         if [[ "$volume_name" == "PlayCover" ]]; then
             continue
@@ -42,8 +42,12 @@ show_quick_status() {
             # Volume not mounted - check if internal storage has data
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
             case "$storage_mode" in
-                "internal_intentional"|"internal_contaminated")
+                "internal_intentional"|"internal_intentional_empty")
                     ((internal_count++))
+                    ;;
+                "internal_contaminated")
+                    # 汚染状態は警告として扱う
+                    ((unmounted_count++))
                     ;;
                 *)
                     ((unmounted_count++))
@@ -188,7 +192,7 @@ show_installed_apps() {
         versions_list=()
     fi
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip PlayCover itself (it's not an iOS app)
         if [[ "$volume_name" == "PlayCover" ]]; then
             continue
@@ -231,8 +235,11 @@ show_installed_apps() {
                 # Volume not mounted - check if internal storage has data
                 local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                 case "$storage_mode" in
-                    "internal_intentional"|"internal_contaminated")
+                    "internal_intentional")
                         storage_icon="🏠 内部"
+                        ;;
+                    "internal_contaminated")
+                        storage_icon="⚠️  汚染"
                         ;;
                     "internal_intentional_empty"|"none")
                         storage_icon="⚠️  データ無し"
@@ -889,7 +896,7 @@ show_mapping_info() {
     echo ""
     
     local index=1
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         echo "  ${index}. ${GREEN}${display_name}${NC}"
         echo "      ボリューム名: ${volume_name}"
         echo "      Bundle ID: ${bundle_id}"
@@ -992,15 +999,7 @@ show_quick_launcher() {
             # Get storage state
             local container_path=$(get_container_path "$bundle_id")
             local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
-            
-            # DEBUG
-            echo "[DEBUG] bundle_id: $bundle_id" >&2
-            echo "[DEBUG] volume_name: $volume_name" >&2
-            echo "[DEBUG] container_path: $container_path" >&2
-            
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-            
-            echo "[DEBUG] storage_mode: $storage_mode" >&2
             
             # Check sudo necessity
             local sudo_mark=""
@@ -1021,10 +1020,15 @@ show_quick_launcher() {
                     status_icon="🔄"
                     status_msg="要再マウント"
                     ;;
-                "internal_intentional"|"internal_contaminated")
+                "internal_intentional")
                     location_icon="🏠"
                     status_icon="●"
                     status_msg="Ready"
+                    ;;
+                "internal_contaminated")
+                    location_icon="🏠"
+                    status_icon="⚠️"
+                    status_msg="内蔵データ検出"
                     ;;
                 "internal_intentional_empty")
                     location_icon="🏠"
