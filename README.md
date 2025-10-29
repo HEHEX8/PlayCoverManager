@@ -84,21 +84,15 @@ cd PlayCoverManager
 ./build-app.sh
 
 # DMGインストーラーを作成（オプション）
-# 方法1: appdmg（推奨 - 確実に動作）
 ./create-dmg-background-simple.sh
 ./create-dmg-appdmg.sh
-
-# 方法2: create-dmg（macOS標準）
-./create-dmg-background.sh
-./create-dmg.sh
 
 # ビルドされたアプリをインストール
 mv "build/PlayCover Manager.app" /Applications/
 ```
 
 **DMG作成の詳細**: 
-- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - 推奨方法（appdmg）
-- [DMG-METHODS-COMPARISON.md](DMG-METHODS-COMPARISON.md) - 方法の比較
+- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - DMG作成ガイド
 - [RELEASE-DMG-GUIDE.md](RELEASE-DMG-GUIDE.md) - リリース方法
 
 ### 初回セットアップ
@@ -192,9 +186,10 @@ PlayCoverManager/
 ./create-dmg-appdmg.sh
 ```
 
-詳細は以下のガイドを参照：
-- [ICON_GUIDE.md](ICON_GUIDE.md) - アイコン作成ガイド
-- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - DMG作成ガイド
+**詳細ガイド:**
+- [ICON_GUIDE.md](ICON_GUIDE.md) - アイコン作成
+- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - DMGインストーラー作成
+- [RELEASE-DMG-GUIDE.md](RELEASE-DMG-GUIDE.md) - GitHub Releasesへの公開
 
 ---
 
