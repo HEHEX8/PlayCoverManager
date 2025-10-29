@@ -121,17 +121,12 @@ get_external_drive_free_space() {
     # Always use PlayCover volume mount point to get external drive free space
     # This is more reliable than checking individual app volumes
     
-    # Check if PlayCover volume exists
-    if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
-        get_storage_free_space "$HOME"
-        return
-    fi
+    # Get PlayCover volume mount point in one call (more efficient)
+    local playcover_mount=$(validate_and_get_mount_point "$PLAYCOVER_VOLUME_NAME")
+    local vol_status=$?
     
-    # Get PlayCover volume mount point
-    local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
-    
-    if [[ -z "$playcover_mount" ]]; then
-        # Not mounted, use home directory space
+    if [[ $vol_status -ne 0 ]] || [[ -z "$playcover_mount" ]]; then
+        # Volume doesn't exist or not mounted, use home directory space
         get_storage_free_space "$HOME"
         return
     fi
@@ -178,7 +173,6 @@ get_storage_type() {
             # This is just an empty mount point directory left after unmount
             echo "none"
             return
-        else
         fi
     fi
     
@@ -281,22 +275,21 @@ get_storage_mode() {
     
     # If volume name is provided, check external volume mount status first
     if [[ -n "$volume_name" ]]; then
-        if volume_exists "$volume_name"; then
-            local current_mount=$(get_mount_point "$volume_name")
+        local current_mount=$(validate_and_get_mount_point "$volume_name")
+        local vol_status=$?
+        
+        if [[ $vol_status -eq 0 ]] && [[ -n "$current_mount" ]]; then
+            # External volume is mounted somewhere
+            # Normalize paths for comparison (remove trailing slashes)
+            local normalized_current="${current_mount%/}"
+            local normalized_expected="${container_path%/}"
             
-            if [[ -n "$current_mount" ]]; then
-                # External volume is mounted somewhere
-                # Normalize paths for comparison (remove trailing slashes)
-                local normalized_current="${current_mount%/}"
-                local normalized_expected="${container_path%/}"
-                
-                if [[ "$normalized_current" == "$normalized_expected" ]]; then
-                    echo "external"  # Correctly mounted at target location
-                else
-                    echo "external_wrong_location"  # Mounted at wrong location
-                fi
-                return 0
+            if [[ "$normalized_current" == "$normalized_expected" ]]; then
+                echo "external"  # Correctly mounted at target location
+            else
+                echo "external_wrong_location"  # Mounted at wrong location
             fi
+            return 0
         fi
     fi
     
@@ -891,8 +884,10 @@ perform_internal_to_external_migration() {
     
     print_info "内蔵から外部ストレージへデータを移行中..."
     
-    # Check if volume exists
-    if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替"; then
+    # Get volume device early (validates existence and gets device in one call)
+    local volume_device=$(validate_and_get_device "$volume_name")
+    if [[ $? -ne 0 ]] || [[ -z "$volume_device" ]]; then
+        show_error_and_return "${display_name} のストレージ切替" "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
@@ -945,16 +940,7 @@ perform_internal_to_external_migration() {
         fi
     fi
     
-    # Get volume device
-    local volume_device=$(get_volume_device "$volume_name")
-    if [[ -z "$volume_device" ]]; then
-        print_error "外部ボリュームのデバイス情報が取得できませんでした"
-        echo ""
-        print_info "デバッグ情報:"
-        echo "  ボリューム名: $volume_name"
-        return 1
-    fi
-    
+    # Volume device was already retrieved at function start (line 873)
     print_info "外部ボリューム: $volume_device"
     
     # Mount for capacity check
@@ -1089,10 +1075,17 @@ perform_external_to_internal_migration() {
     
     print_info "外部から内蔵ストレージへデータを移行中..."
     
-    # Check if volume exists
-    if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替"; then
+    # Get volume info early (validates existence and gets device + mount in one call)
+    local vol_info=$(get_volume_info "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        show_error_and_return "${display_name} のストレージ切替" "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
+    
+    local volume_device="${vol_info%%|*}"
+    local current_mount="${vol_info#*|}"
     
     # Check if app is running before migration
     if is_app_running "$bundle_id"; then
@@ -1105,14 +1098,12 @@ perform_external_to_internal_migration() {
     print_info "転送前の容量チェック中..."
     
     # Mount volume temporarily to check size (if not already mounted)
-    local current_mount=$(get_mount_point "$volume_name")
     local check_mount_point=""
     local need_unmount=false
     
     if [[ -n "$current_mount" ]]; then
         check_mount_point="$current_mount"
     else
-        local volume_device=$(get_volume_device "$volume_name")
         
         # Ensure device has /dev/ prefix
         if [[ ! "$volume_device" =~ ^/dev/ ]]; then

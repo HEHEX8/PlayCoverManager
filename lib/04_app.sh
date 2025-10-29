@@ -140,17 +140,13 @@ check_playcover_volume_mount_install() {
         return 0
     fi
     
-    if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+    # Get device in one call (validates existence)
+    local volume_device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
+    
+    if [[ $? -ne 0 ]] || [[ -z "$volume_device" ]]; then
         print_error "PlayCover ボリュームが見つかりません"
         print_info "初期セットアップスクリプトを実行してください"
         exit_with_cleanup 1 "PlayCover ボリュームが見つかりません"
-    fi
-    
-    local volume_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-    
-    if [[ -z "$volume_device" ]]; then
-        print_error "ボリュームデバイスの取得に失敗しました"
-        exit_with_cleanup 1 "ボリュームデバイス取得エラー"
     fi
     
     PLAYCOVER_VOLUME_DEVICE="/dev/${volume_device}"
@@ -1468,8 +1464,11 @@ launch_app() {
     
     # Handle external storage mode
     if [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
-        # Check if external volume exists
-        if ! volume_exists "$volume_name"; then
+        # Get volume mount status in one call
+        local current_mount=$(validate_and_get_mount_point "$volume_name")
+        local vol_status=$?
+        
+        if [[ $vol_status -eq 1 ]]; then
             print_error "外部ボリュームが見つかりません"
             print_info "ボリューム名: $volume_name"
             print_warning "外部ストレージを接続してから再度実行してください"
@@ -1488,16 +1487,18 @@ launch_app() {
                 }
             fi
             
-            local current_mount=$(get_mount_point "$volume_name")
             if ! unmount_with_fallback "$current_mount" "silent"; then
                 print_error "既存マウントの解除に失敗しました"
                 return 1
             fi
             sleep 1
+            # Clear mount cache after unmount
+            current_mount=""
+            vol_status=2
         fi
         
-        # Handle unmounted volume
-        if [[ -z "$(get_mount_point "$volume_name")" ]]; then
+        # Handle unmounted volume (status 2 = exists but not mounted)
+        if [[ $vol_status -eq 2 ]] || [[ -z "$current_mount" ]]; then
             print_info "${app_name}のボリュームをマウント中..."
             
             if [[ "$needs_sudo" == true ]]; then

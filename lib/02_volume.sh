@@ -64,8 +64,11 @@ _should_skip_batch_volume() {
     local display_name="$3"
     local check_type="$4"  # "mount" or "unmount"
     
-    # Check if volume exists
-    if ! volume_exists "$volume_name"; then
+    # Get volume info in one call (more efficient than separate existence + mount checks)
+    local actual_mount=$(validate_and_get_mount_point "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
         echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
         return 0
     fi
@@ -79,20 +82,17 @@ _should_skip_batch_volume() {
     # Type-specific checks
     case "$check_type" in
         "mount")
-            local actual_mount=$(get_mount_point "$volume_name")
             local target_path="${PLAYCOVER_BASE}/${bundle_id}"
             
             # Skip if already mounted at correct location
-            if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
+            if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$target_path" ]]; then
                 echo "  ✅ ${display_name}: 既にマウント済"
                 return 0
             fi
             ;;
         "unmount")
-            local actual_mount=$(get_mount_point "$volume_name")
-            
-            # Skip if not mounted
-            if [[ -z "$actual_mount" ]]; then
+            # Skip if not mounted (status 2 = exists but not mounted)
+            if [[ $vol_status -eq 2 ]]; then
                 echo "  ⚪️ ${display_name}: 既にアンマウント済"
                 return 0
             fi
@@ -285,17 +285,17 @@ unmount_app_volume() {
     local bundle_id=$2
     local diskutil_cache="${3:-}"
     
-    # Cache diskutil list output if not provided
-    if [[ -z "$diskutil_cache" ]]; then
-        diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-    fi
+    # Get all volume info in one diskutil call (more efficient)
+    local vol_info=$(get_volume_info "$volume_name")
+    local vol_status=$?
     
-    if ! volume_exists "$volume_name" "$diskutil_cache"; then
+    if [[ $vol_status -eq 1 ]]; then
         print_warning "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
     
-    local current_mount=$(get_mount_point "$volume_name" "$diskutil_cache")
+    local device="${vol_info%%|*}"
+    local current_mount="${vol_info#*|}"
     
     if [[ -z "$current_mount" ]]; then
         print_info "既にアンマウント済みです"
@@ -306,8 +306,6 @@ unmount_app_volume() {
     if [[ -n "$bundle_id" ]]; then
         quit_app_if_running "$bundle_id"
     fi
-    
-    local device=$(get_volume_device "$volume_name" "$diskutil_cache")
     
     if unmount_volume "$device" "silent"; then
         print_success "アンマウント成功"
@@ -390,19 +388,26 @@ create_app_volume() {
 delete_app_volume() {
     local volume_name=$1
     
-    # Check if volume exists first (early exit for non-existent volumes)
-    if ! volume_exists "$volume_name"; then
+    # Get all volume info in one call (more efficient than separate checks)
+    local vol_info=$(get_volume_info "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
         print_warning "ボリューム '${volume_name}' は存在しません"
         return 0
     fi
     
-    # Get volume device (with error handling)
-    local device=$(get_volume_device_or_fail "$volume_name") || return 1
+    local device="${vol_info%%|*}"
+    local mount_point="${vol_info#*|}"
+    
+    if [[ -z "$device" ]]; then
+        print_error "ボリュームのデバイスノードを取得できませんでした"
+        return 1
+    fi
     
     print_info "ボリュームを削除中: ${volume_name}"
     
     # Unmount first if mounted
-    local mount_point=$(get_mount_point "$volume_name")
     if [[ -n "$mount_point" ]]; then
         unmount_with_fallback "$device" "silent"
     fi
@@ -454,14 +459,9 @@ ensure_playcover_main_volume() {
         return 0
     fi
     
-    # Check if PlayCover volume exists
-    if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
-        return 1
-    fi
-    
-    # Get device
-    local device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
-    if [[ -z "$device" ]]; then
+    # Get device in one call (more efficient than separate exists + get_device)
+    local device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
+    if [[ $? -ne 0 ]] || [[ -z "$device" ]]; then
         return 1
     fi
     

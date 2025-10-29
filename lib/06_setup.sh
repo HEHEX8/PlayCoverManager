@@ -439,10 +439,10 @@ find_apfs_container_setup() {
 create_playcover_volume_setup() {
     print_header "PlayCover ボリュームの作成"
     
-    # Check if PlayCover volume already exists
-    if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+    # Check if PlayCover volume already exists (get device in one call)
+    local existing_device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
+    if [[ $? -eq 0 ]] && [[ -n "$existing_device" ]]; then
         print_info "PlayCover ボリュームは既に存在します"
-        local existing_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME")
         print_info "デバイス: $existing_device"
         echo ""
         

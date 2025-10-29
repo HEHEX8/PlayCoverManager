@@ -48,12 +48,10 @@ nuclear_cleanup() {
         while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
             [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]] && continue
             
-            # Check if volume exists
-            if volume_exists "$volume_name"; then
-                local device=$(get_volume_device "$volume_name")
-                if [[ -n "$device" ]]; then
-                    mapped_volumes+=("${display_name:-$volume_name}|${volume_name}|${device}|${bundle_id}")
-                fi
+            # Get device in one call (validates existence)
+            local device=$(validate_and_get_device "$volume_name")
+            if [[ $? -eq 0 ]] && [[ -n "$device" ]]; then
+                mapped_volumes+=("${display_name:-$volume_name}|${volume_name}|${device}|${bundle_id}")
             fi
             
             # Check if container exists

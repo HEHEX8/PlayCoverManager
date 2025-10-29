@@ -1038,3 +1038,102 @@ is_playcover_environment_ready() {
     
     return 0
 }
+
+# ================================================================
+# Redundancy Reduction Helpers
+# ================================================================
+
+# Get comprehensive volume information in one call
+# This reduces redundant diskutil calls by retrieving all needed info at once
+# Args: $1 = volume_name
+# Returns: 0 if volume exists and mounted, 1 if not exists, 2 if exists but not mounted
+# Output format: "device|mount_point" (both will be empty if volume doesn't exist)
+# Usage: 
+#   local info=$(get_volume_info "$volume_name")
+#   local status=$?
+#   if [[ $status -eq 0 ]]; then
+#       local device="${info%%|*}"
+#       local mount_point="${info#*|}"
+#   fi
+get_volume_info() {
+    local volume_name="$1"
+    
+    # Single diskutil call to get all info
+    local diskutil_output=$(/usr/sbin/diskutil info "$volume_name" 2>/dev/null)
+    
+    if [[ $? -ne 0 ]] || [[ -z "$diskutil_output" ]]; then
+        echo "|"  # Empty device and mount point
+        return 1  # Volume doesn't exist
+    fi
+    
+    # Extract device identifier
+    local device=$(/usr/bin/grep -E "Device Node:" <<< "$diskutil_output" | /usr/bin/awk '{print $3}')
+    
+    # Extract mount point
+    local mount_point=$(/usr/bin/grep -E "Mount Point:" <<< "$diskutil_output" | /usr/bin/sed 's/^[[:space:]]*Mount Point:[[:space:]]*//')
+    
+    # Output in format: device|mount_point
+    echo "${device}|${mount_point}"
+    
+    # Return status based on mount state
+    if [[ -n "$mount_point" ]]; then
+        return 0  # Exists and mounted
+    else
+        return 2  # Exists but not mounted
+    fi
+}
+
+# Validate volume and get device in one call
+# More efficient than separate volume_exists + get_volume_device calls
+# Args: $1 = volume_name
+# Returns: 0 if exists, 1 if not
+# Output: device node (e.g., /dev/disk3s1) or empty string
+# Usage:
+#   local device=$(validate_and_get_device "$volume_name")
+#   if [[ $? -eq 0 ]] && [[ -n "$device" ]]; then
+#       # Use device...
+#   fi
+validate_and_get_device() {
+    local volume_name="$1"
+    
+    local device=$(/usr/sbin/diskutil info "$volume_name" 2>/dev/null | /usr/bin/grep "Device Node:" | /usr/bin/awk '{print $3}')
+    
+    if [[ -z "$device" ]]; then
+        return 1
+    fi
+    
+    echo "$device"
+    return 0
+}
+
+# Validate volume existence and get mount point in one call
+# More efficient than separate volume_exists + get_mount_point calls
+# Args: $1 = volume_name
+# Returns: 0 if exists and mounted, 1 if not exists, 2 if exists but not mounted
+# Output: mount point path or empty string
+# Usage:
+#   local mount_point=$(validate_and_get_mount_point "$volume_name")
+#   local status=$?
+#   if [[ $status -eq 0 ]]; then
+#       # Volume is mounted at $mount_point
+#   elif [[ $status -eq 2 ]]; then
+#       # Volume exists but not mounted
+#   fi
+validate_and_get_mount_point() {
+    local volume_name="$1"
+    
+    local diskutil_output=$(/usr/sbin/diskutil info "$volume_name" 2>/dev/null)
+    
+    if [[ $? -ne 0 ]] || [[ -z "$diskutil_output" ]]; then
+        return 1  # Volume doesn't exist
+    fi
+    
+    local mount_point=$(/usr/bin/grep -E "Mount Point:" <<< "$diskutil_output" | /usr/bin/sed 's/^[[:space:]]*Mount Point:[[:space:]]*//')
+    
+    if [[ -n "$mount_point" ]]; then
+        echo "$mount_point"
+        return 0  # Mounted
+    else
+        return 2  # Exists but not mounted
+    fi
+}
