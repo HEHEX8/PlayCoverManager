@@ -222,29 +222,7 @@ unmount_volume() {
     fi
 }
 
-# Unmount with automatic force fallback (try normal, then force if failed)
-# Args: target (device or mount point), mode (silent|verbose)
-# Returns: 0 on success, 1 on failure
-unmount_with_fallback() {
-    local target="$1"
-    local mode="${2:-silent}"   # silent, verbose
-    
-    # Try normal unmount first
-    if unmount_volume "$target" "$mode"; then
-        return 0
-    fi
-    
-    # If normal unmount failed, try force unmount
-    if [[ "$mode" == "verbose" ]]; then
-        print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
-    fi
-    
-    if unmount_volume "$target" "$mode" "force"; then
-        return 0
-    else
-        return 1
-    fi
-}
+# Note: unmount_with_fallback() is now in 00_core.sh for cross-module use
 
 # Mount volume with unified error handling
 # Args: device|volume_name, mount_point, [nobrowse], [silent|verbose]
@@ -364,7 +342,7 @@ mount_app_volume() {
         if [[ -n "$bundle_id" ]]; then
             quit_app_if_running "$bundle_id"
         fi
-        unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force"
+        unmount_with_fallback "$device" "silent"
     fi
     
     # Create mount point if not exists
@@ -426,7 +404,7 @@ delete_app_volume() {
     # Unmount first if mounted
     local mount_point=$(get_mount_point "$volume_name")
     if [[ -n "$mount_point" ]]; then
-        unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force"
+        unmount_with_fallback "$device" "silent"
     fi
     
     # Delete volume

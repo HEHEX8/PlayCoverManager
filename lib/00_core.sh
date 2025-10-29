@@ -626,7 +626,7 @@ ensure_volume_mounted() {
     if [[ -n "$desired_mount" ]]; then
         # Unmount if mounted elsewhere
         if [[ -n "$current_mount" ]]; then
-            unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force" || return 1
+            unmount_with_fallback "$device" "silent" || return 1
         fi
         
         # Mount to desired location
@@ -656,6 +656,177 @@ cleanup_temp_dir() {
         fi
     fi
     return 0
+}
+
+#######################################################
+# Cross-Module Common Operations
+# ファイル間共通操作（複数モジュールで使用される高レベル関数）
+#######################################################
+
+# Unmount with automatic force fallback (try normal, then force if failed)
+# Args: target (device or mount point), mode (silent|verbose)
+# Returns: 0 on success, 1 on failure
+unmount_with_fallback() {
+    local target="$1"
+    local mode="${2:-silent}"
+    
+    # Try normal unmount first
+    if unmount_volume "$target" "$mode"; then
+        return 0
+    fi
+    
+    # If normal unmount failed, try force unmount
+    if [[ "$mode" == "verbose" ]]; then
+        print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+    fi
+    
+    if unmount_volume "$target" "$mode" "force"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check mount status and compare with expected path
+# Args: volume_name, expected_path
+# Returns: 0 if mounted at expected path, 1 if not mounted, 2 if mounted elsewhere
+# Output: Current mount point (if mounted)
+check_mount_status() {
+    local volume_name="$1"
+    local expected_path="$2"
+    
+    local current_mount=$(get_mount_point "$volume_name")
+    
+    if [[ -z "$current_mount" ]]; then
+        return 1  # Not mounted
+    fi
+    
+    # Normalize paths for comparison
+    local normalized_current="${current_mount%/}"
+    local normalized_expected="${expected_path%/}"
+    
+    echo "$current_mount"
+    
+    if [[ "$normalized_current" == "$normalized_expected" ]]; then
+        return 0  # Correctly mounted
+    else
+        return 2  # Mounted at wrong location
+    fi
+}
+
+# Ensure directory exists with proper ownership
+# Args: directory_path, [owner_uid:gid]
+# Returns: 0 on success, 1 on failure
+ensure_directory() {
+    local dir_path="$1"
+    local owner="${2:-$(id -u):$(id -g)}"
+    
+    if [[ ! -d "$dir_path" ]]; then
+        /usr/bin/sudo /bin/mkdir -p "$dir_path" || return 1
+    fi
+    
+    /usr/bin/sudo /usr/sbin/chown -R "$owner" "$dir_path" || return 1
+    
+    return 0
+}
+
+# Validate volume and get its device
+# Args: volume_name
+# Returns: 0 on success, 1 on failure
+# Output: Device path
+validate_and_get_device() {
+    local volume_name="$1"
+    
+    if ! volume_exists "$volume_name"; then
+        return 1
+    fi
+    
+    local device=$(get_volume_device "$volume_name")
+    
+    if [[ -z "$device" ]]; then
+        return 1
+    fi
+    
+    echo "$device"
+    return 0
+}
+
+# Safe unmount with app running check
+# Args: volume_name, bundle_id, display_name
+# Returns: 0 on success, 1 on failure (shows error)
+safe_unmount_volume() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="${3:-$volume_name}"
+    
+    # Check if app is running
+    if is_app_running "$bundle_id"; then
+        print_error "アプリ '${display_name}' が実行中のため、アンマウントできません"
+        return 1
+    fi
+    
+    # Get device
+    local device=$(validate_and_get_device "$volume_name")
+    if [[ $? -ne 0 ]]; then
+        print_error "ボリューム '${volume_name}' が見つかりません"
+        return 1
+    fi
+    
+    # Try unmount with force fallback
+    if unmount_with_fallback "$device" "silent"; then
+        return 0
+    else
+        print_error "ボリューム '${display_name}' のアンマウントに失敗しました"
+        return 1
+    fi
+}
+
+# Mount volume with existence and conflict checks
+# Args: volume_name, target_path, bundle_id, [display_name]
+# Returns: 0 on success, 1 on failure (shows error)
+safe_mount_volume() {
+    local volume_name="$1"
+    local target_path="$2"
+    local bundle_id="$3"
+    local display_name="${4:-$volume_name}"
+    
+    # Check if app is running
+    if is_app_running "$bundle_id"; then
+        print_error "アプリ '${display_name}' が実行中のため、マウントできません"
+        return 1
+    fi
+    
+    # Validate volume exists
+    if ! volume_exists "$volume_name"; then
+        print_error "ボリューム '${volume_name}' が見つかりません"
+        return 1
+    fi
+    
+    # Check current mount status
+    local current_mount=$(get_mount_point "$volume_name")
+    
+    if [[ -n "$current_mount" ]]; then
+        # Already mounted somewhere
+        if [[ "$current_mount" == "$target_path" ]]; then
+            # Already mounted at correct location
+            return 0
+        else
+            # Mounted at wrong location, need to remount
+            local device=$(get_volume_device "$volume_name")
+            if ! unmount_with_fallback "$device" "silent"; then
+                print_error "既存のマウントを解除できません"
+                return 1
+            fi
+        fi
+    fi
+    
+    # Now mount to target location
+    if mount_app_volume "$volume_name" "$target_path" "$bundle_id"; then
+        return 0
+    else
+        print_error "ボリューム '${display_name}' のマウントに失敗しました"
+        return 1
+    fi
 }
 
 # Quit app before volume operations

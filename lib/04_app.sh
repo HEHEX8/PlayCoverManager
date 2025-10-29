@@ -447,7 +447,7 @@ mount_app_volume_install() {
     
     # If mounted elsewhere, unmount first
     if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
-        unmount_volume "$device" "silent" || unmount_volume "$device" "silent" "force"
+        unmount_with_fallback "$device" "silent"
     fi
     
     # Mount with nobrowse option
