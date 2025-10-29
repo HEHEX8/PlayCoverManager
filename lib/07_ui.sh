@@ -992,7 +992,15 @@ show_quick_launcher() {
             # Get storage state
             local container_path=$(get_container_path "$bundle_id")
             local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+            
+            # DEBUG
+            echo "[DEBUG] bundle_id: $bundle_id" >&2
+            echo "[DEBUG] volume_name: $volume_name" >&2
+            echo "[DEBUG] container_path: $container_path" >&2
+            
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+            
+            echo "[DEBUG] storage_mode: $storage_mode" >&2
             
             # Check sudo necessity
             local sudo_mark=""
