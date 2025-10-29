@@ -8,6 +8,111 @@
 # This module contains higher-level volume operations
 
 #######################################################
+# Batch Operation Helper Functions
+#######################################################
+
+# Initialize batch operation counters and UI
+_init_batch_operation() {
+    local operation_name="$1"
+    
+    clear
+    print_header "$operation_name"
+    
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        print_error "マッピングファイルが見つかりません: $MAPPING_FILE"
+        wait_for_enter
+        return 1
+    fi
+    
+    # Request sudo upfront
+    /usr/bin/sudo -v
+    
+    echo ""
+    print_info "登録されたボリュームをスキャン中..."
+    echo ""
+    
+    return 0
+}
+
+# Show batch operation summary
+_show_batch_summary() {
+    local operation_name="$1"
+    local success_count=$2
+    local skipped_count=$3
+    local failed_count=$4
+    local success_label="${5:-成功}"
+    
+    echo ""
+    print_header "${operation_name}完了"
+    echo ""
+    echo "  ${GREEN}✅ ${success_label}: ${success_count}件${NC}"
+    echo "  ${GRAY}⏭️  スキップ: ${skipped_count}件${NC}"
+    
+    if [[ $failed_count -gt 0 ]]; then
+        echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
+    fi
+    
+    echo ""
+    wait_for_enter
+}
+
+# Check common skip conditions for batch operations
+# Returns: 0 if should skip, 1 if should process
+_should_skip_batch_volume() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local check_type="$4"  # "mount" or "unmount"
+    
+    # Check if volume exists
+    if ! volume_exists "$volume_name"; then
+        echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
+        return 0
+    fi
+    
+    # Check if app is running
+    if is_app_running "$bundle_id"; then
+        echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
+        return 0
+    fi
+    
+    # Type-specific checks
+    case "$check_type" in
+        "mount")
+            local actual_mount=$(get_mount_point "$volume_name")
+            local target_path="${PLAYCOVER_BASE}/${bundle_id}"
+            
+            # Skip if already mounted at correct location
+            if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
+                echo "  ✅ ${display_name}: 既にマウント済"
+                return 0
+            fi
+            ;;
+        "unmount")
+            local actual_mount=$(get_mount_point "$volume_name")
+            
+            # Skip if not mounted
+            if [[ -z "$actual_mount" ]]; then
+                echo "  ⚪️ ${display_name}: 既にアンマウント済"
+                return 0
+            fi
+            
+            # Check if PlayCover app files are in use
+            local target_path="${PLAYCOVER_BASE}/${bundle_id}"
+            if [[ -d "${target_path}/Wrapper" ]]; then
+                local running_apps=$(get_running_apps_in_directory "$target_path")
+                if [[ -n "$running_apps" ]]; then
+                    echo "  🔥 ${display_name}: 配下アプリ実行中（スキップ）"
+                    return 0
+                fi
+            fi
+            ;;
+    esac
+    
+    return 1
+}
+
+#######################################################
 # Volume Detection Functions
 #######################################################
 
@@ -523,54 +628,23 @@ eject_disk() {
 # Mount all registered volumes
 # Reads from MAPPING_FILE and mounts all unmounted volumes
 batch_mount_all() {
-    clear
-    print_header "全ボリュームをマウント"
-    
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_error "マッピングファイルが見つかりません: $MAPPING_FILE"
-        wait_for_enter
-        return 1
-    fi
-    
-    # Request sudo upfront
-    /usr/bin/sudo -v
+    _init_batch_operation "全ボリュームをマウント" || return 1
     
     local mounted_count=0
     local skipped_count=0
     local failed_count=0
     
-    echo ""
-    print_info "登録されたボリュームをスキャン中..."
-    echo ""
-    
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip empty lines
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
-        # Check if volume exists
-        if ! volume_exists "$volume_name"; then
-            echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
+        # Check common skip conditions
+        if _should_skip_batch_volume "$volume_name" "$bundle_id" "$display_name" "mount"; then
             ((skipped_count++))
             continue
         fi
         
-        # Get mount point and target path
-        local actual_mount=$(get_mount_point "$volume_name")
         local target_path="${PLAYCOVER_BASE}/${bundle_id}"
-        
-        # Skip if already mounted at correct location
-        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
-            echo "  ✅ ${display_name}: 既にマウント済"
-            ((skipped_count++))
-            continue
-        fi
-        
-        # Skip if app is running
-        if is_app_running "$bundle_id"; then
-            echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
-            ((skipped_count++))
-            continue
-        fi
         
         # Check storage mode
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
@@ -654,15 +728,7 @@ batch_mount_all() {
         
     done < "$MAPPING_FILE"
     
-    echo ""
-    print_header "マウント完了"
-    echo ""
-    echo "  ${GREEN}✅ マウント成功: ${mounted_count}件${NC}"
-    echo "  ${GRAY}⏭️  スキップ: ${skipped_count}件${NC}"
-    if [[ $failed_count -gt 0 ]]; then
-        echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
-    fi
-    echo ""
+    _show_batch_summary "マウント" "$mounted_count" "$skipped_count" "$failed_count" "マウント成功"
     
     # Only show storage explanation if at least one volume was mounted
     if [[ $mounted_count -gt 0 ]]; then
@@ -678,72 +744,27 @@ batch_mount_all() {
         echo ""
         echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
+        wait_for_enter
     fi
-    
-    wait_for_enter
 }
 
 # Unmount all registered volumes
 # Reads from MAPPING_FILE and unmounts all mounted volumes
 batch_unmount_all() {
-    clear
-    print_header "全ボリュームをアンマウント"
-    
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_error "マッピングファイルが見つかりません: $MAPPING_FILE"
-        wait_for_enter
-        return 1
-    fi
-    
-    # Request sudo upfront
-    /usr/bin/sudo -v
+    _init_batch_operation "全ボリュームをアンマウント" || return 1
     
     local unmounted_count=0
     local skipped_count=0
     local failed_count=0
     
-    echo ""
-    print_info "登録されたボリュームをスキャン中..."
-    echo ""
-    
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip empty lines
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
-        # Check if volume exists
-        if ! volume_exists "$volume_name"; then
-            echo "  ⚠️  ${display_name}: ボリュームが見つかりません"
+        # Check common skip conditions
+        if _should_skip_batch_volume "$volume_name" "$bundle_id" "$display_name" "unmount"; then
             ((skipped_count++))
             continue
-        fi
-        
-        # Get mount point
-        local actual_mount=$(get_mount_point "$volume_name")
-        
-        # Skip if not mounted
-        if [[ -z "$actual_mount" ]]; then
-            echo "  ⚪️ ${display_name}: 既にアンマウント済"
-            ((skipped_count++))
-            continue
-        fi
-        
-        # Skip if app is running
-        if is_app_running "$bundle_id"; then
-            echo "  🔒 ${display_name}: アプリ実行中（スキップ）"
-            ((skipped_count++))
-            continue
-        fi
-        
-        # Check if PlayCover app files are in use
-        local target_path="${PLAYCOVER_BASE}/${bundle_id}"
-        if [[ -d "${target_path}/Wrapper" ]]; then
-            # This is an app storage volume
-            local running_apps=$(get_running_apps_in_directory "$target_path")
-            if [[ -n "$running_apps" ]]; then
-                echo "  🔥 ${display_name}: 配下アプリ実行中（スキップ）"
-                ((skipped_count++))
-                continue
-            fi
         fi
         
         # Unmount the volume
@@ -759,15 +780,5 @@ batch_unmount_all() {
         
     done < "$MAPPING_FILE"
     
-    echo ""
-    print_header "アンマウント完了"
-    echo ""
-    echo "  ${GREEN}✅ アンマウント成功: ${unmounted_count}件${NC}"
-    echo "  ${GRAY}⏭️  スキップ: ${skipped_count}件${NC}"
-    if [[ $failed_count -gt 0 ]]; then
-        echo "  ${RED}❌ 失敗: ${failed_count}件${NC}"
-    fi
-    echo ""
-    
-    wait_for_enter
+    _show_batch_summary "アンマウント" "$unmounted_count" "$skipped_count" "$failed_count" "アンマウント成功"
 }
