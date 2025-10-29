@@ -18,96 +18,111 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
     exit 1
 fi
 
-# sipsを使用して背景画像を作成（グラデーション）
-# まず、単色の背景を作成
+# Pythonスクリプトを作成
 cat > /tmp/create_bg.py << 'PYTHON_EOF'
 from PIL import Image, ImageDraw, ImageFont
-import sys
 
 # 画像サイズ
 width = 660
 height = 400
 
-# ライトグレーのグラデーション背景
+# ライトグレーの背景（DMGと同じ色）
 img = Image.new('RGB', (width, height), color=(200, 208, 214))
 
-# 矢印を描画
 draw = ImageDraw.Draw(img)
 
-# 矢印の座標（左側アイコンから右側Applicationsフォルダへ）
-arrow_start_x = 240  # 左側アイコンの右側
-arrow_end_x = 480    # Applicationsフォルダの左側
-arrow_y = 200        # 中央の高さ
+# 矢印を描画（太めで目立つように）
+arrow_start_x = 250
+arrow_end_x = 460
+arrow_y = 205
 
-# 矢印の線
-arrow_color = (100, 100, 100)
-line_width = 3
+# 矢印の色（濃いグレー）
+arrow_color = (80, 80, 80)
+line_width = 4
 
-# メインの矢印線
-draw.line([(arrow_start_x, arrow_y), (arrow_end_x - 30, arrow_y)], 
-          fill=arrow_color, width=line_width)
+# メイン矢印線（3本の線で太く見せる）
+for offset in [-2, 0, 2]:
+    draw.line([(arrow_start_x, arrow_y + offset), (arrow_end_x - 35, arrow_y + offset)], 
+              fill=arrow_color, width=line_width)
 
-# 矢印の先端（三角形）
+# 矢印の先端（大きめの三角形）
 arrow_head = [
-    (arrow_end_x - 30, arrow_y - 15),
+    (arrow_end_x - 40, arrow_y - 20),
     (arrow_end_x, arrow_y),
-    (arrow_end_x - 30, arrow_y + 15)
+    (arrow_end_x - 40, arrow_y + 20)
 ]
 draw.polygon(arrow_head, fill=arrow_color)
 
-# テキストを追加（ウィンドウ下部）
+# テキストを追加
 try:
-    # システムフォントを使用
-    font = ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 16)
-    font_small = ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 13)
+    # ヒラギノ角ゴシック
+    font_main = ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", 18)
+    font_sub = ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 14)
 except:
-    font = ImageFont.load_default()
-    font_small = ImageFont.load_default()
+    try:
+        # San Francisco フォント
+        font_main = ImageFont.truetype("/System/Library/Fonts/SFNS.ttf", 18)
+        font_sub = ImageFont.truetype("/System/Library/Fonts/SFNS.ttf", 14)
+    except:
+        font_main = ImageFont.load_default()
+        font_sub = ImageFont.load_default()
 
-text_color = (60, 60, 60)
-
-# メインテキスト
-main_text = "👈 アプリを Applications フォルダにドラッグ 👉"
-# テキストのバウンディングボックスを取得
-bbox = draw.textbbox((0, 0), main_text, font=font)
+# メインテキスト（アイコン上部）
+main_text = "ドラッグ&ドロップでインストール"
+bbox = draw.textbbox((0, 0), main_text, font=font_main)
 text_width = bbox[2] - bbox[0]
 text_x = (width - text_width) // 2
-text_y = 310
+text_y = 320
 
-draw.text((text_x, text_y), main_text, fill=text_color, font=font)
+# テキストに影を追加（読みやすく）
+shadow_offset = 2
+draw.text((text_x + shadow_offset, text_y + shadow_offset), main_text, fill=(255, 255, 255, 180), font=font_main)
+draw.text((text_x, text_y), main_text, fill=(50, 50, 50), font=font_main)
 
-# サブテキスト
-sub_text = "ドラッグ&ドロップでインストール"
-bbox2 = draw.textbbox((0, 0), sub_text, font=font_small)
-sub_text_width = bbox2[2] - bbox2[0]
-sub_x = (width - sub_text_width) // 2
-sub_y = text_y + 25
+# サブテキスト（小さめ）
+sub_text = "左のアプリを右のフォルダへ"
+bbox2 = draw.textbbox((0, 0), sub_text, font=font_sub)
+sub_width = bbox2[2] - bbox2[0]
+sub_x = (width - sub_width) // 2
+sub_y = text_y + 28
 
-draw.text((sub_x, sub_y), sub_text, fill=(80, 80, 80), font=font_small)
+draw.text((sub_x + 1, sub_y + 1), sub_text, fill=(255, 255, 255, 150), font=font_sub)
+draw.text((sub_x, sub_y), sub_text, fill=(70, 70, 70), font=font_sub)
 
 # 保存
 img.save('dmg-background.png', 'PNG')
-print("✅ 背景画像を作成しました")
+print("✅ 背景画像を作成しました: dmg-background.png")
 
 PYTHON_EOF
 
 # Pythonで背景画像を作成
 if command -v python3 &> /dev/null; then
+    # PILがインストールされているか確認
+    if ! python3 -c "import PIL" 2>/dev/null; then
+        echo "📦 Pillow (PIL) をインストール中..."
+        python3 -m pip install --user Pillow --quiet || {
+            echo "❌ Pillow のインストールに失敗しました"
+            echo "   手動でインストールしてください: python3 -m pip install Pillow"
+            exit 1
+        }
+    fi
+    
     python3 /tmp/create_bg.py
     if [ -f "dmg-background.png" ]; then
         echo "✅ 背景画像作成完了: dmg-background.png"
         ls -lh dmg-background.png
+        file dmg-background.png
         rm /tmp/create_bg.py
+        echo ""
+        echo "📦 次のステップ:"
+        echo "   ./create-dmg-applescript.sh を実行してDMGを作成"
     else
         echo "❌ 背景画像の作成に失敗しました"
+        rm /tmp/create_bg.py
         exit 1
     fi
 else
     echo "❌ Python3が見つかりません"
-    echo "   Pythonをインストールするか、手動で背景画像を作成してください"
+    echo "   Homebrewでインストール: brew install python3"
     exit 1
 fi
-
-echo ""
-echo "📦 次のステップ:"
-echo "   ./create-dmg-applescript.sh を実行してDMGを作成"

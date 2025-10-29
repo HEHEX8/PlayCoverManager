@@ -126,44 +126,16 @@ if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
     sleep 1
 fi
 
-# 画面外配置用の隠しプレースホルダーファイルを作成
-# これらは表示ウィンドウ領域外に配置される
-echo "📝 隠しファイルプレースホルダーを作成中..."
-touch "$MOUNT_DIR/.background" 2>/dev/null || true
-touch "$MOUNT_DIR/.VolumeIcon" 2>/dev/null || true
-
-# インストール手順テキストを作成（ドットなしで目立つように）
-echo "📄 インストール手順を作成中..."
-cat > "$MOUNT_DIR/インストール方法.txt" << 'INSTRUCTIONS_EOF'
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      PlayCover Manager インストール方法
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📦 インストール手順：
-
-   左側の「PlayCover Manager」アイコンを
-   右側の「Applications」フォルダへ
-   ドラッグ&ドロップしてください
-   
-            👈    ドラッグ    👉
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✨ インストール完了後：
-   • Launchpad から起動
-   • または Applications フォルダから起動
-
-🔐 初回起動時の注意：
-   • 「開発元を確認できません」と表示された場合
-     → 右クリック → 「開く」を選択
-   • Terminal権限を求められた場合
-     → 「OK」で権限を付与
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📚 詳細は README.md をご覧ください
-
-INSTRUCTIONS_EOF
+# 背景画像をコピー（存在する場合）
+if [ -f "dmg-background.png" ]; then
+    echo "🎨 背景画像をコピー中..."
+    mkdir -p "$MOUNT_DIR/.background"
+    cp "dmg-background.png" "$MOUNT_DIR/.background/background.png"
+else
+    echo "⚠️  背景画像が見つかりません"
+    echo "   ./create-dmg-background.sh を実行して背景画像を作成してください"
+    echo "   背景画像なしで続行します..."
+fi
 
 # AppleScriptでFinderビューを設定
 echo "🎨 Finderビューを設定中..."
@@ -187,10 +159,16 @@ tell application "Finder"
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 128
-        -- ライトグレー背景（読みやすい）
-        set background color of viewOptions to {52428, 54227, 55769}
         set text size of viewOptions to 12
         set label position of viewOptions to bottom
+        
+        -- 背景画像を設定（存在する場合）
+        try
+            set background picture of viewOptions to file ".background:background.png"
+        on error
+            -- 背景画像がない場合はライトグレー背景
+            set background color of viewOptions to {52428, 54227, 55769}
+        end try
         
         delay 2
         
@@ -205,15 +183,6 @@ tell application "Finder"
             set position of item "Applications" of container window to {500, 200}
         on error errMsg
             log "警告: Applicationsの配置に失敗 - " & errMsg
-        end try
-        
-        delay 1
-        
-        -- インストール手順テキストをウィンドウ下部中央に配置
-        try
-            set position of item "インストール方法.txt" of container window to {260, 310}
-        on error errMsg
-            log "警告: 手順テキストの配置に失敗 - " & errMsg
         end try
         
         delay 1
@@ -234,12 +203,6 @@ tell application "Finder"
         
         try
             set position of item ".fseventsd" of container window to {300, 1000}
-        on error
-            -- ファイルが存在しない可能性
-        end try
-        
-        try
-            set position of item ".VolumeIcon" of container window to {400, 1000}
         on error
             -- ファイルが存在しない可能性
         end try
@@ -271,12 +234,10 @@ fi
 # .DS_Storeが存在する場合は隠す
 [ -f "$MOUNT_DIR/.DS_Store" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.DS_Store" 2>/dev/null
 
-# プレースホルダーファイルを隠す
-[ -f "$MOUNT_DIR/.background" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.background" 2>/dev/null
-[ -f "$MOUNT_DIR/.VolumeIcon" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon" 2>/dev/null
-
-# インストール手順テキストは表示したまま（ユーザーが読めるように）
-# ドットなしのファイル名なので通常表示される
+# 背景画像フォルダを隠す
+if [ -d "$MOUNT_DIR/.background" ]; then
+    /usr/bin/SetFile -a V "$MOUNT_DIR/.background" 2>/dev/null
+fi
 
 # .fseventsdを隠す（既に画面外に配置済みだが、念のため隠す）
 if [ -d "$MOUNT_DIR/.fseventsd" ]; then
