@@ -130,10 +130,6 @@ graceful_exit() {
 # Handle Ctrl+C - show message and exit gracefully
 trap 'graceful_exit' INT
 
-# Handle window close button (SIGHUP) - exit cleanly
-# Combined with Terminal configuration above, window closes without confirmation
-trap 'exit 0' HUP
-
 #######################################################
 # Execute Main
 #######################################################
