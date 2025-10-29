@@ -1325,10 +1325,31 @@ get_launchable_apps() {
         local app_name=$(basename "$app_path" .app)
         local bundle_id=$(get_bundle_id_from_app "$app_path")
         
-        if [[ -n "$bundle_id" ]]; then
+        if [[ -z "$bundle_id" ]]; then
+            continue
+        fi
+        
+        # Only include apps that have mapping (external) or intentional internal mode
+        local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+        local container_path=$(get_container_path "$bundle_id")
+        
+        # Check if app has external mapping
+        if [[ -n "$volume_name" ]]; then
+            # External storage - always include
             echo "${app_name}|${bundle_id}|${app_path}"
             ((app_count++))
+            continue
         fi
+        
+        # No external mapping - check for internal intentional mode
+        if [[ -f "${container_path}/.internal_storage" ]]; then
+            # Internal intentional mode - include
+            echo "${app_name}|${bundle_id}|${app_path}"
+            ((app_count++))
+            continue
+        fi
+        
+        # No mapping and no internal flag - skip this app
     done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
     
     if [[ $app_count -eq 0 ]]; then
@@ -1472,13 +1493,15 @@ launch_app() {
     # Launch the app
     echo ""
     print_info "${app_name}を起動しています..."
-    open "$app_path"
+    
+    # Use open -a to launch the app properly
+    open -a "$app_path"
     
     if [[ $? -eq 0 ]]; then
         print_success "起動しました"
         
         # Record as recently used
-        record_recent_app "$bundle_id" "$app_name"
+        record_recent_app "$bundle_id"
         
         return 0
     else
