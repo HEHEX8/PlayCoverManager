@@ -7,7 +7,7 @@
 set -e
 
 APP_NAME="PlayCover Manager"
-APP_VERSION="5.0.0"
+APP_VERSION="5.0.1"
 BUNDLE_ID="com.playcover.manager"
 BUILD_DIR="build"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
