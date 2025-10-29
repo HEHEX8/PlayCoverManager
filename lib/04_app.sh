@@ -49,6 +49,82 @@ PLAYCOVER_VOLUME_DEVICE=""
 SELECTED_DISK=""
 
 #######################################################
+# App Management Helper Functions
+#######################################################
+
+# Show installation/uninstallation summary
+_show_install_summary() {
+    local operation="$1"  # "インストール" or "アンインストール"
+    
+    echo ""
+    print_success "全ての処理が完了しました"
+    
+    if [[ ${#INSTALL_SUCCESS} -gt 0 ]]; then
+        echo ""
+        print_success "${operation}成功: ${#INSTALL_SUCCESS} 個"
+        for app in "${(@)INSTALL_SUCCESS}"; do
+            echo "  ✅ $app"
+        done
+    fi
+    
+    if [[ ${#INSTALL_FAILED} -gt 0 ]]; then
+        echo ""
+        print_error "${operation}失敗: ${#INSTALL_FAILED} 個"
+        for app in "${(@)INSTALL_FAILED}"; do
+            echo "  ❌ $app"
+        done
+    fi
+    
+    echo ""
+    echo -n "Enterキーでメニューに戻る..."
+    read
+}
+
+# Check if app is running and show appropriate error
+_check_app_not_running() {
+    local bundle_id="$1"
+    local app_name="$2"
+    local operation="$3"  # e.g., "インストール", "アンインストール"
+    
+    if is_app_running "$bundle_id"; then
+        echo ""
+        print_error "アプリが実行中のため、${operation}できません"
+        echo ""
+        print_info "アプリを終了してから再度お試しください"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Show uninstall warning and confirmation
+_show_uninstall_warning() {
+    local app_name="$1"
+    local bundle_id="$2"
+    local volume_name="$3"
+    
+    echo ""
+    print_warning "以下のアプリをアンインストールします:"
+    echo ""
+    echo "  アプリ名: ${GREEN}${app_name}${NC}"
+    echo "  Bundle ID: ${bundle_id}"
+    echo "  ボリューム: ${volume_name}"
+    echo ""
+    print_warning "この操作は以下を実行します:"
+    echo "  1. PlayCover からアプリを削除 (Applications/)"
+    echo "  2. アプリ設定を削除 (App Settings/)"
+    echo "  3. Entitlements を削除"
+    echo "  4. Keymapping を削除"
+    echo "  5. Containersフォルダを削除"
+    echo "  6. APFSボリュームをアンマウント"
+    echo "  7. APFSボリュームを削除"
+    echo "  8. マッピング情報を削除"
+    echo ""
+    print_error "この操作は取り消せません！"
+    echo ""
+}
+
+#######################################################
 # PlayCover Volume Management
 #######################################################
 
@@ -427,11 +503,7 @@ install_ipa_to_playcover() {
         # Check if existing app was found and ask for confirmation OUTSIDE the loop
         if [[ -n "$existing_app_path" ]]; then
             # Check if app is currently running
-            if is_app_running "$APP_BUNDLE_ID"; then
-                echo ""
-                print_error "アプリが実行中のため、インストールできません"
-                echo ""
-                print_info "アプリを終了してから再度お試しください"
+            if ! _check_app_not_running "$APP_BUNDLE_ID" "$APP_NAME" "インストール"; then
                 INSTALL_FAILED+=("$APP_NAME (実行中)")
                 echo ""
                 return 1
@@ -818,28 +890,7 @@ install_workflow() {
         install_ipa_to_playcover "$ipa_file" || continue
     done
     
-    echo ""
-    print_success "全ての処理が完了しました"
-    
-    if [[ ${#INSTALL_SUCCESS} -gt 0 ]]; then
-        echo ""
-        print_success "インストール成功: ${#INSTALL_SUCCESS} 個"
-        for app in "${(@)INSTALL_SUCCESS}"; do
-            echo "  ✅ $app"
-        done
-    fi
-    
-    if [[ ${#INSTALL_FAILED} -gt 0 ]]; then
-        echo ""
-        print_error "インストール失敗: ${#INSTALL_FAILED} 個"
-        for app in "${(@)INSTALL_FAILED}"; do
-            echo "  ❌ $app"
-        done
-    fi
-    
-    echo ""
-    echo -n "Enterキーでメニューに戻る..."
-    read
+    _show_install_summary "インストール"
 }
 
 #######################################################
@@ -939,29 +990,10 @@ uninstall_workflow() {
         continue
     fi
     
-    echo ""
-    print_warning "以下のアプリをアンインストールします:"
-    echo ""
-    echo "  アプリ名: ${GREEN}${selected_app}${NC}"
-    echo "  Bundle ID: ${selected_bundle}"
-    echo "  ボリューム: ${selected_volume}"
-    echo ""
-    print_warning "この操作は以下を実行します:"
-    echo "  1. PlayCover からアプリを削除 (Applications/)"
-    echo "  2. アプリ設定を削除 (App Settings/)"
-    echo "  3. Entitlements を削除"
-    echo "  4. Keymapping を削除"
-    echo "  5. Containersフォルダを削除"
-    echo "  6. APFSボリュームをアンマウント"
-    echo "  7. APFSボリュームを削除"
-    echo "  8. マッピング情報を削除"
-    echo ""
-    print_error "この操作は取り消せません！"
-    echo ""
+    _show_uninstall_warning "$selected_app" "$selected_bundle" "$selected_volume"
     
     # Check if app is currently running before uninstall
-    if is_app_running "$selected_bundle"; then
-        print_error "アプリが実行中のため、アンインストールできません"
+    if ! _check_app_not_running "$selected_bundle" "$selected_app" "アンインストール"; then
         echo ""
         print_info "アプリを終了してから再度お試しください"
         wait_for_enter
