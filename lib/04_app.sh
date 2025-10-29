@@ -1335,7 +1335,15 @@ get_launchable_apps() {
         
         # Check if app has external mapping
         if [[ -n "$volume_name" ]]; then
-            # External storage - always include
+            # External storage - check if contaminated
+            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+            
+            # Exclude contaminated apps (cannot launch without resolving)
+            if [[ "$storage_mode" == "internal_contaminated" ]]; then
+                continue
+            fi
+            
+            # Include all other external storage states
             echo "${app_name}|${bundle_id}|${app_path}"
             ((app_count++))
             continue
