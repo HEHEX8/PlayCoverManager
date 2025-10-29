@@ -176,40 +176,11 @@ if [ -f "RELEASE_NOTES_5.0.0.md" ]; then
     cp RELEASE_NOTES_5.0.0.md "${APP_BUNDLE}/Contents/Resources/"
 fi
 
-# Create DMG for distribution (optional)
+# Note about DMG creation
 echo ""
-echo "📦 Creating distributable DMG..."
-DMG_NAME="${APP_NAME}-${APP_VERSION}.dmg"
-DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
-DMG_TEMP_DIR="${BUILD_DIR}/dmg_temp"
-
-if command -v hdiutil >/dev/null 2>&1; then
-    # Create temporary directory for DMG contents
-    mkdir -p "${DMG_TEMP_DIR}"
-    
-    # Copy app to temp directory
-    cp -R "${APP_BUNDLE}" "${DMG_TEMP_DIR}/"
-    
-    # Create symlink to Applications folder
-    ln -s /Applications "${DMG_TEMP_DIR}/Applications"
-    
-    # Create DMG with proper layout
-    echo "🔧 Creating DMG with Applications folder link..."
-    hdiutil create -volname "${APP_NAME}" \
-        -srcfolder "${DMG_TEMP_DIR}" \
-        -ov -format UDZO \
-        "${DMG_PATH}" 2>/dev/null || true
-    
-    # Clean up temp directory
-    rm -rf "${DMG_TEMP_DIR}"
-    
-    if [ -f "${DMG_PATH}" ]; then
-        echo "✅ DMG created: ${DMG_PATH}"
-    fi
-else
-    echo "ℹ️  hdiutil not available (Linux environment)"
-    echo "   App bundle created, but DMG skipped"
-fi
+echo "ℹ️  Basic app bundle created"
+echo "   For professional DMG with custom layout, run on macOS:"
+echo "   ./create-installer-dmg.sh"
 
 # Create ZIP for distribution
 echo ""
