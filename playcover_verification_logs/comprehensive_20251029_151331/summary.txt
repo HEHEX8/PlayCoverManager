@@ -1,6 +1,0 @@
-=== Installation Summary ===
-Date: 2025年 10月29日 水曜日 15時14分11秒 JST
-Bundle ID: com.HoYoverse.hkrpgoversea
-IPA Size: 2765MB
-Settings File: ~/Library/Containers/io.playcover.PlayCover/App Settings/com.HoYoverse.hkrpgoversea.plist
-App Bundle: ~/Library/Containers/io.playcover.PlayCover/Apps/com.HoYoverse.hkrpgoversea.app

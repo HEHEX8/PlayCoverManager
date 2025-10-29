@@ -58,3 +58,21 @@ AppIcon.icns
 *.bak
 *.backup
 *.old
+
+# Development and analysis files
+*_source/
+PlayCover*.zip
+PlayCover*.dmg
+PlayTools_source/
+playcover_verification_logs/
+mac_verification_scripts.zip
+playcover_verification_logs.zip
+__MACOSX/
+old-scripts/
+ANALYSIS_SUMMARY.md
+PLAYCOVER_CLI_PROPOSAL.md
+PLAYCOVER_DEEP_ANALYSIS.md
+MAC_VERIFICATION_SCRIPTS.md
+REVERT_NOTES.md
+test-app.sh
+debug-icon.sh

@@ -1,6 +1,0 @@
-=== Installation Summary ===
-Date: 2025年 10月29日 水曜日 15時22分05秒 JST
-Bundle ID: com.tuyafeng.Via
-IPA Size: 1.6MB
-Settings File: ~/Library/Containers/io.playcover.PlayCover/App Settings/com.tuyafeng.Via.plist
-App Bundle: ~/Library/Containers/io.playcover.PlayCover/Apps/com.tuyafeng.Via.app

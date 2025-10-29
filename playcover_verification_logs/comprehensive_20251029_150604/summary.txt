@@ -1,6 +1,0 @@
-=== Installation Summary ===
-Date: 2025年 10月29日 水曜日 15時08分57秒 JST
-Bundle ID: jp.co.cygames.umamusume
-IPA Size: 185.5MB
-Settings File: ~/Library/Containers/io.playcover.PlayCover/App Settings/jp.co.cygames.umamusume.plist
-App Bundle: ~/Library/Containers/io.playcover.PlayCover/Apps/jp.co.cygames.umamusume.app

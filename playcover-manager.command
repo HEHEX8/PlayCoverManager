@@ -1,15 +1,15 @@
 #!/bin/zsh
 #######################################################
-# PlayCover Manager (Modular Version)
+# PlayCover Manager
 # macOS Sequoia 15.1+ Compatible
-# Version: 5.0.0-alpha5 (Modular Architecture)
+# Version: 5.1.0
 #######################################################
 
 #######################################################
 # Version Information
 #######################################################
 # 
-# v5.0.0-alpha5 - Phase 8完了: volume操作の高レベル統一
+# v5.1.0 - Quick Launcher & Bug Fixes
 # 
 # 【開発履歴】
 # Phase 1: 基本構造とコアモジュール ✅
