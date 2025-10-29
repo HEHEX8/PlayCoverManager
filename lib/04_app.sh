@@ -1252,6 +1252,28 @@ uninstall_all_apps() {
 # Quick Launcher Functions
 #######################################################
 
+# Get bundle ID from .app bundle's Info.plist
+# Args: app_path
+# Output: bundle_id
+# Returns: 0 if found, 1 if not found
+get_bundle_id_from_app() {
+    local app_path=$1
+    local info_plist="${app_path}/Info.plist"
+    
+    if [[ ! -f "$info_plist" ]]; then
+        return 1
+    fi
+    
+    local bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$info_plist" 2>/dev/null)
+    
+    if [[ -n "$bundle_id" ]]; then
+        echo "$bundle_id"
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Get list of launchable apps (apps with .app files in PlayCover)
 # Output: app_name|bundle_id|app_path (one per line)
 # Returns: 0 if apps found, 1 if no apps
@@ -1271,7 +1293,7 @@ get_launchable_apps() {
         if [[ -n "$bundle_id" ]]; then
             echo "${app_name}|${bundle_id}|${app_path}"
         fi
-    done < <(find "$playcover_apps" -name "*.app" -maxdepth 2 -type d 2>/dev/null)
+    done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
     
     return 0
 }
