@@ -1047,10 +1047,10 @@ show_quick_launcher() {
             "")
                 # Empty input (Enter key) - launch most recent app if exists
                 if [[ $recent_count -gt 0 ]] && [[ ${#app_names[@]} -gt 0 ]]; then
-                    # Most recent app is always at index 0
-                    local selected_name="${app_names[0]}"
-                    local selected_bundle_id="${bundle_ids[0]}"
-                    local selected_path="${app_paths[0]}"
+                    # Most recent app is always at index 1 (zsh arrays are 1-based)
+                    local selected_name="${app_names[1]}"
+                    local selected_bundle_id="${bundle_ids[1]}"
+                    local selected_path="${app_paths[1]}"
                     
                     echo ""
                     local container_path=$(get_container_path "$selected_bundle_id")
@@ -1093,7 +1093,8 @@ show_quick_launcher() {
                 ;;
             [1-9]|[1-9][0-9])
                 if [[ $choice -ge 1 ]] && [[ $choice -le ${#sorted_apps_info[@]} ]]; then
-                    local selected_index=$((choice - 1))
+                    # zsh arrays are 1-based, so choice directly maps to index
+                    local selected_index=$choice
                     local selected_name="${app_names[$selected_index]}"
                     local selected_bundle_id="${bundle_ids[$selected_index]}"
                     local selected_path="${app_paths[$selected_index]}"
