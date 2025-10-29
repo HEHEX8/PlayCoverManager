@@ -803,14 +803,3 @@ is_playcover_environment_ready() {
     
     return 0
 }
-p -i playcover >&2
-        return 1
-    fi
-    
-    # Check if mapping file exists
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        return 1
-    fi
-    
-    return 0
-}

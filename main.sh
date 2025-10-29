@@ -113,10 +113,26 @@ main() {
 }
 
 #######################################################
-# Signal Handler (Ctrl+C)
+# Signal Handlers
 #######################################################
 
-trap 'echo ""; print_info "終了します"; /bin/sleep 1; /usr/bin/osascript -e '"'"'tell application "Terminal" to close (every window whose name contains "playcover")'"'"' & exit 0' INT
+# Graceful exit function
+graceful_exit() {
+    echo ""
+    print_info "終了します"
+    /bin/sleep 1
+    
+    # Close all PlayCover-related Terminal windows
+    /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' 2>/dev/null &
+    exit 0
+}
+
+# Handle Ctrl+C - show message and exit gracefully
+trap 'graceful_exit' INT
+
+# Handle window close button (SIGHUP) - exit silently without confirmation
+# This prevents "Do you want to terminate running processes?" dialog
+trap 'exit 0' HUP
 
 #######################################################
 # Execute Main
