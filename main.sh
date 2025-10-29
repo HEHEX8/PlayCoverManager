@@ -52,8 +52,11 @@ main() {
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
-            # Silently mount PlayCover volume (no user interaction on startup)
-            mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID" >/dev/null 2>&1
+            # Show message before mounting (sudo will prompt for password)
+            echo ""
+            print_info "PlayCoverボリュームをマウントしています..."
+            echo ""
+            mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID"
         fi
     fi
     

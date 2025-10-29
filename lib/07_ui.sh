@@ -917,7 +917,7 @@ show_mapping_info() {
 show_quick_launcher() {
     while true; do
         clear
-        print_header "🚀 PlayCover Quick Launcher"
+        print_header "🚀 PlayCover クイックランチャー"
         
         # Check if PlayCover volume exists (should be created during setup)
         if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
@@ -1017,69 +1017,41 @@ show_quick_launcher() {
             # Check sudo necessity
             local sudo_mark=""
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                sudo_mark=" 🔐"
+                sudo_mark="🔐"
             fi
             
-            # Status icons and messages
-            local location_icon="" status_icon="" status_msg=""
+            # Storage type icon (simple)
+            local storage_icon=""
             case "$storage_mode" in
-                "external")
-                    location_icon="🔌"
-                    status_icon="●"
-                    status_msg="Ready"
+                "external"|"external_wrong_location"|"none")
+                    storage_icon="🔌"
                     ;;
-                "external_wrong_location")
-                    location_icon="🔌"
-                    status_icon="🔄"
-                    status_msg="要再マウント"
-                    ;;
-                "internal_intentional")
-                    location_icon="🏠"
-                    status_icon="●"
-                    status_msg="Ready"
+                "internal_intentional"|"internal_intentional_empty")
+                    storage_icon="🏠"
                     ;;
                 "internal_contaminated")
-                    location_icon="🏠"
-                    status_icon="⚠️"
-                    status_msg="内蔵データ検出"
-                    ;;
-                "internal_intentional_empty")
-                    location_icon="🏠"
-                    status_icon="📭"
-                    status_msg="初期状態"
-                    ;;
-                "none")
-                    if is_app_registered_as_external "$bundle_id"; then
-                        location_icon="🔌"
-                        status_icon="📦"
-                        status_msg="未マウント"
-                    else
-                        location_icon="⚠️"
-                        status_icon="❓"
-                        status_msg="状態不明"
-                    fi
+                    storage_icon="⚠️"
                     ;;
             esac
             
-            # Format: [⭐] number. name [icon] status
-            printf "  %-3s%d. %-25s [%s] %s %-12s%s\n" \
-                "$recent_mark" "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
+            # Format: [storage][sudo] [recent] number. name
+            printf "%s%-3s %-3s%d. %s\n" \
+                "$storage_icon" "$sudo_mark" "$recent_mark" "$index" "$display_name"
             ((index++))
         done
         
         echo ""
-        if [[ $recent_count -gt 0 ]]; then
-            echo "  ⭐ 最近使用（Enterで起動）    🔐 管理者権限が必要"
-            echo ""
-        fi
+        echo ""
         print_separator
+        echo "  🔐     : 要管理者権限"
         if [[ $recent_count -gt 0 ]]; then
-            echo "  [Enter] : ⭐付きアプリを起動"
+            echo "  ⭐     : 前回起動アプリ そのままEnterで起動"
         fi
-        echo "  [1-${#apps_info[@]}] : アプリを起動"
-        echo "  [p]   : PlayCoverを起動（設定変更用）"
-        echo "  [m]   : 管理メニュー"
-        echo "  [0]   : 終了"
+        echo "  [1-${#apps_info[@]}]  : アプリを起動"
+        echo ""
+        echo "  [p]    : PlayCoverを起動（設定変更用）"
+        echo "  [m]    : 管理メニュー"
+        echo "  [0]    : 終了"
         print_separator
         echo ""
         
