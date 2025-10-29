@@ -27,10 +27,10 @@ mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 mkdir -p "${APP_BUNDLE}/Contents/Resources/lib"
 
-# Copy main script
+# Copy main script to Resources
 echo "📝 Copying main script..."
-cp main.sh "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
-chmod +x "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
+cp main.sh "${APP_BUNDLE}/Contents/Resources/main-script.sh"
+chmod +x "${APP_BUNDLE}/Contents/Resources/main-script.sh"
 
 # Copy all library modules
 echo "📚 Copying library modules..."
@@ -38,8 +38,41 @@ cp -r lib/* "${APP_BUNDLE}/Contents/Resources/lib/"
 
 # Update SCRIPT_DIR in main script to use Resources
 echo "🔧 Updating script paths..."
-sed -i.bak 's|SCRIPT_DIR="${0:A:h}"|SCRIPT_DIR="$(cd "$(dirname "$0")/../Resources" \&\& pwd)"|' "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
-rm -f "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager.bak"
+# Change shebang from zsh to bash and update SCRIPT_DIR
+sed -i.bak '1s|#!/bin/zsh|#!/bin/bash|' "${APP_BUNDLE}/Contents/Resources/main-script.sh"
+sed -i.bak 's|SCRIPT_DIR="${0:A:h}"|SCRIPT_DIR="$(cd "$(dirname "$0")" \&\& pwd)"|' "${APP_BUNDLE}/Contents/Resources/main-script.sh"
+rm -f "${APP_BUNDLE}/Contents/Resources/main-script.sh.bak"
+
+# Create launcher script in MacOS directory
+echo "🚀 Creating launcher script..."
+cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
+#!/bin/bash
+#######################################################
+# PlayCover Manager - Launcher
+# Opens Terminal and runs the main script
+#######################################################
+
+# Get the Resources directory
+RESOURCES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
+MAIN_SCRIPT="${RESOURCES_DIR}/main-script.sh"
+
+# Check if main script exists
+if [ ! -f "$MAIN_SCRIPT" ]; then
+    osascript -e 'display dialog "PlayCover Manager script not found!" buttons {"OK"} default button 1 with icon stop'
+    exit 1
+fi
+
+# Launch in Terminal
+osascript <<EOF
+tell application "Terminal"
+    activate
+    do script "clear && cd '$RESOURCES_DIR' && bash '$MAIN_SCRIPT'"
+end tell
+EOF
+
+LAUNCHER_EOF
+
+chmod +x "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
 
 # Copy app icon if available
 if [ -f "AppIcon.icns" ]; then
@@ -149,10 +182,27 @@ echo ""
 echo "📦 Creating distributable DMG..."
 DMG_NAME="${APP_NAME}-${APP_VERSION}.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
+DMG_TEMP_DIR="${BUILD_DIR}/dmg_temp"
 
 if command -v hdiutil >/dev/null 2>&1; then
-    # Create temporary DMG
-    hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE}" -ov -format UDZO "${DMG_PATH}" 2>/dev/null || true
+    # Create temporary directory for DMG contents
+    mkdir -p "${DMG_TEMP_DIR}"
+    
+    # Copy app to temp directory
+    cp -R "${APP_BUNDLE}" "${DMG_TEMP_DIR}/"
+    
+    # Create symlink to Applications folder
+    ln -s /Applications "${DMG_TEMP_DIR}/Applications"
+    
+    # Create DMG with proper layout
+    echo "🔧 Creating DMG with Applications folder link..."
+    hdiutil create -volname "${APP_NAME}" \
+        -srcfolder "${DMG_TEMP_DIR}" \
+        -ov -format UDZO \
+        "${DMG_PATH}" 2>/dev/null || true
+    
+    # Clean up temp directory
+    rm -rf "${DMG_TEMP_DIR}"
     
     if [ -f "${DMG_PATH}" ]; then
         echo "✅ DMG created: ${DMG_PATH}"
