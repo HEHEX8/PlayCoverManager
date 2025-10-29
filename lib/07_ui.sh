@@ -201,7 +201,8 @@ show_installed_apps() {
         
         if [[ "$app_found" == true ]]; then
             # Get container path and size
-            local container_path="${HOME}/Library/Containers/${bundle_id}"
+            # Use display_name (volume name) not bundle_id for path
+            local container_path="${PLAYCOVER_CONTAINER}/${display_name}"
             local container_size=$(get_container_size "$container_path")
             local storage_type=$(get_storage_type "$container_path")
             local storage_icon=""
