@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)
+[![Latest Release](https://img.shields.io/github/v/release/HEHEX8/PlayCoverManager?label=version)](https://github.com/HEHEX8/PlayCoverManager/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-macOS%20Sequoia%2015.1%2B-lightgrey.svg)
 ![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -15,11 +15,11 @@
 
 ---
 
-## 🎉 v5.0.0 - 正式安定版リリース
+## 🎉 最新リリース
 
-PlayCover Manager の最初の正式安定版がリリースされました。全ての重大バグが修正され、本番環境での使用に適しています。
+[![GitHub Release](https://img.shields.io/github/v/release/HEHEX8/PlayCoverManager?style=for-the-badge&logo=github)](https://github.com/HEHEX8/PlayCoverManager/releases/latest)
 
-**リリース詳細**: [RELEASE_NOTES_5.0.0.md](RELEASE_NOTES_5.0.0.md)
+最新版のダウンロードは [Releases](https://github.com/HEHEX8/PlayCoverManager/releases/latest) から。
 
 ---
 
@@ -46,19 +46,14 @@ PlayCover Manager は、PlayCover で実行する iOS アプリのデータを�
 - PlayCover 3.0 以降
 - 外部ストレージ（APFS 対応）
 
-### インストール方法1: アプリケーション版（推奨）
+### インストール方法1: DMGインストーラー（推奨）
 
-1. **最新リリースをダウンロード**
-   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases) から `PlayCover Manager-5.0.0.zip` をダウンロード
+1. **最新DMGをダウンロード**
+   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases/latest) から最新の `.dmg` をダウンロード
 
-2. **ZIPを解凍してアプリをインストール**
-   ```bash
-   # ZIPを解凍（Finderでダブルクリックまたは）
-   unzip "PlayCover Manager-5.0.0.zip"
-   
-   # Applicationsフォルダに移動
-   mv "PlayCover Manager.app" /Applications/
-   ```
+2. **インストール**
+   - DMGをマウント
+   - PlayCover Manager.app を Applications フォルダにドラッグ
 
 3. **初回起動**
    - アプリを右クリック → 「開く」を選択
@@ -78,18 +73,7 @@ chmod +x main.sh
 ./main.sh
 ```
 
-### インストール方法3: DMGインストーラー（推奨）
-
-1. **DMGファイルをダウンロード**
-   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases) から `PlayCover Manager-5.0.0.dmg` をダウンロード
-
-2. **DMGをマウント**
-   - DMGファイルをダブルクリック
-
-3. **ドラッグ&ドロップでインストール**
-   - PlayCover Manager.app を Applications フォルダにドラッグ
-
-### インストール方法4: 自分でビルド
+### インストール方法3: 自分でビルド
 
 ```bash
 # リポジトリをクローン
@@ -115,6 +99,7 @@ mv "build/PlayCover Manager.app" /Applications/
 **DMG作成の詳細**: 
 - [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - 推奨方法（appdmg）
 - [DMG-METHODS-COMPARISON.md](DMG-METHODS-COMPARISON.md) - 方法の比較
+- [RELEASE-DMG-GUIDE.md](RELEASE-DMG-GUIDE.md) - リリース方法
 
 ### 初回セットアップ
 
@@ -131,7 +116,7 @@ mv "build/PlayCover Manager.app" /Applications/
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📱 PlayCover Volume Manager v5.0.0
+  📱 PlayCover Volume Manager
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   1. アプリ管理
@@ -183,22 +168,17 @@ PlayCoverManager/
 │   ├── 05_cleanup.sh         # クリーンアップ機能
 │   ├── 06_setup.sh           # 初期セットアップ
 │   └── 07_ui.sh              # UI・メニュー表示
-├── README.md                  # このファイル
-├── CHANGELOG.md               # 変更履歴（旧版）
-└── RELEASE_NOTES_5.0.0.md    # v5.0.0 リリースノート
+└── README.md                  # このファイル
 ```
 
 ### 技術詳細
 
-- **総コード行数**: 6,056 行
-- **モジュール数**: 8 個
 - **言語**: Zsh (macOS 標準シェル)
-- **関数数**: 91 個
 - **テスト**: 包括的な検証済み
 
-### アイコンについて
+### アイコンとDMG作成
 
-プロジェクトにはカスタムアイコンが含まれています。macOS環境でビルドする場合：
+プロジェクトにはカスタムアイコンとDMGインストーラー作成機能が含まれています：
 
 ```bash
 # アイコンを生成（macOS上で実行）
@@ -206,15 +186,21 @@ PlayCoverManager/
 
 # アイコン付きでビルド
 ./build-app.sh
+
+# DMGインストーラーを作成
+./create-dmg-background-simple.sh
+./create-dmg-appdmg.sh
 ```
 
-詳細は [ICON_GUIDE.md](ICON_GUIDE.md) を参照してください。
+詳細は以下のガイドを参照：
+- [ICON_GUIDE.md](ICON_GUIDE.md) - アイコン作成ガイド
+- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - DMG作成ガイド
 
 ---
 
 ## 🐛 バグ報告
 
-バグを発見した場合は、以下の情報と共に Issue を作成してください：
+バグを発見した場合は、[Issues](https://github.com/HEHEX8/PlayCoverManager/issues) で以下の情報と共に報告してください：
 
 - macOS バージョン
 - Mac モデル（M1/M2/M3/M4）
@@ -254,7 +240,6 @@ MIT License
 ## 🙏 謝辞
 
 このツールは、PlayCover で iOS ゲームを楽しむユーザーのために開発されました。
-全ての重大バグが修正され、本番環境での使用に適しています。
 
 ---
 
@@ -262,7 +247,14 @@ MIT License
 
 - **GitHub**: [HEHEX8/PlayCoverManager](https://github.com/HEHEX8/PlayCoverManager)
 - **Issues**: [Bug Reports](https://github.com/HEHEX8/PlayCoverManager/issues)
+- **Releases**: [Latest Version](https://github.com/HEHEX8/PlayCoverManager/releases/latest)
 
 ---
 
-**最終更新**: 2025年10月28日 | **バージョン**: 5.0.0
+<div align="center">
+
+**最新リリースをチェック**
+
+[![GitHub Release](https://img.shields.io/github/v/release/HEHEX8/PlayCoverManager?style=for-the-badge)](https://github.com/HEHEX8/PlayCoverManager/releases/latest)
+
+</div>
