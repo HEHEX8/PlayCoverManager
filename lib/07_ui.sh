@@ -421,13 +421,13 @@ individual_volume_control() {
         return
     fi
     
-    # Build array from file
+    # Build array from file (ignore 4th column if present)
     local -a mappings_array=()
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip empty lines
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
-        # Add to array
+        # Add to array (only first 3 columns)
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
     done < "$MAPPING_FILE"
     
@@ -911,6 +911,28 @@ show_quick_launcher() {
     while true; do
         clear
         print_header "🚀 PlayCover Quick Launcher"
+        
+        # Check and mount PlayCover volume if needed
+        if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+            echo ""
+            print_warning "PlayCoverボリュームがマウントされていません"
+            print_info "PlayCoverボリュームをマウントしています..."
+            echo ""
+            
+            # Try to mount PlayCover volume
+            if ! mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_BUNDLE_ID"; then
+                print_error "PlayCoverボリュームのマウントに失敗しました"
+                echo ""
+                print_info "管理メニューから手動でマウントしてください"
+                echo ""
+                prompt_continue
+                return 0  # Go to main menu
+            fi
+            
+            print_success "PlayCoverボリュームをマウントしました"
+            echo ""
+            sleep 1
+        fi
         
         # Get launchable apps
         local -a apps_info=()
