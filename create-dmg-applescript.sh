@@ -117,9 +117,20 @@ fi
 # Wait for Finder to recognize the mount
 sleep 3
 
-# Set custom icon for volume
+# Set custom icon for volume (MUST be done before Finder opens the window)
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
+    echo "🎨 Setting volume icon..."
     /usr/bin/SetFile -a C "$MOUNT_DIR"
+    # Also ensure the icon file itself is hidden
+    /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns"
+fi
+
+# Hide .fseventsd immediately after mount
+if [ -d "$MOUNT_DIR/.fseventsd" ]; then
+    echo "🧹 Hiding .fseventsd..."
+    chflags hidden "$MOUNT_DIR/.fseventsd" 2>/dev/null || \
+    /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null || \
+    echo "⚠️  Could not hide .fseventsd"
 fi
 
 # Configure Finder view with AppleScript
@@ -144,19 +155,22 @@ tell application "Finder"
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 128
-        set background color of viewOptions to {11264, 15872, 20480}
+        -- Light gray background (easier to read)
+        set background color of viewOptions to {52428, 54227, 55769}
+        set text size of viewOptions to 12
+        set label position of viewOptions to bottom
         
         delay 2
         
-        -- Position items
+        -- Position items (centered in 660px width window)
         try
-            set position of item "${APP_NAME}.app" of container window to {180, 180}
+            set position of item "${APP_NAME}.app" of container window to {160, 200}
         on error errMsg
             log "Warning: Could not position app - " & errMsg
         end try
         
         try
-            set position of item "Applications" of container window to {480, 180}
+            set position of item "Applications" of container window to {500, 200}
         on error errMsg
             log "Warning: Could not position Applications - " & errMsg
         end try
@@ -174,20 +188,21 @@ EOF
 
 echo "✅ Finder view configured"
 
-# Hide invisible files
-echo "🧹 Hiding invisible files..."
-if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null || echo "⚠️  Could not hide .VolumeIcon.icns"
-fi
-if [ -f "$MOUNT_DIR/.DS_Store" ]; then
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.DS_Store" 2>/dev/null || echo "⚠️  Could not hide .DS_Store"
-fi
+# Final cleanup - hide all system files
+echo "🧹 Final cleanup..."
+# .VolumeIcon.icns should already be hidden, but double-check
+[ -f "$MOUNT_DIR/.VolumeIcon.icns" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null
+# Hide .DS_Store if it exists
+[ -f "$MOUNT_DIR/.DS_Store" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.DS_Store" 2>/dev/null
+# Hide .fseventsd using both methods
 if [ -d "$MOUNT_DIR/.fseventsd" ]; then
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null || echo "⚠️  Could not hide .fseventsd"
+    chflags hidden "$MOUNT_DIR/.fseventsd" 2>/dev/null
+    /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null
 fi
-if [ -d "$MOUNT_DIR/.Trashes" ]; then
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.Trashes" 2>/dev/null || echo "⚠️  Could not hide .Trashes"
-fi
+# Hide .Trashes if it exists
+[ -d "$MOUNT_DIR/.Trashes" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.Trashes" 2>/dev/null
+
+echo "✅ All system files hidden"
 
 # Sync changes
 echo "💾 Syncing changes..."
@@ -197,13 +212,22 @@ sync
 # Wait for changes to be written
 sleep 3
 
-# Unmount
+# Unmount (WITHOUT -force to avoid ejecting other volumes)
 echo "💿 Unmounting..."
 if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR" ]; then
-    hdiutil detach "$MOUNT_DIR" -force || {
-        echo "⚠️  First unmount attempt failed, retrying..."
+    # Close any Finder windows for this volume
+    osascript -e "tell application \"Finder\" to close window \"${VOLUME_NAME}\"" 2>/dev/null || true
+    sleep 1
+    
+    # Unmount gracefully (no -force flag)
+    hdiutil detach "$MOUNT_DIR" || {
+        echo "⚠️  First unmount attempt failed, trying with -force..."
         sleep 2
-        hdiutil detach "$MOUNT_DIR" -force || echo "⚠️  Could not unmount, may need manual intervention"
+        # Only use -force as last resort and be more specific
+        DEVICE=$(hdiutil info | grep "$MOUNT_DIR" | awk '{print $1}')
+        if [ -n "$DEVICE" ]; then
+            hdiutil detach "$DEVICE" -force || echo "⚠️  Could not unmount, may need manual intervention"
+        fi
     }
 else
     echo "⚠️  No valid mount point to unmount"
