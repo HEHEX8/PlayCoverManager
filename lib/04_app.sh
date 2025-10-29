@@ -741,7 +741,7 @@ install_workflow() {
     select_ipa_files || return
     
     CURRENT_IPA_INDEX=0
-    for ipa_file in "${SELECTED_IPAS[@]}"; do
+    for ipa_file in "${(@)SELECTED_IPAS}"; do
         ((CURRENT_IPA_INDEX++))
         
         if [[ $BATCH_MODE == true ]]; then
@@ -761,7 +761,7 @@ install_workflow() {
     if [[ ${#INSTALL_SUCCESS} -gt 0 ]]; then
         echo ""
         print_success "インストール成功: ${#INSTALL_SUCCESS} 個"
-        for app in "${INSTALL_SUCCESS[@]}"; do
+        for app in "${(@)INSTALL_SUCCESS}"; do
             echo "  ✅ $app"
         done
     fi
@@ -769,7 +769,7 @@ install_workflow() {
     if [[ ${#INSTALL_FAILED} -gt 0 ]]; then
         echo ""
         print_error "インストール失敗: ${#INSTALL_FAILED} 個"
-        for app in "${INSTALL_FAILED[@]}"; do
+        for app in "${(@)INSTALL_FAILED}"; do
             echo "  ❌ $app"
         done
     fi
@@ -1059,10 +1059,10 @@ uninstall_all_apps() {
         fi
     done
     
-    if [[ ${#running_apps[@]} -gt 0 ]]; then
+    if [[ ${(@)#running_apps} -gt 0 ]]; then
         print_error "以下のアプリが実行中のため、アンインストールできません:"
         echo ""
-        for app in "${running_apps[@]}"; do
+        for app in "${(@)running_apps}"; do
             echo "  🏃 ${app}"
         done
         echo ""

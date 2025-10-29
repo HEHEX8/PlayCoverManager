@@ -60,7 +60,7 @@ show_quick_status() {
         
         # Join status parts with separator
         local first=true
-        for part in "${status_parts[@]}"; do
+        for part in "${(@)status_parts}"; do
             if [[ "$first" == true ]]; then
                 echo -n "$part"
                 first=false

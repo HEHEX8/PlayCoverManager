@@ -38,18 +38,17 @@ cp -r lib/* "${APP_BUNDLE}/Contents/Resources/lib/"
 
 # Update SCRIPT_DIR in main script to use Resources
 echo "🔧 Updating script paths..."
-# Change shebang from zsh to bash and update SCRIPT_DIR
-sed -i.bak '1s|#!/bin/zsh|#!/bin/bash|' "${APP_BUNDLE}/Contents/Resources/main-script.sh"
+# Update SCRIPT_DIR only (keep zsh shebang)
 sed -i.bak 's|SCRIPT_DIR="${0:A:h}"|SCRIPT_DIR="$(cd "$(dirname "$0")" \&\& pwd)"|' "${APP_BUNDLE}/Contents/Resources/main-script.sh"
 rm -f "${APP_BUNDLE}/Contents/Resources/main-script.sh.bak"
 
 # Create launcher script in MacOS directory
 echo "🚀 Creating launcher script..."
 cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
-#!/bin/bash
+#!/bin/zsh
 #######################################################
 # PlayCover Manager - Launcher
-# Opens Terminal and runs the main script
+# Opens Terminal and runs the main script with zsh
 #######################################################
 
 # Get the Resources directory
@@ -62,11 +61,11 @@ if [ ! -f "$MAIN_SCRIPT" ]; then
     exit 1
 fi
 
-# Launch in Terminal
+# Launch in Terminal with zsh
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "clear && cd '$RESOURCES_DIR' && bash '$MAIN_SCRIPT'"
+    do script "clear && cd '$RESOURCES_DIR' && /bin/zsh '$MAIN_SCRIPT'"
 end tell
 EOF
 
