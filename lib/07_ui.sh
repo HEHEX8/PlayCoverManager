@@ -919,8 +919,21 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover Quick Launcher"
         
-        # Check and mount PlayCover volume if needed
+        # Check if PlayCover volume exists (should be created during setup)
         if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+            echo ""
+            print_error "PlayCoverボリュームが見つかりません"
+            echo ""
+            print_info "初期セットアップが必要です"
+            print_info "管理メニューから初期セットアップを実行してください"
+            echo ""
+            prompt_continue
+            return 0  # Go to main menu
+        fi
+        
+        # Check if PlayCover volume is mounted
+        local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+        if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
             echo ""
             print_warning "PlayCoverボリュームがマウントされていません"
             print_info "PlayCoverボリュームをマウントしています..."

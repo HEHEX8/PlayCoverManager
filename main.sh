@@ -48,6 +48,15 @@ main() {
     # Clean up duplicate entries in mapping file
     deduplicate_mappings
     
+    # Check and mount PlayCover volume if needed (before checking launchable apps)
+    if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+        local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+        if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+            # Silently mount PlayCover volume (no user interaction on startup)
+            mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID" >/dev/null 2>&1
+        fi
+    fi
+    
     # Show quick launcher if launchable apps exist
     local -a launchable_apps=()
     while IFS= read -r line; do
