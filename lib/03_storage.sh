@@ -271,7 +271,11 @@ get_storage_mode() {
             
             if [[ -n "$current_mount" ]]; then
                 # External volume is mounted somewhere
-                if [[ "$current_mount" == "$container_path" ]]; then
+                # Normalize paths for comparison (remove trailing slashes)
+                local normalized_current="${current_mount%/}"
+                local normalized_expected="${container_path%/}"
+                
+                if [[ "$normalized_current" == "$normalized_expected" ]]; then
                     echo "external"  # Correctly mounted at target location
                 else
                     echo "external_wrong_location"  # Mounted at wrong location
@@ -367,54 +371,57 @@ switch_storage_location() {
             
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
             
-            # Use display_name (volume name) not bundle_id for path
-            local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
+            local target_path="${HOME}/Library/Containers/${bundle_id}"
             
-            # Get storage mode (includes flag check and external volume mount status)
-            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-            
-            # Get container size and free space
+            # Check actual mount status (same logic as volume info display)
+            local actual_mount=$(get_mount_point "$volume_name")
             local container_size=$(get_container_size "$target_path")
             local free_space=""
             local location_text=""
             local usage_text=""
             
-            case "$storage_mode" in
-                "external")
+            if [[ -n "$actual_mount" ]]; then
+                # Volume is mounted somewhere
+                if [[ "$actual_mount" == "$target_path" ]]; then
+                    # Correctly mounted = external storage mode
                     location_text="${BOLD}${BLUE}🔌 外部ストレージモード${NC}"
                     free_space=$(get_external_drive_free_space "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                    ;;
-                "external_wrong_location")
+                else
+                    # Mounted at wrong location
                     location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
-                    local current_mount=$(get_mount_point "$volume_name")
                     free_space=$(get_external_drive_free_space "$volume_name")
-                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${current_mount}${NC}"
-                    ;;
-                "internal_intentional")
-                    location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
-                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                    ;;
-                "internal_intentional_empty")
-                    location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
-                    usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                    ;;
-                "internal_contaminated")
-                    location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
-                    usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                    ;;
-                "none")
-                    location_text="${GRAY}⚠️ データ無し${NC}"
-                    usage_text="${GRAY}N/A${NC}"
-                    ;;
-                *)
-                    location_text="${GRAY}⚠️ データ無し${NC}"
-                    usage_text="${GRAY}N/A${NC}"
-                    ;;
-            esac
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${actual_mount}${NC}"
+                fi
+            else
+                # Volume not mounted - check internal storage
+                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+                case "$storage_mode" in
+                    "internal_intentional")
+                        location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "internal_intentional_empty")
+                        location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "internal_contaminated")
+                        location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "none")
+                        location_text="${GRAY}⚠️ データ無し${NC}"
+                        usage_text="${GRAY}N/A${NC}"
+                        ;;
+                    *)
+                        location_text="${GRAY}⚠️ データ無し${NC}"
+                        usage_text="${GRAY}N/A${NC}"
+                        ;;
+                esac
+            fi
             
             # Display formatted output
             echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
@@ -450,8 +457,7 @@ switch_storage_location() {
         echo ""
         print_header "${display_name} のストレージ切替"
         
-        # Use display_name (volume name) not bundle_id for path
-        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
+        local target_path="${HOME}/Library/Containers/${bundle_id}"
         
         # Check current storage mode (enhanced with external volume mount check)
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
