@@ -1034,13 +1034,10 @@ uninstall_workflow() {
         fi
     fi
     
-    # Step 9: Remove from mapping file (silent)
+    # Step 9: Remove from mapping file (includes last_launched data)
     if ! remove_mapping "$selected_bundle"; then
         handle_error_and_return "マッピング情報の削除に失敗しました"
     fi
-    
-    # Step 9.5: Remove from recent apps list
-    remove_recent_app "$selected_bundle"
     
     # Step 10: If PlayCover volume, remove PlayCover.app and exit
     if [[ "$selected_volume" == "PlayCover" ]]; then

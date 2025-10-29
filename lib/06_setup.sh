@@ -93,20 +93,16 @@ ensure_data_directory() {
         touch "$MAPPING_FILE"
     fi
     
-    # Clean up old recent apps files if they exist (different naming schemes)
+    # Clean up old recent apps files (no longer used - data integrated into mapping file)
     local -a old_recent_files=(
         "${HOME}/.playcover_manager_recent_apps"
+        "${HOME}/.playcover_manager/recent_apps.txt"
         "${SCRIPT_DIR}/recent_apps.txt"
     )
     
     for old_file in "${old_recent_files[@]}"; do
-        if [[ -f "$old_file" ]] && [[ "$old_file" != "$RECENT_APPS_FILE" ]]; then
-            # Move to new location if newer/better
-            if [[ ! -f "$RECENT_APPS_FILE" ]] || [[ "$old_file" -nt "$RECENT_APPS_FILE" ]]; then
-                mv "$old_file" "$RECENT_APPS_FILE" 2>/dev/null
-            else
-                rm -f "$old_file" 2>/dev/null
-            fi
+        if [[ -f "$old_file" ]]; then
+            rm -f "$old_file" 2>/dev/null
         fi
     done
     

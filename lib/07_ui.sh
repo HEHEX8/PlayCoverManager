@@ -926,13 +926,8 @@ show_quick_launcher() {
             return 0  # Go to main menu
         fi
         
-        # Get most recent app (only the latest one)
-        local most_recent_bundle_id=""
-        local recent_line=$(get_recent_apps 2>/dev/null | head -1)
-        if [[ -n "$recent_line" ]]; then
-            IFS='|' read -r timestamp bundle_id app_name <<< "$recent_line"
-            most_recent_bundle_id="$bundle_id"
-        fi
+        # Get most recent app (only 1 app stored)
+        local most_recent_bundle_id=$(get_recent_app 2>/dev/null)
         
         # Sort apps: most recent first (if exists), then others
         local -a sorted_apps_info=()

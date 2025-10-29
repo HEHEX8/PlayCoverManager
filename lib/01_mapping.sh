@@ -138,8 +138,8 @@ add_mapping() {
         return 0
     fi
     
-    # Add new mapping
-    echo "${volume_name}"$'\t'"${bundle_id}"$'\t'"${display_name}" >> "$MAPPING_FILE"
+    # Add new mapping (4th column: last_launched timestamp, initially 0)
+    echo "${volume_name}"$'\t'"${bundle_id}"$'\t'"${display_name}"$'\t'"0" >> "$MAPPING_FILE"
     
     release_mapping_lock
     print_success "マッピングを追加しました: $display_name"
@@ -189,74 +189,80 @@ update_mapping() {
 # Record app usage (timestamp + bundle_id + app_name)
 # Args: bundle_id, app_name
 # Returns: 0 on success
-record_recent_app() {
-    local bundle_id=$1
-    local app_name=$2
-    local timestamp=$(date +%s)
-    
-    # Ensure data directory exists
-    if [[ ! -d "$DATA_DIR" ]]; then
-        /bin/mkdir -p "$DATA_DIR"
-    fi
-    
-    # Format: timestamp|bundle_id|app_name
-    # Remove old entry if exists
-    if [[ -f "$RECENT_APPS_FILE" ]]; then
-        grep -v "|${bundle_id}|" "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp" 2>/dev/null || true
-        /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE" 2>/dev/null || true
-    fi
-    
-    # Add new entry at top
-    echo "${timestamp}|${bundle_id}|${app_name}" >> "$RECENT_APPS_FILE"
-    
-    # Keep only last 10 entries
-    if [[ -f "$RECENT_APPS_FILE" ]]; then
-        tail -10 "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp"
-        /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE"
-    fi
-    
-    return 0
-}
-
-# Get recent apps list (sorted by timestamp, newest first)
-# Output: TSV format (timestamp|bundle_id|app_name)
-# Returns: 0 if file exists, 1 if not
-get_recent_apps() {
-    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
-        return 1
-    fi
-    
-    # Sort by timestamp (descending)
-    sort -t'|' -k1 -rn "$RECENT_APPS_FILE" 2>/dev/null || true
-    return 0
-}
-
-# Check if app is in recent list
-# Args: bundle_id
-# Returns: 0 if recent, 1 if not
-is_recent_app() {
-    local bundle_id=$1
-    
-    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
-        return 1
-    fi
-    
-    grep -q "|${bundle_id}|" "$RECENT_APPS_FILE" 2>/dev/null
-    return $?
-}
-
-# Remove app from recent list (called during uninstall)
+# Record app launch (update last_launched timestamp in mapping file)
 # Args: bundle_id
 # Returns: 0 on success
-remove_recent_app() {
+record_recent_app() {
     local bundle_id=$1
+    local timestamp=$(date +%s)
     
-    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
-        return 0  # Nothing to remove
+    acquire_mapping_lock || return 1
+    
+    # Update last_launched timestamp for this bundle_id
+    # Format: volume_name<TAB>bundle_id<TAB>display_name<TAB>last_launched
+    local temp_file="${MAPPING_FILE}.tmp"
+    
+    while IFS=$'\t' read -r volume_name stored_bundle_id display_name last_launched; do
+        if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+            # Update timestamp for this app
+            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"$'\t'"${timestamp}"
+        else
+            # Keep other entries unchanged (preserve existing timestamp or 0)
+            if [[ -z "$last_launched" ]]; then
+                last_launched="0"
+            fi
+            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"$'\t'"${last_launched}"
+        fi
+    done < "$MAPPING_FILE" > "$temp_file"
+    
+    /bin/mv "$temp_file" "$MAPPING_FILE"
+    
+    release_mapping_lock
+    return 0
+}
+
+# Get most recently launched app (single app only)
+# Output: bundle_id of most recent app
+# Returns: 0 if found, 1 if none
+get_recent_app() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
     fi
     
-    grep -v "|${bundle_id}|" "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp" 2>/dev/null || true
-    /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE" 2>/dev/null || true
+    # Find entry with largest last_launched timestamp
+    local max_timestamp=0
+    local recent_bundle_id=""
     
-    return 0
+    while IFS=$'\t' read -r volume_name bundle_id display_name last_launched; do
+        # Skip if no timestamp or timestamp is 0
+        if [[ -z "$last_launched" ]] || [[ "$last_launched" == "0" ]]; then
+            continue
+        fi
+        
+        if [[ "$last_launched" -gt "$max_timestamp" ]]; then
+            max_timestamp=$last_launched
+            recent_bundle_id=$bundle_id
+        fi
+    done < "$MAPPING_FILE"
+    
+    if [[ -n "$recent_bundle_id" ]]; then
+        echo "$recent_bundle_id"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check if specific app is the most recently launched
+# Args: bundle_id
+# Returns: 0 if this is the most recent, 1 if not
+is_recent_app() {
+    local bundle_id=$1
+    local recent=$(get_recent_app 2>/dev/null)
+    
+    if [[ "$recent" == "$bundle_id" ]]; then
+        return 0
+    else
+        return 1
+    fi
 }

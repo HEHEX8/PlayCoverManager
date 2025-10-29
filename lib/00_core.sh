@@ -112,11 +112,9 @@ fi
 readonly DATA_DIR="${HOME}/.playcover_manager"
 
 # Mapping file stored in data directory
+# Format: volume_name<TAB>bundle_id<TAB>display_name<TAB>last_launched
 readonly MAPPING_FILE="${DATA_DIR}/volume_mapping.tsv"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
-
-# Recent apps tracking file
-readonly RECENT_APPS_FILE="${DATA_DIR}/recent_apps.txt"
 
 # Internal storage flag (placed in container directories)
 readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
