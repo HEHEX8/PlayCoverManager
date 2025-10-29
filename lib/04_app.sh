@@ -338,7 +338,10 @@ create_app_volume_install() {
         return 0
     fi
     
+    print_info "💾 ボリュームを作成中: ${APP_VOLUME_NAME}"
+    
     if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$SELECTED_DISK" APFS "${APP_VOLUME_NAME}" -nomount > /tmp/apfs_create_app.log 2>&1; then
+        print_success "ボリュームを作成しました"
         /bin/sleep 1
         return 0
     else
@@ -371,7 +374,11 @@ mount_app_volume_install() {
     fi
     
     # Mount with nobrowse option
+    print_info "📌 ボリュームをマウント中..."
+    
     if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+        print_success "マウント完了: $target_path"
+        echo ""
         return 0
     else
         print_error "$MSG_MOUNT_FAILED"
@@ -474,7 +481,7 @@ install_ipa_to_playcover() {
     
     local max_wait=300  # 5 minutes
     local elapsed=0
-    local check_interval=3
+    local check_interval=1  # 1 second for faster detection
     local initial_check_done=false
     
     # PlayCover app settings path
@@ -505,6 +512,9 @@ install_ipa_to_playcover() {
     # 
     # No stability checks, no complex conditions.
     # Just count settings file updates and complete on 2nd update.
+    #
+    # v5.0.1 update: Reduced check_interval to 1 second for faster detection
+    # (small IPAs like 180MB can complete in under 3 seconds)
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
