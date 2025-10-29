@@ -30,15 +30,26 @@ show_quick_status() {
         
         ((total_count++))
         
-        # Use display_name (volume name) not bundle_id for path
-        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
-        local storage_type=$(get_storage_type "$target_path")
+        local target_path="${HOME}/Library/Containers/${bundle_id}"
         
-        case "$storage_type" in
-            "external") ((external_count++)) ;;
-            "internal") ((internal_count++)) ;;
-            *) ((unmounted_count++)) ;;
-        esac
+        # Check actual mount status using get_mount_point (same logic as volume info)
+        local actual_mount=$(get_mount_point "$volume_name")
+        
+        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
+            # Volume is mounted at correct location = external storage
+            ((external_count++))
+        else
+            # Volume not mounted - check if internal storage has data
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+            case "$storage_mode" in
+                "internal_intentional"|"internal_contaminated")
+                    ((internal_count++))
+                    ;;
+                *)
+                    ((unmounted_count++))
+                    ;;
+            esac
+        fi
     done <<< "$mappings_content"
     
     if [[ $total_count -gt 0 ]]; then
@@ -202,27 +213,35 @@ show_installed_apps() {
         
         if [[ "$app_found" == true ]]; then
             # Get container path and size
-            # Use display_name (volume name) not bundle_id for path
-            local container_path="${PLAYCOVER_CONTAINER}/${display_name}"
+            local container_path="${HOME}/Library/Containers/${bundle_id}"
             local container_size=$(get_container_size "$container_path")
-            local storage_type=$(get_storage_type "$container_path")
+            
+            # Check actual mount status using get_mount_point (same as volume info display)
+            local actual_mount=$(get_mount_point "$volume_name")
             local storage_icon=""
             
-            case "$storage_type" in
-                "external")
-                    storage_icon="🔌 外部"
-                    ;;
-                "internal")
-                    storage_icon="🏠 内部"
-                    ;;
-                "none")
-                    storage_icon="⚠️  データ無し"
-                    container_size="0B"
-                    ;;
-                *)
-                    storage_icon="？ 不明"
-                    ;;
-            esac
+            if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$container_path" ]]; then
+                # Volume is mounted at correct location = external storage
+                storage_icon="🔌 外部"
+            elif [[ -n "$actual_mount" ]]; then
+                # Volume is mounted but at wrong location
+                storage_icon="⚠️  位置異常"
+            else
+                # Volume not mounted - check if internal storage has data
+                local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                case "$storage_mode" in
+                    "internal_intentional"|"internal_contaminated")
+                        storage_icon="🏠 内部"
+                        ;;
+                    "internal_intentional_empty"|"none")
+                        storage_icon="⚠️  データ無し"
+                        container_size="0B"
+                        ;;
+                    *)
+                        storage_icon="？ 不明"
+                        ;;
+                esac
+            fi
             
             if [[ "$display_only" == "true" ]]; then
                 printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
@@ -243,7 +262,7 @@ show_installed_apps() {
             if [[ "$display_only" == "true" ]]; then
                 # Check what exactly is missing for detailed error message
                 local volume_exists_check=$(volume_exists "$volume_name" 2>/dev/null && echo "yes" || echo "no")
-                local container_exists_check=$([[ -d "${PLAYCOVER_CONTAINER}/${display_name}" ]] && echo "yes" || echo "no")
+                local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
                 
                 local missing_reason=""
                 if [[ "$volume_exists_check" == "no" ]] && [[ "$container_exists_check" == "no" ]]; then
@@ -445,8 +464,7 @@ individual_volume_control() {
     for ((i=1; i<=${#mappings_array}; i++)); do
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
-        # Use display_name (volume name) not bundle_id for path
-        local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
+        local target_path="${HOME}/Library/Containers/${bundle_id}"
         local status_line=""
         local extra_info=""
         local is_locked=false
@@ -596,8 +614,7 @@ individual_volume_control() {
     local selected_mapping="${selectable_array[$choice]}"
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
-    # Use display_name (volume name) not bundle_id for path
-    local target_path="${PLAYCOVER_CONTAINER}/${display_name}"
+    local target_path="${HOME}/Library/Containers/${bundle_id}"
     local current_mount=$(get_mount_point "$volume_name")
     
     # Quick switch without confirmation
