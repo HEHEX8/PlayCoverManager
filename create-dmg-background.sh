@@ -32,9 +32,11 @@ img = Image.new('RGB', (width, height), color=(200, 208, 214))
 draw = ImageDraw.Draw(img)
 
 # 矢印を描画（アイコンに被らないように調整）
-arrow_start_x = 260  # 左側アイコンの右側（160 + 100）
-arrow_end_x = 450    # Applicationsフォルダの左側（500 - 50）
-arrow_y = 205        # 中央の高さ
+# アイコン位置: 左=160, 右=500, y=185
+# アイコンサイズ: 128x128
+arrow_start_x = 290  # 左側アイコンの右端（160 + 128 + 2マージン）
+arrow_end_x = 435    # Applicationsフォルダの左端（500 - 128/2 - 2マージン）
+arrow_y = 185        # アイコンと同じ高さ
 
 # 矢印の色（濃いグレー）
 arrow_color = (80, 80, 80)
