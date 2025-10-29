@@ -96,9 +96,18 @@ cd PlayCoverManager
 # アプリケーションをビルド
 ./build-app.sh
 
+# DMGインストーラーを作成（オプション）
+# 注意: Node.jsとappdmgパッケージが必要
+./create-dmg-background-simple.sh  # 背景画像を生成
+./create-dmg-appdmg.sh             # DMGを作成
+
 # ビルドされたアプリをインストール
 mv "build/PlayCover Manager.app" /Applications/
 ```
+
+**DMG作成の要件**:
+- Node.js がインストールされていること
+- `npm install -g appdmg` でappdmgをインストール
 
 ### 初回セットアップ
 
