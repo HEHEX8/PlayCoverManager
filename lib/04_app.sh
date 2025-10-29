@@ -1462,7 +1462,7 @@ launch_app() {
                 }
             fi
             
-            if ! mount_app_volume "$volume_name" "$bundle_id"; then
+            if ! mount_app_volume "$volume_name" "$container_path" "$bundle_id"; then
                 print_error "マウントに失敗しました"
                 return 1
             fi

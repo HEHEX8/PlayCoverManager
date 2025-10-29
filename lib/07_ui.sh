@@ -920,7 +920,7 @@ show_quick_launcher() {
             echo ""
             
             # Try to mount PlayCover volume
-            if ! mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_BUNDLE_ID"; then
+            if ! mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID"; then
                 print_error "PlayCoverボリュームのマウントに失敗しました"
                 echo ""
                 print_info "管理メニューから手動でマウントしてください"
