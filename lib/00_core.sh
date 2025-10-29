@@ -791,8 +791,13 @@ is_playcover_environment_ready() {
         return 1
     fi
     
-    # Check if mapping file exists
+    # Check if mapping file exists and has content
     if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
+    fi
+    
+    # Check if mapping file has at least one valid entry (not just empty/whitespace)
+    if [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
         return 1
     fi
     

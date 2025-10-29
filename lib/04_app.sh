@@ -1271,7 +1271,7 @@ get_launchable_apps() {
         if [[ -n "$bundle_id" ]]; then
             echo "${app_name}|${bundle_id}|${app_path}"
         fi
-    done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    done < <(find "$playcover_apps" -name "*.app" -maxdepth 2 -type d 2>/dev/null)
     
     return 0
 }
