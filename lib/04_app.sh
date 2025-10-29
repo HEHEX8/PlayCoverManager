@@ -1274,39 +1274,62 @@ get_bundle_id_from_app() {
     fi
 }
 
+# Get container path for bundle ID
+# Args: bundle_id
+# Output: container_path
+get_container_path() {
+    local bundle_id=$1
+    echo "${HOME}/Library/Containers/${bundle_id}"
+}
+
+# Get volume name from bundle ID (from mapping file)
+# Args: bundle_id
+# Output: volume_name
+# Returns: 0 if found, 1 if not found
+get_volume_name_from_bundle_id() {
+    local bundle_id=$1
+    
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
+    fi
+    
+    local volume_name=""
+    while IFS=$'\t' read -r vol_name stored_bundle_id display_name recent_flag; do
+        if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+            volume_name=$vol_name
+            break
+        fi
+    done < "$MAPPING_FILE"
+    
+    if [[ -n "$volume_name" ]]; then
+        echo "$volume_name"
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Get list of launchable apps (apps with .app files in PlayCover)
 # Output: app_name|bundle_id|app_path (one per line)
 # Returns: 0 if apps found, 1 if no apps
 get_launchable_apps() {
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     
-    # Debug: Check if directory exists
     if [[ ! -d "$playcover_apps" ]]; then
-        echo "[DEBUG] PlayCover Applications directory not found: $playcover_apps" >&2
         return 1
     fi
     
-    local -a app_list=()
     local app_count=0
     
-    # Debug: Show what we're searching
-    echo "[DEBUG] Searching for apps in: $playcover_apps" >&2
-    
     while IFS= read -r app_path; do
-        echo "[DEBUG] Found .app: $app_path" >&2
         local app_name=$(basename "$app_path" .app)
         local bundle_id=$(get_bundle_id_from_app "$app_path")
-        
-        echo "[DEBUG] - App name: $app_name" >&2
-        echo "[DEBUG] - Bundle ID: $bundle_id" >&2
         
         if [[ -n "$bundle_id" ]]; then
             echo "${app_name}|${bundle_id}|${app_path}"
             ((app_count++))
         fi
     done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
-    
-    echo "[DEBUG] Total apps found: $app_count" >&2
     
     if [[ $app_count -eq 0 ]]; then
         return 1
