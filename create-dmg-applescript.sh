@@ -117,13 +117,33 @@ fi
 # Finderがマウントを認識するまで待機
 sleep 3
 
-# ボリュームアイコンを設定（重要：ファイルを隠す前にCustom Iconビットを設定）
+# ボリュームアイコンを設定（重要：正しい順序で実行）
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
     echo "🎨 ボリュームアイコンを設定中..."
-    # ステップ1：ボリュームにCustom Iconビットを設定（アイコンファイル自体ではない）
+    
+    # ステップ1：.VolumeIcon.icnsファイルが存在することを確認
+    echo "   アイコンファイル確認: $(ls -lh "$MOUNT_DIR/.VolumeIcon.icns")"
+    
+    # ステップ2：ボリュームのルートディレクトリにCustom Iconビットを設定
+    echo "   Custom Iconビットを設定中..."
     /usr/bin/SetFile -a C "$MOUNT_DIR"
-    # ステップ2：アイコンファイルをまだ非表示にしない（Finderが最初に見る必要がある）
-    sleep 1
+    
+    # ステップ3：変更を同期
+    sync
+    
+    # ステップ4：Finderに更新を通知（重要！）
+    echo "   Finderを更新中..."
+    osascript -e "tell application \"Finder\" to update \"$MOUNT_DIR\" without registering applications" 2>/dev/null || true
+    
+    # ステップ5：変更が反映されるまで待機
+    sleep 2
+    
+    # ステップ6：検証
+    if /usr/bin/GetFileInfo "$MOUNT_DIR" 2>/dev/null | grep -q "hasCustomIcon: 1"; then
+        echo "   ✅ ボリュームアイコンが正しく設定されました"
+    else
+        echo "   ⚠️  ボリュームアイコンの設定を確認できません"
+    fi
 fi
 
 # 背景画像をコピー（存在する場合）
@@ -223,12 +243,21 @@ echo "✅ Finderビューを設定しました"
 # 最終クリーンアップとアイコン確認
 echo "🧹 最終クリーンアップ中..."
 
-# 重要：ボリュームアイコンが設定されているか再確認（レイアウト後に必要な場合がある）
+# 重要：ボリュームアイコンを再確認・再設定（AppleScript実行後）
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
-    echo "🎨 ボリュームアイコンを確認中（最終パス）..."
+    echo "🎨 ボリュームアイコンを再確認中（最終パス）..."
+    
+    # Custom Iconビットを再設定
     /usr/bin/SetFile -a C "$MOUNT_DIR"
-    # Cフラグを設定した後、アイコンファイルを隠す
+    sync
+    
+    # Finderを再度更新
+    osascript -e "tell application \"Finder\" to update \"$MOUNT_DIR\" without registering applications" 2>/dev/null || true
+    sleep 1
+    
+    # 今度こそアイコンファイルを隠す
     /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null
+    echo "   アイコンファイルを非表示にしました"
 fi
 
 # .DS_Storeが存在する場合は隠す
@@ -248,12 +277,16 @@ fi
 # .Trashesが存在する場合は隠す
 [ -d "$MOUNT_DIR/.Trashes" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.Trashes" 2>/dev/null
 
-# ボリュームアイコンが設定されているか検証
-echo "🔍 ボリュームアイコンを検証中..."
-if /usr/bin/GetFileInfo -aE "$MOUNT_DIR" | grep -q "hasCustomIcon" 2>/dev/null; then
-    echo "✅ ボリュームアイコンを確認しました"
+# 最終検証
+echo "🔍 ボリュームアイコンを最終検証中..."
+ICON_CHECK=$(/usr/bin/GetFileInfo "$MOUNT_DIR" 2>/dev/null | grep "hasCustomIcon")
+if echo "$ICON_CHECK" | grep -q "hasCustomIcon: 1"; then
+    echo "✅ ボリュームアイコンが正しく設定されました"
+    echo "   $ICON_CHECK"
 else
-    echo "⚠️  ボリュームアイコンが正しく設定されていない可能性があります"
+    echo "⚠️  ボリュームアイコンの設定を確認できませんでした"
+    echo "   GetFileInfo出力: $ICON_CHECK"
+    echo "   注意: 圧縮後のDMGでは表示される可能性があります"
 fi
 
 echo "✅ 全てのシステムファイルを画面外に配置または非表示にしました"

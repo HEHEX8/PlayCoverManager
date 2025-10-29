@@ -31,10 +31,10 @@ img = Image.new('RGB', (width, height), color=(200, 208, 214))
 
 draw = ImageDraw.Draw(img)
 
-# 矢印を描画（太めで目立つように）
-arrow_start_x = 250
-arrow_end_x = 460
-arrow_y = 205
+# 矢印を描画（アイコンに被らないように調整）
+arrow_start_x = 260  # 左側アイコンの右側（160 + 100）
+arrow_end_x = 450    # Applicationsフォルダの左側（500 - 50）
+arrow_y = 205        # 中央の高さ
 
 # 矢印の色（濃いグレー）
 arrow_color = (80, 80, 80)
