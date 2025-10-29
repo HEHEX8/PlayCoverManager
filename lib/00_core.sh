@@ -180,65 +180,65 @@ print_separator() {
 
 print_header() {
     echo ""
-    echo "${BOLD}${CYAN}$1${NC}"
+    echo -e "${BOLD}${CYAN}$1${NC}"
     echo ""
 }
 
 print_success() {
-    echo "${SUCCESS}✅ $1${NC}"
+    echo -e "${SUCCESS}✅ $1${NC}"
 }
 
 print_error() {
-    echo "${ERROR}❌ $1${NC}"
+    echo -e "${ERROR}❌ $1${NC}"
 }
 
 print_warning() {
-    echo "${WARNING}⚠️  $1${NC}"
+    echo -e "${WARNING}⚠️  $1${NC}"
 }
 
 print_info() {
-    echo "${INFO}ℹ️  $1${NC}"
+    echo -e "${INFO}ℹ️  $1${NC}"
 }
 
 print_highlight() {
-    echo "${HIGHLIGHT}▶ $1${NC}"
+    echo -e "${HIGHLIGHT}▶ $1${NC}"
 }
 
 print_dim() {
-    echo "${DIM}${GRAY}$1${NC}"
+    echo -e "${DIM}${GRAY}$1${NC}"
 }
 
 print_bold() {
-    echo "${BOLD}${WHITE}$1${NC}"
+    echo -e "${BOLD}${WHITE}$1${NC}"
 }
 
 print_underline() {
-    echo "${UNDERLINE}$1${NC}"
+    echo -e "${UNDERLINE}$1${NC}"
 }
 
 # Print functions with newline (ln versions)
 print_success_ln() {
-    echo "${SUCCESS}✅ $1${NC}"
+    echo -e "${SUCCESS}✅ $1${NC}"
     echo ""
 }
 
 print_error_ln() {
-    echo "${ERROR}❌ $1${NC}"
+    echo -e "${ERROR}❌ $1${NC}"
     echo ""
 }
 
 print_warning_ln() {
-    echo "${WARNING}⚠️  $1${NC}"
+    echo -e "${WARNING}⚠️  $1${NC}"
     echo ""
 }
 
 print_info_ln() {
-    echo "${INFO}ℹ️  $1${NC}"
+    echo -e "${INFO}ℹ️  $1${NC}"
     echo ""
 }
 
 print_highlight_ln() {
-    echo "${HIGHLIGHT}▶ $1${NC}"
+    echo -e "${HIGHLIGHT}▶ $1${NC}"
     echo ""
 }
 
@@ -251,7 +251,7 @@ print_batch_progress() {
     local app_name=$3
     
     echo ""
-    echo "${VIOLET}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
+    echo -e "${VIOLET}▶ 処理中: ${current}/${total} - ${app_name}${NC}"
     print_separator "$SEPARATOR_CHAR" "$VIOLET"
     echo ""
 }

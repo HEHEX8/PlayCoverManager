@@ -741,7 +741,7 @@ install_workflow() {
     select_ipa_files || return
     
     CURRENT_IPA_INDEX=0
-    for ipa_file in "${(@)SELECTED_IPAS}"; do
+    for ipa_file in "${SELECTED_IPAS[@]}"; do
         ((CURRENT_IPA_INDEX++))
         
         if [[ $BATCH_MODE == true ]]; then
@@ -761,7 +761,7 @@ install_workflow() {
     if [[ ${#INSTALL_SUCCESS} -gt 0 ]]; then
         echo ""
         print_success "インストール成功: ${#INSTALL_SUCCESS} 個"
-        for app in "${(@)INSTALL_SUCCESS}"; do
+        for app in "${INSTALL_SUCCESS[@]}"; do
             echo "  ✅ $app"
         done
     fi
@@ -769,7 +769,7 @@ install_workflow() {
     if [[ ${#INSTALL_FAILED} -gt 0 ]]; then
         echo ""
         print_error "インストール失敗: ${#INSTALL_FAILED} 個"
-        for app in "${(@)INSTALL_FAILED}"; do
+        for app in "${INSTALL_FAILED[@]}"; do
             echo "  ❌ $app"
         done
     fi

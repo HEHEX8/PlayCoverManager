@@ -221,7 +221,7 @@ select_external_disk() {
             local full_line="$line"
             
             local already_seen=false
-            for seen in "${(@)seen_disks}"; do
+            for seen in "${seen_disks[@]}"; do
                 if [[ "$seen" == "$disk_id" ]]; then
                     already_seen=true
                     break
@@ -275,7 +275,7 @@ select_external_disk() {
         exit 1
     fi
     
-    for info in "${(@)disk_info}"; do
+    for info in "${disk_info[@]}"; do
         echo "$info"
     done
     

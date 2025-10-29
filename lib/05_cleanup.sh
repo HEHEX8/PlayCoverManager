@@ -99,7 +99,7 @@ nuclear_cleanup() {
     if [[ ${#mapped_volumes} -gt 0 ]]; then
         echo "${CYAN}【1】マップ登録ボリューム: ${#mapped_volumes}個${NC}"
         echo "     ${ORANGE}→ アンマウント後、削除されます${NC}"
-        for vol_info in "${(@)mapped_volumes}"; do
+        for vol_info in "${mapped_volumes[@]}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
@@ -131,7 +131,7 @@ nuclear_cleanup() {
     # 3. Mapped containers
     if [[ ${#mapped_containers} -gt 0 ]]; then
         echo "${CYAN}【3】マップ登録コンテナ（内蔵）: ${#mapped_containers}個${NC}"
-        for container_info in "${(@)mapped_containers}"; do
+        for container_info in "${mapped_containers[@]}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
             local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             echo "  ${RED}🗑${NC}  ${display}"
@@ -212,7 +212,7 @@ nuclear_cleanup() {
     local unmount_count=0
     if [[ ${#mapped_volumes} -gt 0 ]]; then
         # Quit all running apps first
-        for vol_info in "${(@)mapped_volumes}"; do
+        for vol_info in "${mapped_volumes[@]}"; do
             local bundle_id=$(echo "$vol_info" | /usr/bin/cut -d'|' -f4)
             if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
                 quit_app_if_running "$bundle_id" 2>/dev/null || true
@@ -220,7 +220,7 @@ nuclear_cleanup() {
         done
         
         # Unmount volumes
-        for vol_info in "${(@)mapped_volumes}"; do
+        for vol_info in "${mapped_volumes[@]}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
             
@@ -249,7 +249,7 @@ nuclear_cleanup() {
     
     local volume_count=0
     if [[ ${#mapped_volumes} -gt 0 ]]; then
-        for vol_info in "${(@)mapped_volumes}"; do
+        for vol_info in "${mapped_volumes[@]}"; do
             local display=$(echo "$vol_info" | /usr/bin/cut -d'|' -f1)
             local vol_name=$(echo "$vol_info" | /usr/bin/cut -d'|' -f2)
             local device=$(echo "$vol_info" | /usr/bin/cut -d'|' -f3)
@@ -314,7 +314,7 @@ nuclear_cleanup() {
     
     local container_count=0
     if [[ ${#mapped_containers} -gt 0 ]]; then
-        for container_info in "${(@)mapped_containers}"; do
+        for container_info in "${mapped_containers[@]}"; do
             local display=$(echo "$container_info" | /usr/bin/cut -d'|' -f1)
             local container_path=$(echo "$container_info" | /usr/bin/cut -d'|' -f2)
             
