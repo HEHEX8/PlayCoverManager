@@ -929,45 +929,22 @@ show_quick_launcher() {
         # Get most recent app (only 1 app stored)
         local most_recent_bundle_id=$(get_recent_app 2>/dev/null)
         
-        # Sort apps: most recent first (if exists), then others
-        local -a sorted_apps_info=()
-        local most_recent_info=""
-        
-        # Find and add the most recent app first
-        if [[ -n "$most_recent_bundle_id" ]]; then
-            for app_info in "${apps_info[@]}"; do
-                IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
-                if [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                    sorted_apps_info+=("$app_info")
-                    most_recent_info="$app_info"
-                    break
-                fi
-            done
-        fi
-        
-        # Add remaining apps
-        for app_info in "${apps_info[@]}"; do
-            if [[ "$app_info" != "$most_recent_info" ]]; then
-                sorted_apps_info+=("$app_info")
-            fi
-        done
-        
-        # Display app list
+        # Display app list (in mapping file order, no sorting)
         local index=1
         local -a app_names=()
         local -a bundle_ids=()
         local -a app_paths=()
         local recent_count=0
         
-        for app_info in "${sorted_apps_info[@]}"; do
+        for app_info in "${apps_info[@]}"; do
             IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
             app_names+=("$app_name")
             bundle_ids+=("$bundle_id")
             app_paths+=("$app_path")
             
-            # Check if this is the most recent app (only first one gets the star)
+            # Check if this is the most recent app (mark with star but don't reorder)
             local recent_mark=""
-            if [[ $index -eq 1 ]] && [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
+            if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
                 recent_mark=" ⭐"
                 recent_count=1
             fi
@@ -1033,7 +1010,7 @@ show_quick_launcher() {
         if [[ $recent_count -gt 0 ]]; then
             echo "  [Enter] : ⭐付きアプリを起動"
         fi
-        echo "  [1-${#sorted_apps_info[@]}] : アプリを起動"
+        echo "  [1-${#apps_info[@]}] : アプリを起動"
         echo "  [p]   : PlayCoverを起動（設定変更用）"
         echo "  [m]   : 管理メニュー"
         echo "  [0]   : 終了"
@@ -1046,34 +1023,48 @@ show_quick_launcher() {
         case "$choice" in
             "")
                 # Empty input (Enter key) - launch most recent app if exists
-                if [[ $recent_count -gt 0 ]] && [[ ${#app_names[@]} -gt 0 ]]; then
-                    # Most recent app is always at index 1 (zsh arrays are 1-based)
-                    local selected_name="${app_names[1]}"
-                    local selected_bundle_id="${bundle_ids[1]}"
-                    local selected_path="${app_paths[1]}"
+                if [[ $recent_count -gt 0 ]] && [[ -n "$most_recent_bundle_id" ]]; then
+                    # Find the recent app in the arrays (no longer at index 1)
+                    local recent_index=0
+                    for ((i=1; i<=${#bundle_ids[@]}; i++)); do
+                        if [[ "${bundle_ids[$i]}" == "$most_recent_bundle_id" ]]; then
+                            recent_index=$i
+                            break
+                        fi
+                    done
                     
-                    echo ""
-                    local container_path=$(get_container_path "$selected_bundle_id")
-                    local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
-                    local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-                    
-                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
-                        # Success - return to quick launcher
+                    if [[ $recent_index -gt 0 ]]; then
+                        local selected_name="${app_names[$recent_index]}"
+                        local selected_bundle_id="${bundle_ids[$recent_index]}"
+                        local selected_path="${app_paths[$recent_index]}"
+                        
                         echo ""
+                        local container_path=$(get_container_path "$selected_bundle_id")
+                        local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
+                        local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                        
+                        if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                            # Success - return to quick launcher
+                            echo ""
+                            sleep 1
+                            continue
+                        else
+                            # Failure - go to main menu
+                            echo ""
+                            print_warning "起動に失敗しました"
+                            print_info "管理メニューで状態を確認してください"
+                            echo ""
+                            prompt_continue
+                            return 0
+                        fi
+                    else
+                        print_error "最近起動したアプリが見つかりません"
                         sleep 1
                         continue
-                    else
-                        # Failure - go to main menu
-                        echo ""
-                        print_warning "起動に失敗しました"
-                        print_info "管理メニューで状態を確認してください"
-                        echo ""
-                        prompt_continue
-                        return 0
                     fi
                 else
-                    # No recent app or invalid state
-                    print_error "無効な選択です"
+                    # No recent app
+                    print_error "最近起動したアプリがありません"
                     sleep 1
                     continue
                 fi
@@ -1092,7 +1083,7 @@ show_quick_launcher() {
                 return 0  # Go to main menu
                 ;;
             [1-9]|[1-9][0-9])
-                if [[ $choice -ge 1 ]] && [[ $choice -le ${#sorted_apps_info[@]} ]]; then
+                if [[ $choice -ge 1 ]] && [[ $choice -le ${#apps_info[@]} ]]; then
                     # zsh arrays are 1-based, so choice directly maps to index
                     local selected_index=$choice
                     local selected_name="${app_names[$selected_index]}"
