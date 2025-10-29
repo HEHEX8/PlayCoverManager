@@ -117,21 +117,20 @@ fi
 # Wait for Finder to recognize the mount
 sleep 3
 
-# Set custom icon for volume (MUST be done before Finder opens the window)
+# Set custom icon for volume (CRITICAL: Must set Custom Icon bit BEFORE hiding the file)
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
     echo "🎨 Setting volume icon..."
+    # Step 1: Set the Custom Icon bit on the VOLUME (not the icon file)
     /usr/bin/SetFile -a C "$MOUNT_DIR"
-    # Also ensure the icon file itself is hidden
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns"
+    # Step 2: Make sure the icon file is NOT invisible yet (Finder needs to see it first)
+    sleep 1
 fi
 
-# Hide .fseventsd immediately after mount
-if [ -d "$MOUNT_DIR/.fseventsd" ]; then
-    echo "🧹 Hiding .fseventsd..."
-    chflags hidden "$MOUNT_DIR/.fseventsd" 2>/dev/null || \
-    /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null || \
-    echo "⚠️  Could not hide .fseventsd"
-fi
+# Create hidden placeholder files for off-screen positioning
+# These will be positioned outside the visible window area
+echo "📝 Creating hidden file placeholders..."
+touch "$MOUNT_DIR/.background" 2>/dev/null || true
+touch "$MOUNT_DIR/.VolumeIcon" 2>/dev/null || true
 
 # Configure Finder view with AppleScript
 echo "🎨 Configuring Finder view..."
@@ -162,7 +161,7 @@ tell application "Finder"
         
         delay 2
         
-        -- Position items (centered in 660px width window)
+        -- Position visible items (centered in 660px width window)
         try
             set position of item "${APP_NAME}.app" of container window to {160, 200}
         on error errMsg
@@ -173,6 +172,34 @@ tell application "Finder"
             set position of item "Applications" of container window to {500, 200}
         on error errMsg
             log "Warning: Could not position Applications - " & errMsg
+        end try
+        
+        delay 1
+        
+        -- Move hidden files OFF-SCREEN (below visible area)
+        -- Window height is 400px, so y=1000 is safely out of view
+        try
+            set position of item ".VolumeIcon.icns" of container window to {100, 1000}
+        on error
+            -- File might not exist or already hidden
+        end try
+        
+        try
+            set position of item ".background" of container window to {200, 1000}
+        on error
+            -- File might not exist
+        end try
+        
+        try
+            set position of item ".fseventsd" of container window to {300, 1000}
+        on error
+            -- File might not exist
+        end try
+        
+        try
+            set position of item ".VolumeIcon" of container window to {400, 1000}
+        on error
+            -- File might not exist
         end try
         
         delay 2
@@ -188,21 +215,42 @@ EOF
 
 echo "✅ Finder view configured"
 
-# Final cleanup - hide all system files
+# Final cleanup and icon confirmation
 echo "🧹 Final cleanup..."
-# .VolumeIcon.icns should already be hidden, but double-check
-[ -f "$MOUNT_DIR/.VolumeIcon.icns" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null
+
+# CRITICAL: Re-confirm volume icon is set (sometimes needs to be done AFTER layout)
+if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
+    echo "🎨 Confirming volume icon (final pass)..."
+    /usr/bin/SetFile -a C "$MOUNT_DIR"
+    # Now hide the icon file (AFTER setting the C flag)
+    /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null
+fi
+
 # Hide .DS_Store if it exists
 [ -f "$MOUNT_DIR/.DS_Store" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.DS_Store" 2>/dev/null
-# Hide .fseventsd using both methods
+
+# Hide placeholder files
+[ -f "$MOUNT_DIR/.background" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.background" 2>/dev/null
+[ -f "$MOUNT_DIR/.VolumeIcon" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon" 2>/dev/null
+
+# Hide .fseventsd (already positioned off-screen, but also hide)
 if [ -d "$MOUNT_DIR/.fseventsd" ]; then
     chflags hidden "$MOUNT_DIR/.fseventsd" 2>/dev/null
     /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null
 fi
+
 # Hide .Trashes if it exists
 [ -d "$MOUNT_DIR/.Trashes" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.Trashes" 2>/dev/null
 
-echo "✅ All system files hidden"
+# Verify volume icon is set
+echo "🔍 Verifying volume icon..."
+if /usr/bin/GetFileInfo -aE "$MOUNT_DIR" | grep -q "hasCustomIcon" 2>/dev/null; then
+    echo "✅ Volume icon confirmed"
+else
+    echo "⚠️  Volume icon may not be set correctly"
+fi
+
+echo "✅ All system files positioned off-screen or hidden"
 
 # Sync changes
 echo "💾 Syncing changes..."
