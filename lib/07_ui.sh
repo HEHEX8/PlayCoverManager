@@ -938,7 +938,24 @@ show_quick_launcher() {
         
         for app_info in "${apps_info[@]}"; do
             IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
-            app_names+=("$app_name")
+            
+            # Get display name from mapping file
+            local display_name=""
+            if [[ -f "$MAPPING_FILE" ]]; then
+                while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
+                    if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+                        display_name=$stored_display_name
+                        break
+                    fi
+                done < "$MAPPING_FILE"
+            fi
+            
+            # Fallback to app_name if no display name found
+            if [[ -z "$display_name" ]]; then
+                display_name=$app_name
+            fi
+            
+            app_names+=("$display_name")
             bundle_ids+=("$bundle_id")
             app_paths+=("$app_path")
             
@@ -961,7 +978,7 @@ show_quick_launcher() {
             fi
             
             # Status icons and messages
-            local location_icon status_icon status_msg
+            local location_icon="" status_icon="" status_msg=""
             case "$storage_mode" in
                 "external")
                     location_icon="🔌"
@@ -997,7 +1014,7 @@ show_quick_launcher() {
             esac
             
             printf "  %d. %-25s [%s] %s %-12s%s%s\n" \
-                "$index" "$app_name" "$location_icon" "$status_icon" "$status_msg" "$recent_mark" "$sudo_mark"
+                "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$recent_mark" "$sudo_mark"
             ((index++))
         done
         
