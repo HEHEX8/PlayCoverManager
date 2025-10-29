@@ -290,6 +290,12 @@ get_storage_mode() {
                 local normalized_current="${current_mount%/}"
                 local normalized_expected="${container_path%/}"
                 
+                # DEBUG: Output to stderr for troubleshooting
+                echo "[DEBUG] current_mount: $current_mount" >&2
+                echo "[DEBUG] container_path: $container_path" >&2
+                echo "[DEBUG] normalized_current: $normalized_current" >&2
+                echo "[DEBUG] normalized_expected: $normalized_expected" >&2
+                
                 if [[ "$normalized_current" == "$normalized_expected" ]]; then
                     echo "external"  # Correctly mounted at target location
                 else
