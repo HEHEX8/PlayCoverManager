@@ -45,8 +45,6 @@ main() {
         fi
     fi
     
-    check_mapping_file
-    
     # Clean up duplicate entries in mapping file
     deduplicate_mappings
     

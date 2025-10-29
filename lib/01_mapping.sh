@@ -50,19 +50,40 @@ check_mapping_file() {
         fi
     fi
     
-    # Ensure mapping file exists
+    # Check if mapping file exists (don't create empty file)
     if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_warning "マッピングファイルが見つかりません"
-        print_info "空のマッピングファイルを作成します"
+        return 1
+    fi
+    
+    # Check if mapping file has content
+    if [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
+        return 1
+    fi
+    
+    return 0
+}
+
+# Ensure mapping file exists (creates empty file if needed for installation)
+# Returns: 0 on success, 1 on failure
+ensure_mapping_file() {
+    # Ensure data directory exists
+    if [[ ! -d "$DATA_DIR" ]]; then
+        /bin/mkdir -p "$DATA_DIR"
+        
+        if [[ ! -d "$DATA_DIR" ]]; then
+            print_error "データディレクトリの作成に失敗しました"
+            return 1
+        fi
+    fi
+    
+    # Create mapping file if it doesn't exist
+    if [[ ! -f "$MAPPING_FILE" ]]; then
         touch "$MAPPING_FILE"
         
         if [[ ! -f "$MAPPING_FILE" ]]; then
             print_error "マッピングファイルの作成に失敗しました"
             return 1
         fi
-        
-        echo ""
-        return 1
     fi
     
     return 0

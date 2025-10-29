@@ -796,7 +796,7 @@ install_workflow() {
     TOTAL_IPAS=0
     
     check_playcover_app
-    check_mapping_file
+    ensure_mapping_file
     check_full_disk_access
     authenticate_sudo
     check_playcover_volume_mount_install
