@@ -42,7 +42,6 @@ Thumbs.db
 # PlayCover Manager specific
 .playcover-volume-mapping.tsv
 playcover-log.txt
-test-*.sh
 debug/
 archive/
 
