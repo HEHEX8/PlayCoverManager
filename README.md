@@ -78,7 +78,18 @@ chmod +x main.sh
 ./main.sh
 ```
 
-### インストール方法3: 自分でビルド
+### インストール方法3: DMGインストーラー（推奨）
+
+1. **DMGファイルをダウンロード**
+   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases) から `PlayCover Manager-5.0.0.dmg` をダウンロード
+
+2. **DMGをマウント**
+   - DMGファイルをダブルクリック
+
+3. **ドラッグ&ドロップでインストール**
+   - PlayCover Manager.app を Applications フォルダにドラッグ
+
+### インストール方法4: 自分でビルド
 
 ```bash
 # リポジトリをクローン
@@ -88,9 +99,15 @@ cd PlayCoverManager
 # アプリケーションをビルド
 ./build-app.sh
 
+# DMGインストーラーを作成（オプション）
+./create-dmg-background.sh  # 背景画像を生成
+./create-dmg.sh             # DMGを作成
+
 # ビルドされたアプリをインストール
 mv "build/PlayCover Manager.app" /Applications/
 ```
+
+**DMG作成の詳細**: [DMG-BUILD-README.md](DMG-BUILD-README.md)
 
 ### 初回セットアップ
 
