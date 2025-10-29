@@ -132,6 +132,39 @@ echo "📝 隠しファイルプレースホルダーを作成中..."
 touch "$MOUNT_DIR/.background" 2>/dev/null || true
 touch "$MOUNT_DIR/.VolumeIcon" 2>/dev/null || true
 
+# インストール手順テキストを作成（ドットなしで目立つように）
+echo "📄 インストール手順を作成中..."
+cat > "$MOUNT_DIR/インストール方法.txt" << 'INSTRUCTIONS_EOF'
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      PlayCover Manager インストール方法
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 インストール手順：
+
+   左側の「PlayCover Manager」アイコンを
+   右側の「Applications」フォルダへ
+   ドラッグ&ドロップしてください
+   
+            👈    ドラッグ    👉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ インストール完了後：
+   • Launchpad から起動
+   • または Applications フォルダから起動
+
+🔐 初回起動時の注意：
+   • 「開発元を確認できません」と表示された場合
+     → 右クリック → 「開く」を選択
+   • Terminal権限を求められた場合
+     → 「OK」で権限を付与
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 詳細は README.md をご覧ください
+
+INSTRUCTIONS_EOF
+
 # AppleScriptでFinderビューを設定
 echo "🎨 Finderビューを設定中..."
 
@@ -172,6 +205,15 @@ tell application "Finder"
             set position of item "Applications" of container window to {500, 200}
         on error errMsg
             log "警告: Applicationsの配置に失敗 - " & errMsg
+        end try
+        
+        delay 1
+        
+        -- インストール手順テキストをウィンドウ下部中央に配置
+        try
+            set position of item "インストール方法.txt" of container window to {260, 310}
+        on error errMsg
+            log "警告: 手順テキストの配置に失敗 - " & errMsg
         end try
         
         delay 1
@@ -232,6 +274,9 @@ fi
 # プレースホルダーファイルを隠す
 [ -f "$MOUNT_DIR/.background" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.background" 2>/dev/null
 [ -f "$MOUNT_DIR/.VolumeIcon" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon" 2>/dev/null
+
+# インストール手順テキストは表示したまま（ユーザーが読めるように）
+# ドットなしのファイル名なので通常表示される
 
 # .fseventsdを隠す（既に画面外に配置済みだが、念のため隠す）
 if [ -d "$MOUNT_DIR/.fseventsd" ]; then
