@@ -12,12 +12,13 @@
 # - Installation status monitoring
 # - Batch installation support
 #
-# Installation Detection Strategy (v5.0.1):
-#   - Wait for settings file 2nd update → Complete immediately
+# Installation Detection Strategy (v5.0.2):
+#   - Standard pattern: Wait for 2nd update + 4sec stability → Complete
+#   - Tiny app fallback: 1 update only + 8sec wait + 4sec stability → Complete
 #   - Both new and overwrite installs use same detection
 #   - Robust crash detection and recovery
 #
-# Version: 5.0.1
+# Version: 5.0.2
 # Part of: Modular Architecture Refactoring
 
 #######################################################

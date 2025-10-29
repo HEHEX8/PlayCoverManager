@@ -1,0 +1,6 @@
+=== Installation Summary ===
+Date: 2025年 10月29日 水曜日 15時11分57秒 JST
+Bundle ID: com.HoYoverse.Nap
+IPA Size: 2784MB
+Settings File: ~/Library/Containers/io.playcover.PlayCover/App Settings/com.HoYoverse.Nap.plist
+App Bundle: ~/Library/Containers/io.playcover.PlayCover/Apps/com.HoYoverse.Nap.app
