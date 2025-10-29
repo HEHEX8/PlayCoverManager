@@ -1335,6 +1335,12 @@ get_launchable_apps() {
         
         # Check if app has external mapping
         if [[ -n "$volume_name" ]]; then
+            # Check if volume physically exists (connected to Mac)
+            if ! volume_exists "$volume_name"; then
+                # Volume not connected - cannot launch
+                continue
+            fi
+            
             # External storage - check if contaminated
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
             
