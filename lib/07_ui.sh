@@ -926,37 +926,33 @@ show_quick_launcher() {
             return 0  # Go to main menu
         fi
         
-        # Get recent apps for priority sorting
-        local -a recent_bundle_ids=()
-        while IFS='|' read -r timestamp bundle_id app_name; do
-            [[ -n "$bundle_id" ]] && recent_bundle_ids+=("$bundle_id")
-        done < <(get_recent_apps 2>/dev/null)
+        # Get most recent app (only the latest one)
+        local most_recent_bundle_id=""
+        local recent_line=$(get_recent_apps 2>/dev/null | head -1)
+        if [[ -n "$recent_line" ]]; then
+            IFS='|' read -r timestamp bundle_id app_name <<< "$recent_line"
+            most_recent_bundle_id="$bundle_id"
+        fi
         
-        # Sort apps: recent first, then others
+        # Sort apps: most recent first (if exists), then others
         local -a sorted_apps_info=()
+        local most_recent_info=""
         
-        # Add recent apps first
-        for recent_id in "${recent_bundle_ids[@]}"; do
+        # Find and add the most recent app first
+        if [[ -n "$most_recent_bundle_id" ]]; then
             for app_info in "${apps_info[@]}"; do
                 IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
-                if [[ "$bundle_id" == "$recent_id" ]]; then
+                if [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
                     sorted_apps_info+=("$app_info")
+                    most_recent_info="$app_info"
                     break
                 fi
             done
-        done
+        fi
         
         # Add remaining apps
         for app_info in "${apps_info[@]}"; do
-            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
-            local found=false
-            for recent_id in "${recent_bundle_ids[@]}"; do
-                if [[ "$bundle_id" == "$recent_id" ]]; then
-                    found=true
-                    break
-                fi
-            done
-            if [[ "$found" == false ]]; then
+            if [[ "$app_info" != "$most_recent_info" ]]; then
                 sorted_apps_info+=("$app_info")
             fi
         done
@@ -974,11 +970,11 @@ show_quick_launcher() {
             bundle_ids+=("$bundle_id")
             app_paths+=("$app_path")
             
-            # Check if recent
+            # Check if this is the most recent app (only first one gets the star)
             local recent_mark=""
-            if is_recent_app "$bundle_id"; then
+            if [[ $index -eq 1 ]] && [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
                 recent_mark=" ⭐"
-                ((recent_count++))
+                recent_count=1
             fi
             
             # Get storage state
@@ -1035,10 +1031,13 @@ show_quick_launcher() {
         
         echo ""
         if [[ $recent_count -gt 0 ]]; then
-            echo "  ⭐ 最近使用したアプリ    🔐 管理者権限が必要"
+            echo "  ⭐ 最近使用（Enterで起動）    🔐 管理者権限が必要"
             echo ""
         fi
         print_separator
+        if [[ $recent_count -gt 0 ]]; then
+            echo "  [Enter] : ⭐付きアプリを起動"
+        fi
         echo "  [1-${#sorted_apps_info[@]}] : アプリを起動"
         echo "  [p]   : PlayCoverを起動（設定変更用）"
         echo "  [m]   : 管理メニュー"
@@ -1050,6 +1049,40 @@ show_quick_launcher() {
         read "choice?選択: "
         
         case "$choice" in
+            "")
+                # Empty input (Enter key) - launch most recent app if exists
+                if [[ $recent_count -gt 0 ]] && [[ ${#app_names[@]} -gt 0 ]]; then
+                    # Most recent app is always at index 0
+                    local selected_name="${app_names[0]}"
+                    local selected_bundle_id="${bundle_ids[0]}"
+                    local selected_path="${app_paths[0]}"
+                    
+                    echo ""
+                    local container_path=$(get_container_path "$selected_bundle_id")
+                    local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
+                    local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                    
+                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                        # Success - return to quick launcher
+                        echo ""
+                        sleep 1
+                        continue
+                    else
+                        # Failure - go to main menu
+                        echo ""
+                        print_warning "起動に失敗しました"
+                        print_info "管理メニューで状態を確認してください"
+                        echo ""
+                        prompt_continue
+                        return 0
+                    fi
+                else
+                    # No recent app or invalid state
+                    print_error "無効な選択です"
+                    sleep 1
+                    continue
+                fi
+                ;;
             0)
                 exit 0
                 ;;
