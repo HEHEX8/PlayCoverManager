@@ -138,8 +138,8 @@ add_mapping() {
         return 0
     fi
     
-    # Add new mapping (4th column: last_launched timestamp, initially 0)
-    echo "${volume_name}"$'\t'"${bundle_id}"$'\t'"${display_name}"$'\t'"0" >> "$MAPPING_FILE"
+    # Add new mapping (3 columns initially, 4th column added on first launch)
+    echo "${volume_name}"$'\t'"${bundle_id}"$'\t'"${display_name}" >> "$MAPPING_FILE"
     
     release_mapping_lock
     print_success "マッピングを追加しました: $display_name"
@@ -189,29 +189,25 @@ update_mapping() {
 # Record app usage (timestamp + bundle_id + app_name)
 # Args: bundle_id, app_name
 # Returns: 0 on success
-# Record app launch (update last_launched timestamp in mapping file)
+# Record app launch (mark as most recent in mapping file)
 # Args: bundle_id
 # Returns: 0 on success
 record_recent_app() {
     local bundle_id=$1
-    local timestamp=$(date +%s)
     
     acquire_mapping_lock || return 1
     
-    # Update last_launched timestamp for this bundle_id
-    # Format: volume_name<TAB>bundle_id<TAB>display_name<TAB>last_launched
+    # Mark this app as recent (4th column = "1"), clear others
+    # Format: volume_name<TAB>bundle_id<TAB>display_name<TAB>recent_flag
     local temp_file="${MAPPING_FILE}.tmp"
     
-    while IFS=$'\t' read -r volume_name stored_bundle_id display_name last_launched; do
+    while IFS=$'\t' read -r volume_name stored_bundle_id display_name recent_flag; do
         if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
-            # Update timestamp for this app
-            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"$'\t'"${timestamp}"
+            # Mark this app as recent
+            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"$'\t'"1"
         else
-            # Keep other entries unchanged (preserve existing timestamp or 0)
-            if [[ -z "$last_launched" ]]; then
-                last_launched="0"
-            fi
-            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"$'\t'"${last_launched}"
+            # Clear recent flag for other apps (just 3 columns = no flag)
+            echo "${volume_name}"$'\t'"${stored_bundle_id}"$'\t'"${display_name}"
         fi
     done < "$MAPPING_FILE" > "$temp_file"
     
@@ -229,19 +225,13 @@ get_recent_app() {
         return 1
     fi
     
-    # Find entry with largest last_launched timestamp
-    local max_timestamp=0
+    # Find entry with "1" in 4th column
     local recent_bundle_id=""
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name last_launched; do
-        # Skip if no timestamp or timestamp is 0
-        if [[ -z "$last_launched" ]] || [[ "$last_launched" == "0" ]]; then
-            continue
-        fi
-        
-        if [[ "$last_launched" -gt "$max_timestamp" ]]; then
-            max_timestamp=$last_launched
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+        if [[ "$recent_flag" == "1" ]]; then
             recent_bundle_id=$bundle_id
+            break
         fi
     done < "$MAPPING_FILE"
     
