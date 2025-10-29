@@ -22,7 +22,8 @@ fi
 cat > /tmp/create_bg.py << 'PYTHON_EOF'
 from PIL import Image, ImageDraw, ImageFont
 
-# 画像サイズ
+# 画像サイズ（ウィンドウの内部表示領域に合わせる）
+# create-dmgのwindow-sizeはウィンドウ全体、背景はコンテンツ領域
 width = 660
 height = 400
 
@@ -31,20 +32,30 @@ img = Image.new('RGB', (width, height), color=(200, 208, 214))
 
 draw = ImageDraw.Draw(img)
 
-# 矢印を描画（2つのアイコンの間の空間の中央に配置）
-# アイコン位置: 左=160, 右=500, y=185
-# アイコンサイズ: 128x128
-left_icon_right_edge = 160 + 128  # = 288
-right_icon_left_edge = 500 - 64   # = 436 (Applicationsフォルダは中心が500)
+# アイコン配置の計算（バランスを取る）
+icon_size = 128
+
+# ウィンドウ幅660pxで左右対称に配置
+# 左アイコン: 左から1/4の位置
+left_icon_x = width // 4 - icon_size // 2  # 660/4 - 64 = 101
+# 右アイコン: 右から1/4の位置
+right_icon_x = width * 3 // 4 - icon_size // 2  # 660*3/4 - 64 = 431
+
+# アイコンのY位置（上下中央より少し上）
+icon_y = (height - icon_size) // 2 - 30  # (400-128)/2 - 30 = 106
+
+# 矢印を描画（2つのアイコンの間の中央）
+left_icon_center = left_icon_x + icon_size // 2
+right_icon_center = right_icon_x + icon_size // 2
 
 # 空間の中央を計算
-space_center = (left_icon_right_edge + right_icon_left_edge) // 2  # = 362
+space_center = (left_icon_center + right_icon_center) // 2
 
-# 矢印のサイズ
-arrow_length = 80
-arrow_start_x = space_center - arrow_length // 2  # 362 - 40 = 322
-arrow_end_x = space_center + arrow_length // 2    # 362 + 40 = 402
-arrow_y = 185 + 64  # アイコンの中心の高さ（185 + 128/2）
+# 矢印のサイズと位置
+arrow_length = 100
+arrow_start_x = space_center - arrow_length // 2
+arrow_end_x = space_center + arrow_length // 2
+arrow_y = icon_y + icon_size // 2  # アイコンの中心の高さ
 
 # 矢印の色（濃いグレー）
 arrow_color = (80, 80, 80)
@@ -77,12 +88,12 @@ except:
         font_main = ImageFont.load_default()
         font_sub = ImageFont.load_default()
 
-# メインテキスト（アイコン上部）
+# メインテキスト（アイコン下部）
 main_text = "ドラッグ&ドロップでインストール"
 bbox = draw.textbbox((0, 0), main_text, font=font_main)
 text_width = bbox[2] - bbox[0]
 text_x = (width - text_width) // 2
-text_y = 320
+text_y = icon_y + icon_size + 40  # アイコンの下
 
 # テキストに影を追加（読みやすく）
 shadow_offset = 2
@@ -98,6 +109,13 @@ sub_y = text_y + 28
 
 draw.text((sub_x + 1, sub_y + 1), sub_text, fill=(255, 255, 255, 150), font=font_sub)
 draw.text((sub_x, sub_y), sub_text, fill=(70, 70, 70), font=font_sub)
+
+# デバッグ情報を出力
+print(f"📐 画像サイズ: {width}x{height}")
+print(f"📍 左アイコン位置: ({left_icon_x}, {icon_y})")
+print(f"📍 右アイコン位置: ({right_icon_x}, {icon_y})")
+print(f"➡️  矢印中央: x={space_center}, y={arrow_y}")
+print(f"📏 矢印範囲: {arrow_start_x} → {arrow_end_x}")
 
 # 保存
 img.save('dmg-background.png', 'PNG')

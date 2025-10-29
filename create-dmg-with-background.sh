@@ -53,11 +53,22 @@ rm -f "build/${DMG_NAME}"
 echo "📦 DMGを作成中..."
 echo ""
 
-# アイコン位置は背景画像に合わせて調整
+# アイコン位置を背景画像に合わせて計算
 # 背景画像: 660x400
-# アプリアイコン: x=160 (左側)
-# Applicationsフォルダ: x=500 (右側)
-# y=185 (両方とも中央より少し上)
+# アイコンサイズ: 128x128
+# 
+# 計算式（背景画像スクリプトと同じ）:
+#   左アイコン: width/4 - icon_size/2 = 660/4 - 64 = 101
+#   右アイコン: width*3/4 - icon_size/2 = 495 - 64 = 431
+#   Y位置: (height - icon_size)/2 - 30 = 136/2 - 30 = 106
+LEFT_ICON_X=101
+RIGHT_ICON_X=431
+ICON_Y=106
+
+echo "📐 アイコン配置座標:"
+echo "   左アイコン: ($LEFT_ICON_X, $ICON_Y)"
+echo "   右アイコン: ($RIGHT_ICON_X, $ICON_Y)"
+echo ""
 
 if [ -f "AppIcon.icns" ]; then
     create-dmg \
@@ -67,9 +78,9 @@ if [ -f "AppIcon.icns" ]; then
         --window-pos 200 120 \
         --window-size 660 400 \
         --icon-size 128 \
-        --icon "${APP_NAME}.app" 160 185 \
+        --icon "${APP_NAME}.app" $LEFT_ICON_X $ICON_Y \
         --hide-extension "${APP_NAME}.app" \
-        --app-drop-link 500 185 \
+        --app-drop-link $RIGHT_ICON_X $ICON_Y \
         --no-internet-enable \
         "build/${DMG_NAME}" \
         "$SOURCE_APP"
@@ -84,9 +95,9 @@ else
         --window-pos 200 120 \
         --window-size 660 400 \
         --icon-size 128 \
-        --icon "${APP_NAME}.app" 160 185 \
+        --icon "${APP_NAME}.app" $LEFT_ICON_X $ICON_Y \
         --hide-extension "${APP_NAME}.app" \
-        --app-drop-link 500 185 \
+        --app-drop-link $RIGHT_ICON_X $ICON_Y \
         --no-internet-enable \
         "build/${DMG_NAME}" \
         "$SOURCE_APP"
