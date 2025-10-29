@@ -1280,20 +1280,37 @@ get_bundle_id_from_app() {
 get_launchable_apps() {
     local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     
+    # Debug: Check if directory exists
     if [[ ! -d "$playcover_apps" ]]; then
+        echo "[DEBUG] PlayCover Applications directory not found: $playcover_apps" >&2
         return 1
     fi
     
     local -a app_list=()
+    local app_count=0
+    
+    # Debug: Show what we're searching
+    echo "[DEBUG] Searching for apps in: $playcover_apps" >&2
     
     while IFS= read -r app_path; do
+        echo "[DEBUG] Found .app: $app_path" >&2
         local app_name=$(basename "$app_path" .app)
         local bundle_id=$(get_bundle_id_from_app "$app_path")
         
+        echo "[DEBUG] - App name: $app_name" >&2
+        echo "[DEBUG] - Bundle ID: $bundle_id" >&2
+        
         if [[ -n "$bundle_id" ]]; then
             echo "${app_name}|${bundle_id}|${app_path}"
+            ((app_count++))
         fi
     done < <(find "$playcover_apps" -name "*.app" -maxdepth 1 -type d 2>/dev/null)
+    
+    echo "[DEBUG] Total apps found: $app_count" >&2
+    
+    if [[ $app_count -eq 0 ]]; then
+        return 1
+    fi
     
     return 0
 }
