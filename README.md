@@ -96,17 +96,9 @@ cd PlayCoverManager
 # アプリケーションをビルド
 ./build-app.sh
 
-# DMGインストーラーを作成（オプション）
-./create-dmg-background-simple.sh
-./create-dmg-appdmg.sh
-
 # ビルドされたアプリをインストール
 mv "build/PlayCover Manager.app" /Applications/
 ```
-
-**DMG作成の詳細**: 
-- [DMG-APPDMG-GUIDE.md](DMG-APPDMG-GUIDE.md) - DMG作成ガイド
-- [RELEASE-DMG-GUIDE.md](RELEASE-DMG-GUIDE.md) - リリース方法
 
 ### 初回セットアップ
 
