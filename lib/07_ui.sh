@@ -1110,7 +1110,8 @@ show_quick_launcher() {
                 ;;
             0)
                 clear
-                exit 0
+                # Close Terminal window using AppleScript
+                osascript -e 'tell application "Terminal" to close first window' & exit 0
                 ;;
             [pP])
                 echo ""
