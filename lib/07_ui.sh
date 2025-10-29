@@ -46,7 +46,7 @@ show_quick_status() {
                     ((internal_count++))
                     ;;
                 "internal_contaminated")
-                    # 汚染状態は警告として扱う
+                    # 内蔵データ検出状態は警告として扱う
                     ((unmounted_count++))
                     ;;
                 *)
@@ -239,7 +239,7 @@ show_installed_apps() {
                         storage_icon="🏠 内部"
                         ;;
                     "internal_contaminated")
-                        storage_icon="⚠️  汚染"
+                        storage_icon="⚠️  内蔵データ検出"
                         ;;
                     "internal_intentional_empty"|"none")
                         storage_icon="⚠️  データ無し"
