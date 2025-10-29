@@ -6,7 +6,14 @@
 set -e
 
 APP_NAME="PlayCover Manager"
-APP_VERSION="5.0.0"
+
+# Get version from build-app.sh
+if [ -f "build-app.sh" ]; then
+    APP_VERSION=$(grep '^APP_VERSION=' build-app.sh | cut -d'"' -f2)
+else
+    APP_VERSION="5.0.1"
+fi
+
 SOURCE_APP="build/${APP_NAME}.app"
 DMG_NAME="${APP_NAME}-${APP_VERSION}.dmg"
 CONFIG_JSON="appdmg-config.json"
