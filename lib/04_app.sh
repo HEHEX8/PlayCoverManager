@@ -17,7 +17,7 @@
 #   - Both new and overwrite installs use same detection
 #   - Robust crash detection and recovery
 #
-# Version: 5.0.0-alpha1
+# Version: 5.0.0-alpha2
 # Part of: Modular Architecture Refactoring
 
 #######################################################

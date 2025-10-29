@@ -17,7 +17,7 @@
 # Hidden Access: This function is accessed via special keys:
 #   - X, x, RESET, reset in main menu
 #
-# Version: 5.0.0-alpha1
+# Version: 5.0.0-alpha2
 # Part of: Modular Architecture Refactoring
 
 #######################################################
