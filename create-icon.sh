@@ -1,7 +1,7 @@
 #!/bin/bash
 #######################################################
-# Create macOS .icns icon from source image
-# This script should be run on macOS
+# ソース画像からmacOS .icnsアイコンを作成
+# このスクリプトはmacOSで実行してください
 #######################################################
 
 set -e
@@ -10,41 +10,41 @@ SOURCE_IMAGE="app-icon.png"
 ICONSET_DIR="AppIcon.iconset"
 
 if [ ! -f "$SOURCE_IMAGE" ]; then
-    echo "❌ Error: $SOURCE_IMAGE not found"
+    echo "❌ エラー: $SOURCE_IMAGE が見つかりません"
     exit 1
 fi
 
-echo "🎨 Creating macOS icon from $SOURCE_IMAGE..."
+echo "🎨 $SOURCE_IMAGE からmacOSアイコンを作成中..."
 echo ""
 
-# Check source image format
+# ソース画像のフォーマットを確認
 IMAGE_FORMAT=$(file "$SOURCE_IMAGE" | grep -o "PNG\|JPEG")
-echo "📋 Detected format: $IMAGE_FORMAT"
+echo "📋 検出されたフォーマット: $IMAGE_FORMAT"
 
-# If JPEG, convert to PNG first
+# JPEGの場合、最初にPNGに変換
 if [[ "$IMAGE_FORMAT" == "JPEG" ]]; then
-    echo "🔄 Converting JPEG to PNG format..."
+    echo "🔄 JPEGをPNGフォーマットに変換中..."
     TEMP_PNG="app-icon-converted.png"
     sips -s format png "$SOURCE_IMAGE" --out "$TEMP_PNG" > /dev/null 2>&1
     if [ -f "$TEMP_PNG" ]; then
         SOURCE_IMAGE="$TEMP_PNG"
-        echo "✅ Converted to PNG: $SOURCE_IMAGE"
+        echo "✅ PNGに変換しました: $SOURCE_IMAGE"
     else
-        echo "❌ Failed to convert to PNG"
+        echo "❌ PNGへの変換に失敗しました"
         exit 1
     fi
 fi
 
 echo ""
 
-# Check if running on macOS
+# macOSで実行されているか確認
 if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "⚠️  Warning: This script should be run on macOS"
-    echo "   The icon will be added to the build, but .icns conversion requires macOS"
+    echo "⚠️  警告: このスクリプトはmacOSで実行してください"
+    echo "   アイコンはビルドに追加されますが、.icns変換にはmacOSが必要です"
     echo ""
-    echo "📋 To create .icns on macOS:"
-    echo "   1. Create AppIcon.iconset directory"
-    echo "   2. Generate required sizes with sips:"
+    echo "📋 macOSで.icnsを作成するには:"
+    echo "   1. AppIcon.iconsetディレクトリを作成"
+    echo "   2. sipsで必要なサイズを生成:"
     echo "      sips -z 16 16     $SOURCE_IMAGE --out AppIcon.iconset/icon_16x16.png"
     echo "      sips -z 32 32     $SOURCE_IMAGE --out AppIcon.iconset/icon_16x16@2x.png"
     echo "      sips -z 32 32     $SOURCE_IMAGE --out AppIcon.iconset/icon_32x32.png"
@@ -55,21 +55,21 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
     echo "      sips -z 512 512   $SOURCE_IMAGE --out AppIcon.iconset/icon_256x256@2x.png"
     echo "      sips -z 512 512   $SOURCE_IMAGE --out AppIcon.iconset/icon_512x512.png"
     echo "      sips -z 1024 1024 $SOURCE_IMAGE --out AppIcon.iconset/icon_512x512@2x.png"
-    echo "   3. Convert to .icns:"
+    echo "   3. .icnsに変換:"
     echo "      iconutil -c icns AppIcon.iconset"
     echo ""
     exit 0
 fi
 
-# Create iconset directory
-echo "📁 Creating $ICONSET_DIR directory..."
+# iconsetディレクトリを作成
+echo "📁 $ICONSET_DIR ディレクトリを作成中..."
 rm -rf "$ICONSET_DIR"
 mkdir -p "$ICONSET_DIR"
 
-# Generate all required icon sizes
-echo "🔧 Generating icon sizes..."
+# 必要な全てのアイコンサイズを生成
+echo "🔧 アイコンサイズを生成中..."
 
-# Array of sizes to generate
+# 生成するサイズの配列
 declare -a SIZES=(
     "16:icon_16x16.png"
     "32:icon_16x16@2x.png"
@@ -89,71 +89,71 @@ for size_info in "${SIZES[@]}"; do
     NAME="${size_info##*:}"
     
     if ! sips -z "$SIZE" "$SIZE" "$SOURCE_IMAGE" --out "$ICONSET_DIR/$NAME" > /dev/null 2>&1; then
-        echo "⚠️  Failed to generate $NAME"
+        echo "⚠️  $NAME の生成に失敗しました"
         FAILED=$((FAILED + 1))
     fi
 done
 
 if [ $FAILED -gt 0 ]; then
-    echo "❌ Failed to generate $FAILED icon sizes"
-    echo "🔍 Run ./debug-icon.sh for more details"
+    echo "❌ $FAILED 個のアイコンサイズの生成に失敗しました"
+    echo "🔍 詳細は ./debug-icon.sh を実行してください"
     exit 1
 fi
 
-echo "✅ Generated 10 icon sizes"
+echo "✅ 10個のアイコンサイズを生成しました"
 
-# Verify all files exist and are valid PNGs
-echo "🔍 Verifying generated icons..."
+# 全てのファイルが存在し、有効なPNGであることを検証
+echo "🔍 生成されたアイコンを検証中..."
 for size_info in "${SIZES[@]}"; do
     NAME="${size_info##*:}"
     if [ ! -f "$ICONSET_DIR/$NAME" ]; then
-        echo "❌ Missing: $NAME"
+        echo "❌ 見つかりません: $NAME"
         exit 1
     fi
     if ! file "$ICONSET_DIR/$NAME" | grep -q "PNG image data"; then
-        echo "❌ Invalid PNG: $NAME"
+        echo "❌ 無効なPNG: $NAME"
         exit 1
     fi
 done
-echo "✅ All icons verified"
+echo "✅ 全てのアイコンを検証しました"
 
-# Convert to .icns
-echo "🎨 Converting to .icns format..."
+# .icnsに変換
+echo "🎨 .icnsフォーマットに変換中..."
 if iconutil -c icns "$ICONSET_DIR" -o AppIcon.icns 2>&1; then
     if [ -f "AppIcon.icns" ]; then
-        echo "✅ AppIcon.icns created successfully!"
+        echo "✅ AppIcon.icnsの作成に成功しました！"
         echo ""
-        echo "📦 Next steps:"
-        echo "   1. Run ./build-app.sh to rebuild the app with the new icon"
-        echo "   2. The icon will be automatically included in the app bundle"
+        echo "📦 次のステップ:"
+        echo "   1. ./build-app.sh を実行して新しいアイコンでアプリを再ビルド"
+        echo "   2. アイコンは自動的にアプリバンドルに含まれます"
         echo ""
         ls -lh AppIcon.icns
         file AppIcon.icns
     else
-        echo "❌ Failed to create AppIcon.icns (file not found)"
-        echo "🔍 Run ./debug-icon.sh for more details"
+        echo "❌ AppIcon.icnsの作成に失敗しました（ファイルが見つかりません）"
+        echo "🔍 詳細は ./debug-icon.sh を実行してください"
         exit 1
     fi
 else
-    echo "❌ iconutil command failed"
-    echo "🔍 Checking AppIcon.iconset contents..."
+    echo "❌ iconutilコマンドが失敗しました"
+    echo "🔍 AppIcon.iconsetの内容を確認中..."
     ls -la "$ICONSET_DIR/"
     echo ""
-    echo "💡 Possible issues:"
-    echo "   1. One or more PNG files may be corrupted"
-    echo "   2. Incorrect file naming in iconset"
-    echo "   3. Run ./debug-icon.sh for detailed diagnostics"
+    echo "💡 考えられる問題:"
+    echo "   1. 1つ以上のPNGファイルが破損している可能性があります"
+    echo "   2. iconsetでのファイル命名が正しくありません"
+    echo "   3. 詳細な診断には ./debug-icon.sh を実行してください"
     exit 1
 fi
 
-# Clean up iconset directory (optional)
+# iconsetディレクトリをクリーンアップ（オプション）
 # rm -rf "$ICONSET_DIR"
 
-# Clean up temporary converted PNG if it was created
+# 作成された一時変換PNGをクリーンアップ
 if [ -f "app-icon-converted.png" ]; then
     rm -f "app-icon-converted.png"
-    echo "🧹 Cleaned up temporary files"
+    echo "🧹 一時ファイルをクリーンアップしました"
 fi
 
 echo ""
-echo "✨ Done!"
+echo "✨ 完了！"

@@ -1,7 +1,7 @@
 #!/bin/bash
 #######################################################
-# Create DMG with AppleScript for precise control
-# Most reliable method for custom DMG layout
+# AppleScriptを使用した高精度DMG作成
+# プロフェッショナルなDMGレイアウトに最適な方法
 #######################################################
 
 set -e
@@ -14,132 +14,132 @@ VOLUME_NAME="${APP_NAME}"
 DMG_TEMP_DIR="build/dmg_temp"
 DMG_SIZE="100m"
 
-echo "🚀 Creating DMG with AppleScript..."
+echo "🚀 AppleScriptでDMGを作成中..."
 echo ""
 
-# Check if app exists
+# アプリの存在確認
 if [ ! -d "$SOURCE_APP" ]; then
-    echo "❌ App not found: $SOURCE_APP"
-    echo "   Run ./build-app.sh first"
+    echo "❌ アプリが見つかりません: $SOURCE_APP"
+    echo "   先に ./build-app.sh を実行してください"
     exit 1
 fi
 
-# Clean previous builds
+# 以前のビルドをクリーンアップ
 rm -rf "${DMG_TEMP_DIR}"
 rm -f "build/${DMG_NAME}"
 
-# Create temporary directory
+# 一時ディレクトリを作成
 mkdir -p "${DMG_TEMP_DIR}"
 
-# Copy app
-echo "📦 Copying app to temporary directory..."
+# アプリをコピー
+echo "📦 一時ディレクトリにアプリをコピー中..."
 cp -R "$SOURCE_APP" "${DMG_TEMP_DIR}/"
 
-# Create Applications symlink
-echo "🔗 Creating Applications symlink..."
+# Applicationsシンボリックリンクを作成
+echo "🔗 Applicationsシンボリックリンクを作成中..."
 ln -s /Applications "${DMG_TEMP_DIR}/Applications"
 
-# Copy app icon as volume icon
+# アプリアイコンをボリュームアイコンとしてコピー
 if [ -f "${SOURCE_APP}/Contents/Resources/AppIcon.icns" ]; then
     cp "${SOURCE_APP}/Contents/Resources/AppIcon.icns" "${DMG_TEMP_DIR}/.VolumeIcon.icns"
 fi
 
-# Create initial DMG
-echo "🔨 Creating initial DMG..."
+# 初期DMGを作成
+echo "🔨 初期DMGを作成中..."
 hdiutil create -volname "${VOLUME_NAME}" \
     -srcfolder "${DMG_TEMP_DIR}" \
     -ov -format UDRW \
     -size ${DMG_SIZE} \
     "build/temp.dmg"
 
-# Mount DMG
-echo "💾 Mounting DMG..."
+# DMGをマウント
+echo "💾 DMGをマウント中..."
 
-# Try multiple methods to get mount point
+# マウントポイント取得のため複数の方法を試行
 MOUNT_OUTPUT=$(hdiutil attach -readwrite -noverify -noautoopen "build/temp.dmg" 2>&1)
-echo "🔍 Mount output:"
+echo "🔍 マウント出力:"
 echo "$MOUNT_OUTPUT"
 echo ""
 
-# Method 1: Look for /Volumes path in output
+# 方法1: 出力から /Volumes パスを抽出
 MOUNT_DIR=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/[^[:space:]]*' | head -1)
 
-# Method 2: If not found, use volume name directly
+# 方法2: 見つからない場合、ボリューム名を直接使用
 if [ -z "$MOUNT_DIR" ]; then
     MOUNT_DIR="/Volumes/${VOLUME_NAME}"
-    echo "⚠️  Using default path: $MOUNT_DIR"
+    echo "⚠️  デフォルトパスを使用: $MOUNT_DIR"
 fi
 
-# Method 3: If still not found, check all mounted volumes
+# 方法3: それでも見つからない場合、マウント済みボリュームを全て確認
 if [ ! -d "$MOUNT_DIR" ]; then
-    echo "⚠️  Checking all mounted volumes..."
+    echo "⚠️  マウント済みボリュームを確認中..."
     ls -la /Volumes/
     
-    # Try to find the volume
+    # ボリュームを検索
     for vol in /Volumes/*; do
         if [[ "$vol" == *"PlayCover"* ]]; then
             MOUNT_DIR="$vol"
-            echo "✅ Found volume: $MOUNT_DIR"
+            echo "✅ ボリュームを発見: $MOUNT_DIR"
             break
         fi
     done
 fi
 
-echo "📍 Mounted at: $MOUNT_DIR"
+echo "📍 マウント先: $MOUNT_DIR"
 
-# Validate mount point
+# マウントポイントを検証
 if [ -z "$MOUNT_DIR" ]; then
-    echo "❌ Failed to find mount point"
-    echo "   Please check /Volumes/ manually"
+    echo "❌ マウントポイントの取得に失敗しました"
+    echo "   /Volumes/ を手動で確認してください"
     ls -la /Volumes/
     exit 1
 fi
 
 if [ ! -d "$MOUNT_DIR" ]; then
-    echo "❌ Mount directory does not exist: $MOUNT_DIR"
-    echo "   Available volumes:"
+    echo "❌ マウントディレクトリが存在しません: $MOUNT_DIR"
+    echo "   利用可能なボリューム:"
     ls -la /Volumes/
     exit 1
 fi
 
-echo "✅ Mount point validated"
-echo "📂 Contents:"
+echo "✅ マウントポイントを検証しました"
+echo "📂 内容:"
 ls -la "$MOUNT_DIR/"
 echo ""
 
-# Verify Applications symlink exists
+# Applicationsシンボリックリンクの存在確認
 if [ ! -e "$MOUNT_DIR/Applications" ]; then
-    echo "❌ Applications symlink not found in mounted volume"
-    echo "   Creating it now..."
+    echo "❌ マウントされたボリュームにApplicationsシンボリックリンクが見つかりません"
+    echo "   作成中..."
     ln -sf /Applications "$MOUNT_DIR/Applications"
 fi
 
-# Wait for Finder to recognize the mount
+# Finderがマウントを認識するまで待機
 sleep 3
 
-# Set custom icon for volume (CRITICAL: Must set Custom Icon bit BEFORE hiding the file)
+# ボリュームアイコンを設定（重要：ファイルを隠す前にCustom Iconビットを設定）
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
-    echo "🎨 Setting volume icon..."
-    # Step 1: Set the Custom Icon bit on the VOLUME (not the icon file)
+    echo "🎨 ボリュームアイコンを設定中..."
+    # ステップ1：ボリュームにCustom Iconビットを設定（アイコンファイル自体ではない）
     /usr/bin/SetFile -a C "$MOUNT_DIR"
-    # Step 2: Make sure the icon file is NOT invisible yet (Finder needs to see it first)
+    # ステップ2：アイコンファイルをまだ非表示にしない（Finderが最初に見る必要がある）
     sleep 1
 fi
 
-# Create hidden placeholder files for off-screen positioning
-# These will be positioned outside the visible window area
-echo "📝 Creating hidden file placeholders..."
+# 画面外配置用の隠しプレースホルダーファイルを作成
+# これらは表示ウィンドウ領域外に配置される
+echo "📝 隠しファイルプレースホルダーを作成中..."
 touch "$MOUNT_DIR/.background" 2>/dev/null || true
 touch "$MOUNT_DIR/.VolumeIcon" 2>/dev/null || true
 
-# Configure Finder view with AppleScript
-echo "🎨 Configuring Finder view..."
+# AppleScriptでFinderビューを設定
+echo "🎨 Finderビューを設定中..."
 
-# First, ensure Finder sees the volume
+# まず、Finderがボリュームを認識していることを確認
 osascript -e "tell application \"Finder\" to update disk \"${VOLUME_NAME}\" without registering applications"
 sleep 2
 
-# Now configure the view
+# ビューを設定
 osascript <<EOF
 tell application "Finder"
     tell disk "${VOLUME_NAME}"
@@ -154,52 +154,52 @@ tell application "Finder"
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 128
-        -- Light gray background (easier to read)
+        -- ライトグレー背景（読みやすい）
         set background color of viewOptions to {52428, 54227, 55769}
         set text size of viewOptions to 12
         set label position of viewOptions to bottom
         
         delay 2
         
-        -- Position visible items (centered in 660px width window)
+        -- 表示アイテムを配置（660pxウィンドウ幅で中央揃え）
         try
             set position of item "${APP_NAME}.app" of container window to {160, 200}
         on error errMsg
-            log "Warning: Could not position app - " & errMsg
+            log "警告: アプリの配置に失敗 - " & errMsg
         end try
         
         try
             set position of item "Applications" of container window to {500, 200}
         on error errMsg
-            log "Warning: Could not position Applications - " & errMsg
+            log "警告: Applicationsの配置に失敗 - " & errMsg
         end try
         
         delay 1
         
-        -- Move hidden files OFF-SCREEN (below visible area)
-        -- Window height is 400px, so y=1000 is safely out of view
+        -- 隠しファイルを画面外に移動（表示領域の下）
+        -- ウィンドウの高さは400pxなので、y=1000は完全に画面外
         try
             set position of item ".VolumeIcon.icns" of container window to {100, 1000}
         on error
-            -- File might not exist or already hidden
+            -- ファイルが存在しないか、既に隠されている
         end try
         
         try
             set position of item ".background" of container window to {200, 1000}
         on error
-            -- File might not exist
+            -- ファイルが存在しない可能性
         end try
         
         try
             set position of item ".fseventsd" of container window to {300, 1000}
         on error
-            -- File might not exist
+            -- ファイルが存在しない可能性
         end try
         
         try
             set position of item ".VolumeIcon" of container window to {400, 1000}
         on error
-            -- File might not exist
+            -- ファイルが存在しない可能性
         end try
         
         delay 2
@@ -213,91 +213,91 @@ tell application "Finder"
 end tell
 EOF
 
-echo "✅ Finder view configured"
+echo "✅ Finderビューを設定しました"
 
-# Final cleanup and icon confirmation
-echo "🧹 Final cleanup..."
+# 最終クリーンアップとアイコン確認
+echo "🧹 最終クリーンアップ中..."
 
-# CRITICAL: Re-confirm volume icon is set (sometimes needs to be done AFTER layout)
+# 重要：ボリュームアイコンが設定されているか再確認（レイアウト後に必要な場合がある）
 if [ -f "$MOUNT_DIR/.VolumeIcon.icns" ]; then
-    echo "🎨 Confirming volume icon (final pass)..."
+    echo "🎨 ボリュームアイコンを確認中（最終パス）..."
     /usr/bin/SetFile -a C "$MOUNT_DIR"
-    # Now hide the icon file (AFTER setting the C flag)
+    # Cフラグを設定した後、アイコンファイルを隠す
     /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon.icns" 2>/dev/null
 fi
 
-# Hide .DS_Store if it exists
+# .DS_Storeが存在する場合は隠す
 [ -f "$MOUNT_DIR/.DS_Store" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.DS_Store" 2>/dev/null
 
-# Hide placeholder files
+# プレースホルダーファイルを隠す
 [ -f "$MOUNT_DIR/.background" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.background" 2>/dev/null
 [ -f "$MOUNT_DIR/.VolumeIcon" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.VolumeIcon" 2>/dev/null
 
-# Hide .fseventsd (already positioned off-screen, but also hide)
+# .fseventsdを隠す（既に画面外に配置済みだが、念のため隠す）
 if [ -d "$MOUNT_DIR/.fseventsd" ]; then
     chflags hidden "$MOUNT_DIR/.fseventsd" 2>/dev/null
     /usr/bin/SetFile -a V "$MOUNT_DIR/.fseventsd" 2>/dev/null
 fi
 
-# Hide .Trashes if it exists
+# .Trashesが存在する場合は隠す
 [ -d "$MOUNT_DIR/.Trashes" ] && /usr/bin/SetFile -a V "$MOUNT_DIR/.Trashes" 2>/dev/null
 
-# Verify volume icon is set
-echo "🔍 Verifying volume icon..."
+# ボリュームアイコンが設定されているか検証
+echo "🔍 ボリュームアイコンを検証中..."
 if /usr/bin/GetFileInfo -aE "$MOUNT_DIR" | grep -q "hasCustomIcon" 2>/dev/null; then
-    echo "✅ Volume icon confirmed"
+    echo "✅ ボリュームアイコンを確認しました"
 else
-    echo "⚠️  Volume icon may not be set correctly"
+    echo "⚠️  ボリュームアイコンが正しく設定されていない可能性があります"
 fi
 
-echo "✅ All system files positioned off-screen or hidden"
+echo "✅ 全てのシステムファイルを画面外に配置または非表示にしました"
 
-# Sync changes
-echo "💾 Syncing changes..."
+# 変更を同期
+echo "💾 変更を同期中..."
 sync
 sync
 
-# Wait for changes to be written
+# 変更が書き込まれるまで待機
 sleep 3
 
-# Unmount (WITHOUT -force to avoid ejecting other volumes)
-echo "💿 Unmounting..."
+# アンマウント（他のボリュームを誤って取り出さないよう-forceは使用しない）
+echo "💿 アンマウント中..."
 if [ -n "$MOUNT_DIR" ] && [ -d "$MOUNT_DIR" ]; then
-    # Close any Finder windows for this volume
+    # このボリュームのFinderウィンドウを閉じる
     osascript -e "tell application \"Finder\" to close window \"${VOLUME_NAME}\"" 2>/dev/null || true
     sleep 1
     
-    # Unmount gracefully (no -force flag)
+    # 通常のアンマウント（-forceフラグなし）
     hdiutil detach "$MOUNT_DIR" || {
-        echo "⚠️  First unmount attempt failed, trying with -force..."
+        echo "⚠️  最初のアンマウント試行が失敗しました。-forceで再試行中..."
         sleep 2
-        # Only use -force as last resort and be more specific
+        # 最終手段としてのみ-forceを使用し、より具体的にする
         DEVICE=$(hdiutil info | grep "$MOUNT_DIR" | awk '{print $1}')
         if [ -n "$DEVICE" ]; then
-            hdiutil detach "$DEVICE" -force || echo "⚠️  Could not unmount, may need manual intervention"
+            hdiutil detach "$DEVICE" -force || echo "⚠️  アンマウントできませんでした。手動での対応が必要な可能性があります"
         fi
     }
 else
-    echo "⚠️  No valid mount point to unmount"
+    echo "⚠️  アンマウントする有効なマウントポイントがありません"
 fi
 
-# Convert to compressed final DMG
-echo "📦 Creating final compressed DMG..."
+# 最終的な圧縮DMGに変換
+echo "📦 最終的な圧縮DMGを作成中..."
 hdiutil convert "build/temp.dmg" \
     -format UDZO \
     -imagekey zlib-level=9 \
     -o "build/${DMG_NAME}"
 
-# Clean up
+# クリーンアップ
 rm -f "build/temp.dmg"
 rm -rf "${DMG_TEMP_DIR}"
 
 echo ""
-echo "✅ DMG created successfully!"
+echo "✅ DMGの作成に成功しました！"
 echo ""
 ls -lh "build/${DMG_NAME}"
 echo ""
-echo "🎉 Perfect DMG ready for distribution!"
+echo "🎉 配布用の完璧なDMGが準備できました！"
 echo ""
-echo "📦 To test:"
+echo "📦 テスト方法:"
 echo "   open 'build/${DMG_NAME}'"

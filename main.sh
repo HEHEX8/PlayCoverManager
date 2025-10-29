@@ -1,15 +1,15 @@
 #!/bin/zsh
 #
-# PlayCover Volume Manager - Main Entry Point
-# File: main.sh
-# Description: Load modules and start main execution loop
-# Version: 5.0.0
+# PlayCover Volume Manager - メインエントリーポイント
+# ファイル: main.sh
+# 説明: モジュールを読み込み、メイン実行ループを開始
+# バージョン: 5.0.0
 #
 
-# Get script directory (absolute path)
+# スクリプトディレクトリを取得（絶対パス）
 SCRIPT_DIR="${0:A:h}"
 
-# Load all modules in order
+# 全てのモジュールを順番に読み込み
 source "${SCRIPT_DIR}/lib/00_core.sh"
 source "${SCRIPT_DIR}/lib/01_mapping.sh"
 source "${SCRIPT_DIR}/lib/02_volume.sh"
@@ -20,14 +20,14 @@ source "${SCRIPT_DIR}/lib/06_setup.sh"
 source "${SCRIPT_DIR}/lib/07_ui.sh"
 
 #######################################################
-# Main Execution Function
+# メイン実行関数
 #######################################################
 
 main() {
-    # Clear screen to hide terminal session info
+    # ターミナルセッション情報を隠すため画面をクリア
     clear
     
-    # Check if PlayCover environment is ready
+    # PlayCover環境が準備できているか確認
     if ! is_playcover_environment_ready; then
         run_initial_setup
         
