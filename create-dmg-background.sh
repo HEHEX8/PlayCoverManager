@@ -31,12 +31,20 @@ img = Image.new('RGB', (width, height), color=(200, 208, 214))
 
 draw = ImageDraw.Draw(img)
 
-# 矢印を描画（アイコンに被らないように調整）
+# 矢印を描画（2つのアイコンの間の空間の中央に配置）
 # アイコン位置: 左=160, 右=500, y=185
 # アイコンサイズ: 128x128
-arrow_start_x = 295  # 左側アイコンの右端（160 + 128 + 7マージン）
-arrow_end_x = 425    # Applicationsフォルダの左端（500 - 128/2 - 12マージン）
-arrow_y = 185        # アイコンと同じ高さ
+left_icon_right_edge = 160 + 128  # = 288
+right_icon_left_edge = 500 - 64   # = 436 (Applicationsフォルダは中心が500)
+
+# 空間の中央を計算
+space_center = (left_icon_right_edge + right_icon_left_edge) // 2  # = 362
+
+# 矢印のサイズ
+arrow_length = 80
+arrow_start_x = space_center - arrow_length // 2  # 362 - 40 = 322
+arrow_end_x = space_center + arrow_length // 2    # 362 + 40 = 402
+arrow_y = 185 + 64  # アイコンの中心の高さ（185 + 128/2）
 
 # 矢印の色（濃いグレー）
 arrow_color = (80, 80, 80)
@@ -44,14 +52,14 @@ line_width = 4
 
 # メイン矢印線（3本の線で太く見せる）
 for offset in [-2, 0, 2]:
-    draw.line([(arrow_start_x, arrow_y + offset), (arrow_end_x - 35, arrow_y + offset)], 
+    draw.line([(arrow_start_x, arrow_y + offset), (arrow_end_x - 25, arrow_y + offset)], 
               fill=arrow_color, width=line_width)
 
 # 矢印の先端（大きめの三角形）
 arrow_head = [
-    (arrow_end_x - 40, arrow_y - 20),
+    (arrow_end_x - 30, arrow_y - 15),
     (arrow_end_x, arrow_y),
-    (arrow_end_x - 40, arrow_y + 20)
+    (arrow_end_x - 30, arrow_y + 15)
 ]
 draw.polygon(arrow_head, fill=arrow_color)
 
