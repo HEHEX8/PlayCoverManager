@@ -437,7 +437,7 @@ eject_disk() {
     
     if [[ -n "$mappings_content" ]]; then
         local -a mappings_array=()
-        while IFS=$'\t' read -r volume_name bundle_id display_name; do
+        while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
             [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
         done <<< "$mappings_content"
@@ -543,7 +543,7 @@ batch_mount_all() {
     print_info "登録されたボリュームをスキャン中..."
     echo ""
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip empty lines
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
@@ -579,9 +579,40 @@ batch_mount_all() {
             ((skipped_count++))
             continue
         elif [[ "$storage_mode" == "internal_contaminated" ]]; then
-            echo "  ⚠️  ${display_name}: 内蔵データ検出（個別操作で処理してください）"
-            ((skipped_count++))
-            continue
+            echo ""
+            echo "  ⚠️  ${YELLOW}${display_name}: 内蔵データが検出されました${NC}"
+            echo ""
+            echo "  ${CYAN}処理方法を選択:${NC}"
+            echo "    ${LIGHT_GREEN}1.${NC} 削除して外部ボリュームをマウント"
+            echo "    ${LIGHT_GREEN}2.${NC} 保持して外部ボリュームと統合"
+            echo "    ${LIGHT_GREEN}3.${NC} スキップ（後で個別に処理）"
+            echo ""
+            echo -n "  選択 (1-3): "
+            read contamination_choice
+            echo ""
+            
+            case "$contamination_choice" in
+                1)
+                    echo "  🗑️  ${display_name}: 内蔵データを削除中..."
+                    if /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null; then
+                        echo "  ✅ 削除完了"
+                        # Continue to mount below
+                    else
+                        echo "  ❌ 削除失敗"
+                        ((failed_count++))
+                        continue
+                    fi
+                    ;;
+                2)
+                    echo "  🔄 ${display_name}: データを統合します（マウント後に外部に移動）"
+                    # Continue to mount, data will be merged
+                    ;;
+                3|*)
+                    echo "  ⏭️  ${display_name}: スキップしました"
+                    ((skipped_count++))
+                    continue
+                    ;;
+            esac
         fi
         
         # Get device early (needed for both unmount and mount)
@@ -675,7 +706,7 @@ batch_unmount_all() {
     print_info "登録されたボリュームをスキャン中..."
     echo ""
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name; do
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         # Skip empty lines
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
