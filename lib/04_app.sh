@@ -520,6 +520,7 @@ install_ipa_to_playcover() {
     local stability_threshold=4  # File must be stable for 4 seconds
     local last_stable_mtime=0
     local stable_duration=0
+    local first_update_time=0  # Track when first update occurred
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
@@ -633,11 +634,16 @@ install_ipa_to_playcover() {
                                     # Settings file was updated!
                                     ((settings_update_count++))
                                     last_settings_mtime=$current_settings_mtime
+                                    
+                                    # v5.0.2: Track first update time for single-update detection
+                                    if [[ $settings_update_count -eq 1 ]]; then
+                                        first_update_time=$elapsed
+                                    fi
                                 fi
                                 
-                                # v5.0.1: Two-phase detection with stability check
+                                # v5.0.2: Two-phase detection with stability check + single-update fallback
                                 if [[ "$structure_valid" == true ]]; then
-                                    # Phase 1: Wait for 2nd update (basic completion signal)
+                                    # Phase 1: Wait for 2nd update (normal completion signal)
                                     if [[ $settings_update_count -ge 2 ]]; then
                                         # Phase 2: Verify file stability
                                         if [[ $current_settings_mtime -eq $last_stable_mtime ]]; then
@@ -660,6 +666,25 @@ install_ipa_to_playcover() {
                                             # mtime changed - reset stability counter
                                             last_stable_mtime=$current_settings_mtime
                                             stable_duration=0
+                                        fi
+                                    # Phase 1b: Single-update fallback (for very small apps)
+                                    elif [[ $settings_update_count -eq 1 ]] && [[ $first_update_time -gt 0 ]]; then
+                                        local time_since_first_update=$((elapsed - first_update_time))
+                                        # If 8 seconds passed since first update with no 2nd update
+                                        if [[ $time_since_first_update -ge 8 ]]; then
+                                            # Verify file stability for single-update pattern
+                                            if [[ $current_settings_mtime -eq $last_stable_mtime ]]; then
+                                                stable_duration=$((stable_duration + check_interval))
+                                                
+                                                if [[ $stable_duration -ge $stability_threshold ]]; then
+                                                    # Single-update pattern confirmed - complete!
+                                                    found=true
+                                                    break
+                                                fi
+                                            else
+                                                last_stable_mtime=$current_settings_mtime
+                                                stable_duration=0
+                                            fi
                                         fi
                                     fi
                                 fi
