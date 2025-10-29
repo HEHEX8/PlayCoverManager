@@ -224,16 +224,31 @@ has_internal_storage_flag() {
 # Create internal storage flag (when switching to internal)
 create_internal_storage_flag() {
     local container_path=$1
+    local flag_path="${container_path}/${INTERNAL_STORAGE_FLAG}"
     
-    # Create flag file with timestamp
-    echo "Switched to internal storage at: $(date)" > "${container_path}/${INTERNAL_STORAGE_FLAG}"
-    
-    if [[ $? -eq 0 ]]; then
-        return 0
-    else
-        print_error "内蔵ストレージフラグの作成に失敗しました"
+    # Debug: Check directory permissions before creating flag
+    if [[ ! -d "$container_path" ]]; then
+        print_error "フラグファイル作成失敗: ディレクトリが存在しません"
+        print_info "パス: $container_path"
         return 1
     fi
+    
+    if [[ ! -w "$container_path" ]]; then
+        print_error "フラグファイル作成失敗: ディレクトリに書き込み権限がありません"
+        print_info "パス: $container_path"
+        print_info "パーミッション: $(ls -ld "$container_path" 2>/dev/null)"
+        return 1
+    fi
+    
+    # Create flag file with timestamp
+    if ! echo "Switched to internal storage at: $(date)" > "$flag_path" 2>/dev/null; then
+        print_error "内蔵ストレージフラグの作成に失敗しました"
+        print_info "フラグパス: $flag_path"
+        print_info "ディレクトリ情報: $(ls -ld "$container_path" 2>/dev/null)"
+        return 1
+    fi
+    
+    return 0
 }
 
 # Remove internal storage flag (when switching back to external)
@@ -1015,26 +1030,52 @@ perform_external_to_internal_migration() {
         print_info "空のデータを内蔵ストレージにコピーします"
         echo ""
         
-        # Create empty internal directory
-        /usr/bin/sudo /bin/mkdir -p "$target_path"
-        /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
-        
-        # Unmount external volume
+        # Unmount external volume first
         print_info "外部ボリュームをアンマウント中..."
         if ! unmount_app_volume "$volume_name" "$bundle_id"; then
             print_error "外部ボリュームのアンマウントに失敗しました"
-            print_warning "空ディレクトリは作成されましたが、外部ボリュームがまだマウントされています"
             print_info "手動でアンマウントしてから、再度ストレージ切替を実行してください"
             return 1
+        fi
+        
+        # Remove existing mount point directory if it exists (may be owned by root)
+        if [[ -e "$target_path" ]]; then
+            print_info "既存のマウントポイントをクリーンアップ中..."
+            /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null || true
+        fi
+        
+        # Create empty internal directory
+        /usr/bin/sudo /bin/mkdir -p "$target_path"
+        
+        # Change ownership immediately after creation
+        if ! /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"; then
+            print_error "ディレクトリの所有権変更に失敗しました"
+            print_info "対象パス: $target_path"
+            print_info "現在の所有権: $(ls -ld "$target_path" 2>/dev/null || echo "確認できません")"
+            return 1
+        fi
+        
+        # Verify ownership change succeeded
+        local current_owner=$(stat -f "%u:%g" "$target_path" 2>/dev/null)
+        local expected_owner="$(id -u):$(id -g)"
+        if [[ "$current_owner" != "$expected_owner" ]]; then
+            print_warning "所有権変更の確認に失敗"
+            print_info "期待値: $expected_owner"
+            print_info "実際の値: $current_owner"
         fi
         
         echo ""
         print_success "内蔵ストレージへの切り替えが完了しました（空ディレクトリ作成）"
         print_info "保存場所: ${target_path}"
         
-        # Create internal storage flag (only after successful unmount)
-        if create_internal_storage_flag "$target_path"; then
+        # Create internal storage flag with sudo first, then chown (safer for empty containers)
+        local flag_path="${target_path}/${INTERNAL_STORAGE_FLAG}"
+        if /usr/bin/sudo /bin/bash -c "echo 'Switched to internal storage at: $(date)' > '$flag_path'"; then
+            /usr/bin/sudo /usr/sbin/chown $(id -u):$(id -g) "$flag_path"
             print_info "内蔵ストレージモードフラグを作成しました"
+        else
+            print_warning "内蔵ストレージフラグの作成に失敗しました"
+            print_info "手動で作成する場合: touch \"${flag_path}\""
         fi
         
         return 0
