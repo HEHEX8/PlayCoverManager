@@ -3,8 +3,239 @@
 # PlayCover Volume Manager - UI Module
 # File: lib/07_ui.sh
 # Description: Main menu, quick status, individual volume control, batch operations
-# Version: 5.0.1
+# Version: 5.1.0
 #
+
+#######################################################
+# Volume Control Helper Functions
+#######################################################
+
+# Handle unmount operation with error checking
+_handle_unmount_operation() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    
+    # Check if app is running
+    check_app_running_with_error "$bundle_id" "$display_name" "アンマウント" "individual_volume_control" || return 1
+    
+    local device=$(get_volume_device "$volume_name")
+    if unmount_volume "$device" "silent"; then
+        silent_return_to_menu "individual_volume_control"
+        return 0
+    else
+        # Determine error reason
+        local error_msg="アンマウント失敗: ファイルが使用中の可能性があります"
+        if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+            error_msg="アンマウント失敗: アプリが実行中です"
+        fi
+        
+        show_error_and_return "${display_name} の操作" "$error_msg" "individual_volume_control"
+        return 1
+    fi
+}
+
+# Handle remount operation (from wrong location to correct location)
+_handle_remount_operation() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local target_path="$4"
+    
+    # Check if app is running
+    check_app_running_with_error "$bundle_id" "$display_name" "再マウント" "individual_volume_control" || return 1
+    
+    local device=$(get_volume_device "$volume_name")
+    
+    # Unmount from wrong location
+    if ! unmount_volume "$device" "silent"; then
+        show_error_and_return "${display_name} の操作" \
+            "アンマウント失敗: ファイルが使用中の可能性があります" \
+            "individual_volume_control"
+        return 1
+    fi
+    
+    # Mount to correct location
+    /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+    
+    if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+        silent_return_to_menu "individual_volume_control"
+        return 0
+    else
+        show_error_and_return "${display_name} の操作" "再マウント失敗" "individual_volume_control"
+        return 1
+    fi
+}
+
+# Handle mount operation with storage mode checks
+_handle_mount_operation() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local target_path="$4"
+    
+    # Check if volume exists
+    if ! check_volume_exists_or_error "$volume_name" "${display_name} の操作" "individual_volume_control"; then
+        return 1
+    fi
+    
+    # Check storage mode
+    local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+    
+    case "$storage_mode" in
+        "internal_intentional"|"internal_intentional_empty")
+            show_error_info_and_return "${display_name} の操作" \
+                "$MSG_INTENTIONAL_INTERNAL_MODE" \
+                "$MSG_SWITCH_VIA_STORAGE_MENU" \
+                "individual_volume_control"
+            return 1
+            ;;
+        "internal_contaminated")
+            _handle_contaminated_mount "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            return $?
+            ;;
+        *)
+            _perform_mount "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            return $?
+            ;;
+    esac
+}
+
+# Handle contaminated data during mount
+_handle_contaminated_mount() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local target_path="$4"
+    
+    clear
+    print_header "${display_name} の操作"
+    echo ""
+    print_warning "$MSG_UNINTENDED_INTERNAL_DATA"
+    echo ""
+    
+    # Show data sizes
+    local internal_size=$(get_container_size "$target_path")
+    echo "  ${CYAN}内蔵データサイズ:${NC} ${BOLD}${internal_size}${NC}"
+    echo ""
+    
+    echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
+    echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
+    echo "  ${BOLD}${CYAN}2.${NC} 内蔵データを外部ボリュームにマージ（内蔵データを保持）"
+    echo "  ${BOLD}${BLUE}3.${NC} キャンセル（マウントしない）"
+    echo ""
+    echo -n "${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
+    read cleanup_choice </dev/tty
+    
+    cleanup_choice=${cleanup_choice:-1}
+    
+    case "$cleanup_choice" in
+        1)
+            print_info "外部ボリュームを優先します（内蔵データを削除）"
+            print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
+            /usr/bin/sudo /bin/rm -rf "$target_path"
+            echo ""
+            _perform_mount "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            return $?
+            ;;
+        2)
+            _merge_internal_to_external "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            return $?
+            ;;
+        3)
+            print_info "マウントをキャンセルしました"
+            wait_for_enter
+            silent_return_to_menu "individual_volume_control"
+            return 0
+            ;;
+        *)
+            print_error "$MSG_INVALID_SELECTION"
+            wait_for_enter
+            silent_return_to_menu "individual_volume_control"
+            return 1
+            ;;
+    esac
+}
+
+# Perform actual mount operation
+_perform_mount() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local target_path="$4"
+    
+    authenticate_sudo
+    
+    local device=$(get_volume_device "$volume_name")
+    /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+    
+    if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+        silent_return_to_menu "individual_volume_control"
+        return 0
+    else
+        show_error_and_return "${display_name} の操作" "マウント失敗" "individual_volume_control"
+        return 1
+    fi
+}
+
+# Merge internal data to external volume
+_merge_internal_to_external() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local target_path="$4"
+    
+    print_info "内蔵データを外部ボリュームにマージします"
+    echo ""
+    
+    # Mount to temp location
+    local temp_mount=$(create_temp_dir) || {
+        show_error_and_return "${display_name} の操作" \
+            "一時ディレクトリの作成に失敗しました" \
+            "individual_volume_control"
+        return 1
+    }
+    
+    authenticate_sudo
+    local device=$(get_volume_device "$volume_name")
+    
+    if ! mount_volume "/dev/$device" "$temp_mount" "nobrowse" "silent"; then
+        /bin/rm -rf "$temp_mount"
+        show_error_and_return "${display_name} の操作" \
+            "一時マウントに失敗しました" \
+            "individual_volume_control"
+        return 1
+    fi
+    
+    # Copy data
+    print_info "データをマージしています..."
+    if /usr/bin/sudo /usr/bin/rsync -a --info=progress2 "$target_path/" "$temp_mount/"; then
+        unmount_volume "$device" "silent"
+        /bin/rm -rf "$temp_mount"
+        /usr/bin/sudo /bin/rm -rf "$target_path"
+        
+        # Final mount
+        /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
+        if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+            print_success "マージとマウントが完了しました"
+            wait_for_enter
+            silent_return_to_menu "individual_volume_control"
+            return 0
+        else
+            show_error_and_return "${display_name} の操作" \
+                "最終マウントに失敗しました" \
+                "individual_volume_control"
+            return 1
+        fi
+    else
+        unmount_volume "$device" "silent"
+        /bin/rm -rf "$temp_mount"
+        show_error_and_return "${display_name} の操作" \
+            "データのマージに失敗しました" \
+            "individual_volume_control"
+        return 1
+    fi
+}
 
 #######################################################
 # Quick Status Display
@@ -625,7 +856,7 @@ individual_volume_control() {
     local target_path="${HOME}/Library/Containers/${bundle_id}"
     local current_mount=$(get_mount_point "$volume_name")
     
-    # Quick switch without confirmation
+    # Quick switch without confirmation - delegate to helper functions
     if [[ -n "$current_mount" ]]; then
         # Volume is mounted somewhere
         if ! check_volume_exists_or_error "$volume_name" "${display_name} の操作" "individual_volume_control"; then
@@ -635,238 +866,17 @@ individual_volume_control() {
         # Check if mounted at correct location
         if [[ "$current_mount" == "$target_path" ]]; then
             # Correctly mounted -> Unmount
-            
-            # Re-check if app is running (race condition prevention)
-            local app_is_running=false
-            if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-                # Special check for PlayCover itself
-                is_playcover_running && app_is_running=true
-            else
-                # Normal app check
-                is_app_running "$bundle_id" && app_is_running=true
-            fi
-            
-            if [[ "$app_is_running" == true ]]; then
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                print_error "アンマウント失敗: アプリが実行中です"
-                echo ""
-                print_info "アプリを終了してから再度お試しください"
-                wait_for_enter
-                individual_volume_control
-                return
-            fi
-            
-            local device=$(get_volume_device "$volume_name")
-            if unmount_volume "$device" "silent"; then
-                # Success - silently return to menu
-                individual_volume_control
-                return
-            else
-                # Failed - show error
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
-                    print_error "アンマウント失敗: アプリが実行中です"
-                else
-                    print_error "アンマウント失敗: ファイルが使用中の可能性があります"
-                fi
-                wait_for_enter
-                individual_volume_control
-                return
-            fi
+            _handle_unmount_operation "$volume_name" "$bundle_id" "$display_name"
+            return
         else
             # Mounted at wrong location -> Remount to correct location
-            
-            # Re-check if app is running (race condition prevention)
-            local app_is_running=false
-            if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-                # Special check for PlayCover itself
-                is_playcover_running && app_is_running=true
-            else
-                # Normal app check
-                is_app_running "$bundle_id" && app_is_running=true
-            fi
-            
-            if [[ "$app_is_running" == true ]]; then
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                print_error "再マウント失敗: アプリが実行中です"
-                echo ""
-                print_info "アプリを終了してから再度お試しください"
-                wait_for_enter
-                individual_volume_control
-                return
-            fi
-            
-            local device=$(get_volume_device "$volume_name")
-            
-            # Unmount from wrong location
-            if ! unmount_volume "$device" "silent"; then
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                print_error "アンマウント失敗: ファイルが使用中の可能性があります"
-                wait_for_enter
-                individual_volume_control
-                return
-            fi
-            
-            # Mount to correct location
-            # Create mount point if not exists
-            /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
-            
-            if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
-                # Success - silently return to menu
-                individual_volume_control
-                return
-            else
-                clear
-                print_header "${display_name} の操作"
-                echo ""
-                print_error "再マウント失敗"
-                wait_for_enter
-                individual_volume_control
-                return
-            fi
+            _handle_remount_operation "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            return
         fi
     else
         # Currently unmounted -> Mount
-        if ! check_volume_exists_or_error "$volume_name" "${display_name} の操作" "individual_volume_control"; then
-            return
-        fi
-        
-        # Check storage mode before mounting (includes external volume mount check)
-        local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-        
-        if [[ "$storage_mode" == "internal_intentional" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
-            # Intentional internal storage (with or without data) - refuse to mount
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_error "$MSG_INTENTIONAL_INTERNAL_MODE"
-            print_info "$MSG_SWITCH_VIA_STORAGE_MENU"
-            echo ""
-            wait_for_enter "Enterキーで続行..."
-            individual_volume_control
-            return
-        elif [[ "$storage_mode" == "internal_contaminated" ]]; then
-            # Contaminated data - ask user for cleanup method
-            clear
-            print_header "${display_name} の操作"
-            echo ""
-            print_warning "$MSG_UNINTENDED_INTERNAL_DATA"
-            echo ""
-            
-            # Show data sizes for informed decision
-            local internal_size=$(get_container_size "$target_path")
-            echo "  ${CYAN}内蔵データサイズ:${NC} ${BOLD}${internal_size}${NC}"
-            echo ""
-            
-            echo "${BOLD}${YELLOW}処理方法を選択してください:${NC}"
-            echo "  ${BOLD}${GREEN}1.${NC} 外部ボリュームを優先（内蔵データは削除）${BOLD}${GREEN}[推奨・デフォルト]${NC}"
-            echo "  ${BOLD}${CYAN}2.${NC} 内蔵データを外部ボリュームにマージ（内蔵データを保持）"
-            echo "  ${BOLD}${BLUE}3.${NC} キャンセル（マウントしない）"
-            echo ""
-            echo -n "${BOLD}${YELLOW}選択 (1-3) [デフォルト: 1]:${NC} "
-            read cleanup_choice
-            
-            # Default to option 1 if empty
-            cleanup_choice=${cleanup_choice:-1}
-            
-            case "$cleanup_choice" in
-                1)
-                    print_info "外部ボリュームを優先します（内蔵データを削除）"
-                    print_info "$MSG_CLEANUP_INTERNAL_STORAGE"
-                    /usr/bin/sudo /bin/rm -rf "$target_path"
-                    echo ""
-                    # Continue to mount below
-                    ;;
-                2)
-                    print_info "内蔵データを外部ボリュームにマージします"
-                    echo ""
-                    
-                    # Mount external volume to temporary location
-                    local temp_mount=$(create_temp_dir) || {
-                        show_error_and_return "${display_name} の操作" "一時ディレクトリの作成に失敗しました" "individual_volume_control"
-                        return
-                    }
-                    
-                    local device=$(get_volume_device "$volume_name")
-                    if [[ -z "$device" ]]; then
-                        cleanup_temp_dir "$temp_mount" true
-                        show_error_and_return "${display_name} の操作" "ボリュームデバイスの取得に失敗しました" "individual_volume_control"
-                        return
-                    fi
-                    
-                    print_info "外部ボリュームを一時マウント中..."
-                    if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "/dev/$device" "$temp_mount" 2>/dev/null; then
-                        cleanup_temp_dir "$temp_mount" true
-                        show_error_and_return "${display_name} の操作" "外部ボリュームのマウントに失敗しました" "individual_volume_control"
-                        return
-                    fi
-                    
-                    # Copy internal data to external volume (merge)
-                    print_info "内蔵データを外部ボリュームにマージ中..."
-                    if /usr/bin/sudo /usr/bin/rsync -a --info=progress2 "$target_path/" "$temp_mount/"; then
-                        print_success "マージ完了"
-                        
-                        # Unmount temporary mount
-                        unmount_volume "/dev/$device" "silent"
-                        cleanup_temp_dir "$temp_mount" true
-                        
-                        # Remove internal data
-                        print_info "内蔵データをクリーンアップ中..."
-                        /usr/bin/sudo /bin/rm -rf "$target_path"
-                        echo ""
-                    else
-                        print_error "マージに失敗しました"
-                        unmount_volume "/dev/$device" "silent"
-                        cleanup_temp_dir "$temp_mount" true
-                        wait_for_enter
-                        individual_volume_control
-                        return
-                    fi
-                    # Continue to mount below
-                    ;;
-                *)
-                    show_error_and_return "${display_name} の操作" "$MSG_CANCELED" "individual_volume_control"
-                    return
-                    ;;
-            esac
-        fi
-        
-        # Ensure PlayCover volume is mounted first (dependency requirement)
-        if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
-            if ! ensure_playcover_main_volume >/dev/null 2>&1; then
-                show_error_and_return "${display_name} の操作" "PlayCover ボリューム（依存先）のマウントに失敗しました" "individual_volume_control"
-                return
-            fi
-        fi
-        
-        # Get device path for mounting
-        local device=$(get_volume_device "$volume_name")
-        if [[ -z "$device" ]]; then
-            show_error_and_return "${display_name} の操作" "ボリュームデバイスの取得に失敗しました" "individual_volume_control"
-            return
-        fi
-        
-        # Create mount point if not exists
-        /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
-        
-        # Try to mount using mount_volume function with device path and nobrowse option
-        if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
-            # Success - silently return to menu
-            individual_volume_control
-            return
-        else
-            # Failed - show error
-            show_error_and_return "${display_name} の操作" "マウントに失敗しました" "individual_volume_control"
-            return
-        fi
+        _handle_mount_operation "$volume_name" "$bundle_id" "$display_name" "$target_path"
+        return
     fi
 }
 

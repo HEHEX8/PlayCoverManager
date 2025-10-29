@@ -305,6 +305,70 @@ show_error_and_return() {
     fi
 }
 
+# Show error with optional info message and return to menu
+# More flexible version with info message support
+show_error_info_and_return() {
+    local title="$1"
+    local error_message="$2"
+    local info_message="${3:-}"
+    local callback="${4:-}"
+    
+    clear
+    print_header "$title"
+    echo ""
+    print_error "$error_message"
+    
+    if [[ -n "$info_message" ]]; then
+        echo ""
+        print_info "$info_message"
+    fi
+    
+    wait_for_enter
+    
+    if [[ -n "$callback" ]] && type "$callback" &>/dev/null; then
+        "$callback"
+    fi
+}
+
+# Silent return to menu (for successful operations)
+# Args: callback function name
+silent_return_to_menu() {
+    local callback="${1:-}"
+    
+    if [[ -n "$callback" ]] && type "$callback" &>/dev/null; then
+        "$callback"
+    fi
+    return 0
+}
+
+# Check if app is running and show error if true
+# Returns: 0 if app is NOT running, 1 if running (and shows error)
+check_app_running_with_error() {
+    local bundle_id="$1"
+    local display_name="$2"
+    local operation_name="${3:-操作}"  # e.g., "アンマウント", "再マウント"
+    local callback="${4:-}"
+    
+    local app_is_running=false
+    
+    if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+        is_playcover_running && app_is_running=true
+    else
+        is_app_running "$bundle_id" && app_is_running=true
+    fi
+    
+    if [[ "$app_is_running" == true ]]; then
+        show_error_info_and_return \
+            "${display_name} の操作" \
+            "${operation_name}失敗: アプリが実行中です" \
+            "アプリを終了してから再度お試しください" \
+            "$callback"
+        return 1
+    fi
+    
+    return 0
+}
+
 # Get available disk space in kilobytes
 # Args: path (mount point or directory path)
 # Returns: Available space in KB, or empty string on error
