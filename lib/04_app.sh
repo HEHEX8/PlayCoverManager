@@ -1039,6 +1039,9 @@ uninstall_workflow() {
         handle_error_and_return "マッピング情報の削除に失敗しました"
     fi
     
+    # Step 9.5: Remove from recent apps list
+    remove_recent_app "$selected_bundle"
+    
     # Step 10: If PlayCover volume, remove PlayCover.app and exit
     if [[ "$selected_volume" == "PlayCover" ]]; then
         echo ""

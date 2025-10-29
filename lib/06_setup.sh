@@ -37,6 +37,83 @@ SELECTED_EXTERNAL_DISK=""
 SELECTED_CONTAINER=""
 
 #######################################################
+# Data Directory Management
+#######################################################
+
+# Ensure data directory exists and migrate old files if found
+ensure_data_directory() {
+    # Create data directory if it doesn't exist
+    if [[ ! -d "$DATA_DIR" ]]; then
+        print_info "データディレクトリを作成中..."
+        mkdir -p "$DATA_DIR"
+        
+        if [[ $? -ne 0 ]]; then
+            print_error "データディレクトリの作成に失敗しました: $DATA_DIR"
+            return 1
+        fi
+        
+        print_success "データディレクトリを作成しました: $DATA_DIR"
+    fi
+    
+    # Migrate old mapping file if exists (from app bundle to home directory)
+    # Old location patterns to check
+    local -a old_mapping_locations=(
+        "${SCRIPT_DIR}/volume_mapping.tsv"
+        "${SCRIPT_DIR}/mapping.txt"
+        "${HOME}/volume_mapping.tsv"
+        "${HOME}/.playcover_volume_mapping.tsv"
+    )
+    
+    local migrated=false
+    for old_location in "${old_mapping_locations[@]}"; do
+        if [[ -f "$old_location" ]] && [[ "$old_location" != "$MAPPING_FILE" ]]; then
+            print_info "既存のマッピングファイルを発見: $old_location"
+            print_info "新しい場所に移行中: $MAPPING_FILE"
+            
+            # Copy to new location (preserve original as backup)
+            cp "$old_location" "$MAPPING_FILE"
+            
+            if [[ $? -eq 0 ]]; then
+                print_success "マッピングファイルを移行しました"
+                
+                # Rename old file as backup
+                mv "$old_location" "${old_location}.migrated.backup"
+                print_info "旧ファイルをバックアップとして保存: ${old_location}.migrated.backup"
+                
+                migrated=true
+                break
+            else
+                print_warning "マッピングファイルの移行に失敗しました"
+            fi
+        fi
+    done
+    
+    if [[ "$migrated" == false ]] && [[ ! -f "$MAPPING_FILE" ]]; then
+        # No old file found, create empty mapping file
+        touch "$MAPPING_FILE"
+    fi
+    
+    # Clean up old recent apps files if they exist (different naming schemes)
+    local -a old_recent_files=(
+        "${HOME}/.playcover_manager_recent_apps"
+        "${SCRIPT_DIR}/recent_apps.txt"
+    )
+    
+    for old_file in "${old_recent_files[@]}"; do
+        if [[ -f "$old_file" ]] && [[ "$old_file" != "$RECENT_APPS_FILE" ]]; then
+            # Move to new location if newer/better
+            if [[ ! -f "$RECENT_APPS_FILE" ]] || [[ "$old_file" -nt "$RECENT_APPS_FILE" ]]; then
+                mv "$old_file" "$RECENT_APPS_FILE" 2>/dev/null
+            else
+                rm -f "$old_file" 2>/dev/null
+            fi
+        fi
+    done
+    
+    return 0
+}
+
+#######################################################
 # Architecture Check
 #######################################################
 
@@ -436,6 +513,9 @@ run_initial_setup() {
     echo ""
     print_separator "=" "$CYAN"
     echo ""
+    
+    # Step 0: Ensure data directory exists and migrate old files
+    ensure_data_directory
     
     # Step 1: Architecture check
     check_architecture

@@ -107,9 +107,17 @@ else
     readonly SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 fi
 
-# Mapping file stored in manager directory
-readonly MAPPING_FILE="${SCRIPT_DIR}/.playcover-volume-mapping.tsv"
+# Data directory for PlayCover Manager (centralized storage)
+readonly DATA_DIR="${HOME}/.playcover_manager"
+
+# Mapping file stored in data directory
+readonly MAPPING_FILE="${DATA_DIR}/volume_mapping.tsv"
 readonly MAPPING_LOCK_FILE="${MAPPING_FILE}.lock"
+
+# Recent apps tracking file
+readonly RECENT_APPS_FILE="${DATA_DIR}/recent_apps.txt"
+
+# Internal storage flag (placed in container directories)
 readonly INTERNAL_STORAGE_FLAG=".playcover_internal_storage_flag"
 
 #######################################################

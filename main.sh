@@ -27,6 +27,9 @@ main() {
     # ターミナルセッション情報を隠すため画面をクリア
     clear
     
+    # Ensure data directory exists (before any file operations)
+    ensure_data_directory
+    
     # PlayCover環境が準備できているか確認
     if ! is_playcover_environment_ready; then
         run_initial_setup

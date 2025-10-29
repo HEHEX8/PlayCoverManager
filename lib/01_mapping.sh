@@ -39,10 +39,27 @@ release_mapping_lock() {
 # Check if mapping file exists, create if not
 # Returns: 0 if exists, 1 if not found or created
 check_mapping_file() {
+    # Ensure data directory exists
+    if [[ ! -d "$DATA_DIR" ]]; then
+        print_info "データディレクトリを作成します: $DATA_DIR"
+        /bin/mkdir -p "$DATA_DIR"
+        
+        if [[ ! -d "$DATA_DIR" ]]; then
+            print_error "データディレクトリの作成に失敗しました"
+            return 1
+        fi
+    fi
+    
+    # Ensure mapping file exists
     if [[ ! -f "$MAPPING_FILE" ]]; then
         print_warning "マッピングファイルが見つかりません"
         print_info "空のマッピングファイルを作成します"
         touch "$MAPPING_FILE"
+        
+        if [[ ! -f "$MAPPING_FILE" ]]; then
+            print_error "マッピングファイルの作成に失敗しました"
+            return 1
+        fi
         
         echo ""
         return 1
@@ -163,4 +180,83 @@ update_mapping() {
     # Remove old mapping if exists, then add new one
     remove_mapping "$bundle_id"
     add_mapping "$volume_name" "$bundle_id" "$display_name"
+}
+
+#######################################################
+# Recent Apps Tracking Functions
+#######################################################
+
+# Record app usage (timestamp + bundle_id + app_name)
+# Args: bundle_id, app_name
+# Returns: 0 on success
+record_recent_app() {
+    local bundle_id=$1
+    local app_name=$2
+    local timestamp=$(date +%s)
+    
+    # Ensure data directory exists
+    if [[ ! -d "$DATA_DIR" ]]; then
+        /bin/mkdir -p "$DATA_DIR"
+    fi
+    
+    # Format: timestamp|bundle_id|app_name
+    # Remove old entry if exists
+    if [[ -f "$RECENT_APPS_FILE" ]]; then
+        grep -v "|${bundle_id}|" "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp" 2>/dev/null || true
+        /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE" 2>/dev/null || true
+    fi
+    
+    # Add new entry at top
+    echo "${timestamp}|${bundle_id}|${app_name}" >> "$RECENT_APPS_FILE"
+    
+    # Keep only last 10 entries
+    if [[ -f "$RECENT_APPS_FILE" ]]; then
+        tail -10 "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp"
+        /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE"
+    fi
+    
+    return 0
+}
+
+# Get recent apps list (sorted by timestamp, newest first)
+# Output: TSV format (timestamp|bundle_id|app_name)
+# Returns: 0 if file exists, 1 if not
+get_recent_apps() {
+    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
+        return 1
+    fi
+    
+    # Sort by timestamp (descending)
+    sort -t'|' -k1 -rn "$RECENT_APPS_FILE" 2>/dev/null || true
+    return 0
+}
+
+# Check if app is in recent list
+# Args: bundle_id
+# Returns: 0 if recent, 1 if not
+is_recent_app() {
+    local bundle_id=$1
+    
+    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
+        return 1
+    fi
+    
+    grep -q "|${bundle_id}|" "$RECENT_APPS_FILE" 2>/dev/null
+    return $?
+}
+
+# Remove app from recent list (called during uninstall)
+# Args: bundle_id
+# Returns: 0 on success
+remove_recent_app() {
+    local bundle_id=$1
+    
+    if [[ ! -f "$RECENT_APPS_FILE" ]]; then
+        return 0  # Nothing to remove
+    fi
+    
+    grep -v "|${bundle_id}|" "$RECENT_APPS_FILE" > "${RECENT_APPS_FILE}.tmp" 2>/dev/null || true
+    /bin/mv "${RECENT_APPS_FILE}.tmp" "$RECENT_APPS_FILE" 2>/dev/null || true
+    
+    return 0
 }
