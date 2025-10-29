@@ -81,10 +81,8 @@ main() {
                 eject_disk
                 ;;
             0)
-                echo ""
-                print_info "終了します"
-                /bin/sleep 1
-                /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+                clear
+                exit 0
                 ;;
             X|x|RESET|reset)
                 echo ""

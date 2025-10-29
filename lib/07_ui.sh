@@ -963,7 +963,7 @@ show_quick_launcher() {
             # Check if this is the most recent app (mark with star but don't reorder)
             local recent_mark=""
             if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                recent_mark=" ⭐"
+                recent_mark="⭐ "
                 recent_count=1
             fi
             
@@ -1015,13 +1015,8 @@ show_quick_launcher() {
             esac
             
             # Format: [⭐] number. name [icon] status
-            if [[ -n "$recent_mark" ]]; then
-                printf "  ⭐ %d. %-25s [%s] %s %-12s%s\n" \
-                    "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
-            else
-                printf "     %d. %-25s [%s] %s %-12s%s\n" \
-                    "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
-            fi
+            printf "  %-3s%d. %-25s [%s] %s %-12s%s\n" \
+                "$recent_mark" "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
             ((index++))
         done
         
@@ -1094,9 +1089,7 @@ show_quick_launcher() {
                 fi
                 ;;
             0)
-                echo ""
-                print_info "終了します..."
-                echo ""
+                clear
                 exit 0
                 ;;
             [pP])
