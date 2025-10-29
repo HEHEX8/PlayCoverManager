@@ -1226,13 +1226,6 @@ perform_external_to_internal_migration() {
         source_mount="$current_mount"
     fi
     
-    # Debug: Show source path and content
-    print_info "コピー元: ${source_mount}"
-    local file_count=$(sudo /usr/bin/find "$source_mount" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    local total_size=$(get_container_size "$source_mount")
-    print_info "  ファイル数: ${file_count}"
-    print_info "  データサイズ: ${total_size}"
-    
     # Remove existing internal data/mount point if it exists
     if [[ -e "$target_path" ]]; then
         print_info "既存データをクリーンアップ中..."
@@ -1244,7 +1237,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _perform_rsync_transfer "$source_mount" "$target_path" "copy"; then
+    if ! _rsync_migration_data "$source_mount" "$target_path" "false"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
@@ -1260,8 +1253,28 @@ perform_external_to_internal_migration() {
     # Change ownership after successful copy
     /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$target_path"
     
-    # Unmount volume using helper
-    if ! _cleanup_and_unmount "$source_mount" "$temp_mount_created" "$volume_name" "$bundle_id"; then
+    # Unmount volume
+    local unmount_success=true
+    if [[ "$temp_mount_created" == true ]]; then
+        print_info "一時マウントをクリーンアップ中..."
+        if ! unmount_with_fallback "$source_mount" "silent"; then
+            print_warning "一時マウントのアンマウントに失敗しました"
+            unmount_success=false
+        fi
+        /bin/sleep 1
+        cleanup_temp_dir "$source_mount" true
+    else
+        print_info "外部ボリュームをアンマウント中..."
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "外部ボリュームのアンマウントに失敗しました"
+            print_warning "ボリュームがまだマウントされている可能性があります"
+            print_info "手動でアンマウントしてください"
+            unmount_success=false
+        fi
+    fi
+    
+    # Only proceed with flag creation if unmount succeeded
+    if [[ "$unmount_success" == false ]]; then
         echo ""
         print_error "アンマウント失敗のため、内蔵ストレージモードの設定を完了できませんでした"
         print_warning "データは ${target_path} にコピーされましたが、外部ボリュームがまだマウントされています"
@@ -1269,9 +1282,7 @@ perform_external_to_internal_migration() {
         return 1
     fi
     
-    echo ""
-    print_success "内蔵ストレージへの切り替えが完了しました"
-    print_info "保存場所: ${target_path}"
+    _show_migration_success "internal" "$target_path"
     
     # Create internal storage flag to mark this as intentional (only if unmount succeeded)
     if create_internal_storage_flag "$target_path"; then
