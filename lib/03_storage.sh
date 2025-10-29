@@ -286,28 +286,11 @@ get_storage_mode() {
             
             if [[ -n "$current_mount" ]]; then
                 # External volume is mounted somewhere
-                # Resolve both paths to absolute canonical paths for accurate comparison
-                # This handles symlinks and shortened paths correctly
-                local resolved_current=""
-                local resolved_expected=""
+                # Normalize paths for comparison (remove trailing slashes)
+                local normalized_current="${current_mount%/}"
+                local normalized_expected="${container_path%/}"
                 
-                if [[ -e "$current_mount" ]]; then
-                    resolved_current=$(/usr/bin/stat -f "%Y" "$current_mount" 2>/dev/null || echo "$current_mount")
-                else
-                    resolved_current="$current_mount"
-                fi
-                
-                if [[ -e "$container_path" ]]; then
-                    resolved_expected=$(/usr/bin/stat -f "%Y" "$container_path" 2>/dev/null || echo "$container_path")
-                else
-                    resolved_expected="$container_path"
-                fi
-                
-                # Remove trailing slashes after resolution
-                resolved_current="${resolved_current%/}"
-                resolved_expected="${resolved_expected%/}"
-                
-                if [[ "$resolved_current" == "$resolved_expected" ]]; then
+                if [[ "$normalized_current" == "$normalized_expected" ]]; then
                     echo "external"  # Correctly mounted at target location
                 else
                     echo "external_wrong_location"  # Mounted at wrong location
