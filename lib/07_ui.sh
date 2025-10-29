@@ -103,9 +103,10 @@ show_menu() {
     
     echo "${CYAN}メインメニュー${NC}"
     echo ""
-    echo "  ${LIGHT_GREEN}1.${NC} アプリ管理"
-    echo "  ${LIGHT_GREEN}2.${NC} ボリューム操作"
-    echo "  ${LIGHT_GREEN}3.${NC} ストレージ切り替え（内蔵⇄外部）"
+    echo "  ${LIGHT_GREEN}1.${NC} 🚀 クイックランチャー"
+    echo "  ${LIGHT_GREEN}2.${NC} アプリ管理"
+    echo "  ${LIGHT_GREEN}3.${NC} ボリューム操作"
+    echo "  ${LIGHT_GREEN}4.${NC} ストレージ切り替え（内蔵⇄外部）"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -121,10 +122,10 @@ show_menu() {
         fi
     fi
     
-    echo "  ${LIGHT_GREEN}4.${NC} ${eject_label}"
+    echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
     echo "  ${LIGHT_GREEN}0.${NC} 終了"
     echo ""
-    echo -n "${CYAN}選択 (0-4):${NC} "
+    echo -n "${CYAN}選択 (0-5):${NC} "
 }
 
 #######################################################
@@ -1013,8 +1014,14 @@ show_quick_launcher() {
                     ;;
             esac
             
-            printf "  %d. %-25s [%s] %s %-12s%s%s\n" \
-                "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$recent_mark" "$sudo_mark"
+            # Format: [⭐] number. name [icon] status
+            if [[ -n "$recent_mark" ]]; then
+                printf "  ⭐ %d. %-25s [%s] %s %-12s%s\n" \
+                    "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
+            else
+                printf "     %d. %-25s [%s] %s %-12s%s\n" \
+                    "$index" "$display_name" "$location_icon" "$status_icon" "$status_msg" "$sudo_mark"
+            fi
             ((index++))
         done
         
@@ -1087,6 +1094,9 @@ show_quick_launcher() {
                 fi
                 ;;
             0)
+                echo ""
+                print_info "終了します..."
+                echo ""
                 exit 0
                 ;;
             [pP])

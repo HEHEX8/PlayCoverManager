@@ -66,15 +66,18 @@ main() {
         
         case "$choice" in
             1)
-                app_management_menu
+                show_quick_launcher
                 ;;
             2)
-                individual_volume_control
+                app_management_menu
                 ;;
             3)
-                switch_storage_location
+                individual_volume_control
                 ;;
             4)
+                switch_storage_location
+                ;;
+            5)
                 eject_disk
                 ;;
             0)
