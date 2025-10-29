@@ -481,7 +481,7 @@ install_ipa_to_playcover() {
     
     local max_wait=300  # 5 minutes
     local elapsed=0
-    local check_interval=1  # 1 second for faster detection
+    local check_interval=2  # 2 seconds (balance between speed and CPU)
     local initial_check_done=false
     
     # PlayCover app settings path
@@ -499,22 +499,27 @@ install_ipa_to_playcover() {
         last_settings_mtime=$(stat -f %m "$app_settings_plist" 2>/dev/null || echo 0)
     fi
     
-    # Detection Method (v5.0.1 - Settings File Update Count - Unified):
-    # Ultra-simple approach based on real-world observation:
+    # Detection Method (v5.0.1 - File Stability Check):
+    # Improved approach that balances speed and accuracy:
     # 
     # BOTH NEW and OVERWRITE INSTALL:
-    #   - Wait for settings file 2nd update → Complete immediately
+    #   1. Wait for settings file 2nd update (basic completion signal)
+    #   2. Then verify file stability (no changes for N seconds)
+    #   3. Optionally check if PlayCover is still accessing the file
     # 
     # Reasoning:
-    #   - NEW: 1st update happens too early (still processing)
-    #   - OVERWRITE: 1st update is initial, 2nd is completion
-    #   - Unified approach: Always wait for 2nd update
+    #   - 2nd update indicates PlayCover finished main processing
+    #   - Stability check prevents false positives with large IPAs
+    #   - Small IPAs: Quick 2nd update + short stability check
+    #   - Large IPAs: Wait for genuine completion + stability
     # 
-    # No stability checks, no complex conditions.
-    # Just count settings file updates and complete on 2nd update.
-    #
-    # v5.0.1 update: Reduced check_interval to 1 second for faster detection
-    # (small IPAs like 180MB can complete in under 3 seconds)
+    # Parameters:
+    #   - check_interval: 2 seconds (balance between speed and CPU)
+    #   - stability_threshold: 4 seconds of no changes = stable
+    
+    local stability_threshold=4  # File must be stable for 4 seconds
+    local last_stable_mtime=0
+    local stable_duration=0
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
@@ -630,12 +635,32 @@ install_ipa_to_playcover() {
                                     last_settings_mtime=$current_settings_mtime
                                 fi
                                 
-                                # v5.0.1: Unified completion logic - Always wait for 2nd update
+                                # v5.0.1: Two-phase detection with stability check
                                 if [[ "$structure_valid" == true ]]; then
-                                    # Both NEW and OVERWRITE: Wait for 2nd update = Complete
+                                    # Phase 1: Wait for 2nd update (basic completion signal)
                                     if [[ $settings_update_count -ge 2 ]]; then
-                                        found=true
-                                        break
+                                        # Phase 2: Verify file stability
+                                        if [[ $current_settings_mtime -eq $last_stable_mtime ]]; then
+                                            # mtime unchanged - accumulate stable duration
+                                            stable_duration=$((stable_duration + check_interval))
+                                            
+                                            # If stable for threshold duration, check if PlayCover is done
+                                            if [[ $stable_duration -ge $stability_threshold ]]; then
+                                                # Optional: Verify PlayCover is not actively writing
+                                                if lsof "$app_settings_plist" 2>/dev/null | grep -q "PlayCover"; then
+                                                    # PlayCover still accessing file - reset and continue
+                                                    stable_duration=0
+                                                else
+                                                    # File is stable AND PlayCover is not writing - complete!
+                                                    found=true
+                                                    break
+                                                fi
+                                            fi
+                                        else
+                                            # mtime changed - reset stability counter
+                                            last_stable_mtime=$current_settings_mtime
+                                            stable_duration=0
+                                        fi
                                     fi
                                 fi
                             fi
@@ -681,13 +706,15 @@ install_ipa_to_playcover() {
         /bin/sleep $check_interval
         elapsed=$((elapsed + check_interval))
         
-        # Show progress indicator with detailed status (v5.0.1 - Unified)
-        if [[ $settings_update_count -ge 2 ]]; then
-            echo -n "✅"  # Complete (shouldn't reach here)
+        # Show progress indicator with detailed status (v5.0.1 - Stability Check)
+        if [[ $settings_update_count -ge 2 ]] && [[ $stable_duration -gt 0 ]]; then
+            echo -n "⏳"  # 2nd update detected, verifying stability
+        elif [[ $settings_update_count -ge 2 ]]; then
+            echo -n "◇"  # 2nd update detected (starting stability check)
         elif [[ $settings_update_count -eq 1 ]]; then
-            echo -n "◇"  # 1st update (waiting for 2nd)
+            echo -n "◆"  # 1st update (waiting for 2nd)
         elif [[ $last_settings_mtime -gt 0 ]]; then
-            echo -n "◆"  # Settings file exists but not updated yet
+            echo -n "◇"  # Settings file exists but not updated yet
         else
             echo -n "."  # Waiting for 1st update
         fi
