@@ -23,7 +23,7 @@
 #   7. Create PlayCover volume
 #   8. Create initial mapping
 #
-# Version: 5.0.0-alpha2
+# Version: 5.0.1
 # Part of: Modular Architecture Refactoring
 
 #######################################################
