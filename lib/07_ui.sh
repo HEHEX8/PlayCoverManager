@@ -1002,23 +1002,10 @@ show_quick_launcher() {
             bundle_ids+=("$bundle_id")
             app_paths+=("$app_path")
             
-            # Check if this is the most recent app (mark with star but don't reorder)
-            local recent_mark=""
-            if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                recent_mark="⭐ "
-                recent_count=1
-            fi
-            
             # Get storage state
             local container_path=$(get_container_path "$bundle_id")
             local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-            
-            # Check sudo necessity
-            local sudo_mark=""
-            if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                sudo_mark="🔐"
-            fi
             
             # Storage type icon (simple)
             local storage_icon=""
@@ -1034,9 +1021,23 @@ show_quick_launcher() {
                     ;;
             esac
             
-            # Format: [storage][sudo] [recent] number. name
-            printf "%s%-3s %-3s%d. %s\n" \
-                "$storage_icon" "$sudo_mark" "$recent_mark" "$index" "$display_name"
+            # Check sudo necessity
+            local sudo_mark="  "  # 2-space placeholder
+            if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
+                sudo_mark="🔐"
+            fi
+            
+            # Recent mark with proper spacing
+            local recent_display="   "  # 3-space placeholder
+            if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
+                recent_display="⭐ "
+                recent_count=1
+            fi
+            
+            # Format: [storage][sudo][recent] number. name
+            # Fixed width: storage(2) sudo(2) recent(3) = 7 chars for icons, then 2-digit number
+            printf "%s%s%s%2d. %s\n" \
+                "$storage_icon" "$sudo_mark" "$recent_display" "$index" "$display_name"
             ((index++))
         done
         
