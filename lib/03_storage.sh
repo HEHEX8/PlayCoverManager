@@ -435,31 +435,72 @@ _mount_for_capacity_check() {
     fi
 }
 
-# Perform rsync data transfer with common options
+# Perform fast file copy using fcp (or cp as fallback)
 # Returns: 0 on success, 1 on failure
-_perform_rsync_transfer() {
+_perform_fcp_transfer() {
     local source_path=$1
     local dest_path=$2
     local sync_mode=$3  # "sync" (with --delete) or "copy" (without --delete)
     
-    local rsync_opts="-avH --progress"
-    local exclude_opts="--exclude='.Spotlight-V100' --exclude='.fseventsd' --exclude='.Trashes' --exclude='.TemporaryItems' --exclude='.DS_Store' --exclude='.playcover_backup_*'"
+    print_info "データ転送を準備中..."
+    
+    # Count total files and size
+    local total_files=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    local source_size=$(get_container_size "$source_path")
+    
+    echo ""
+    print_info "📊 転送情報:"
+    print_info "  ファイル数: ${total_files}"
+    print_info "  データサイズ: ${source_size}"
+    echo ""
+    
+    # Determine which copy command to use
+    local copy_cmd=""
+    local copy_name=""
+    
+    if command -v fcp >/dev/null 2>&1; then
+        copy_cmd="fcp"
+        copy_name="fcp (高速並列コピー)"
+    else
+        copy_cmd="cp"
+        copy_name="cp (標準コピー)"
+    fi
+    
+    print_info "🚀 使用ツール: ${copy_name}"
     
     if [[ "$sync_mode" == "sync" ]]; then
-        rsync_opts="$rsync_opts --delete"
-        print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
-    else
-        rsync_opts="$rsync_opts --ignore-errors"
+        print_info "💡 同期モード: 転送後に余分なファイルを削除"
     fi
     
     echo ""
+    print_info "データ転送中..."
+    echo ""
     
-    # Execute rsync with all options
-    eval "/usr/bin/sudo /usr/bin/rsync $rsync_opts $exclude_opts \"$source_path/\" \"$dest_path/\""
-    local rsync_exit=$?
+    # Execute copy
+    local copy_exit=0
+    if [[ "$copy_cmd" == "fcp" ]]; then
+        # fcp: parallel copy with all CPU cores
+        /usr/bin/sudo fcp -r "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?
+    else
+        # cp: standard recursive copy
+        /usr/bin/sudo cp -a "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?
+    fi
     
-    # Check rsync exit code (0, 23, 24 are acceptable)
-    if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
+    if [[ $copy_exit -eq 0 ]]; then
+        # Handle sync mode: delete files in dest that don't exist in source
+        if [[ "$sync_mode" == "sync" ]]; then
+            echo ""
+            print_info "同期モード: 余分なファイルを削除中..."
+            
+            # Find files in dest that don't exist in source
+            while IFS= read -r dest_file; do
+                local rel_path="${dest_file#$dest_path/}"
+                if [[ ! -e "$source_path/$rel_path" ]]; then
+                    /usr/bin/sudo /bin/rm -rf "$dest_file" 2>/dev/null
+                fi
+            done < <(/usr/bin/find "$dest_path" -mindepth 1 2>/dev/null)
+        fi
+        
         echo ""
         print_success "データのコピーが完了しました"
         
@@ -469,7 +510,7 @@ _perform_rsync_transfer() {
         return 0
     else
         echo ""
-        print_error "データのコピーに失敗しました"
+        print_error "データのコピーに失敗しました (終了コード: $copy_exit)"
         return 1
     fi
 }
@@ -1007,7 +1048,7 @@ perform_internal_to_external_migration() {
     
     # Copy data from internal to external (using unified helper)
     print_info "データを同期転送中... (進捗が表示されます)"
-    if ! _perform_rsync_transfer "$source_path" "$temp_mount" "sync"; then
+    if ! _perform_fcp_transfer "$source_path" "$temp_mount" "sync"; then
         print_info "一時マウントをクリーンアップ中..."
         unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
@@ -1237,7 +1278,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _perform_rsync_transfer "$source_mount" "$target_path" "copy"; then
+    if ! _perform_fcp_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
