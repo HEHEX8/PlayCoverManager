@@ -739,7 +739,31 @@ individual_volume_control() {
             status_line="❌ ボリュームが見つかりません"
         elif [[ $vol_status -eq 0 ]]; then
             # Volume is mounted
-            if [[ "$actual_mount" == "$target_path" ]]; then
+            # Additional check: if mount point is empty, treat as unmounted (stale cache protection)
+            if [[ -z "$actual_mount" ]]; then
+                # Cache might be stale, treat as unmounted
+                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+                case "$storage_mode" in
+                    "none")
+                        status_line="⚪️ 未マウント"
+                        ;;
+                    "internal_intentional")
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_intentional"
+                        ;;
+                    "internal_intentional_empty")
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_intentional_empty"
+                        ;;
+                    "internal_contaminated")
+                        status_line="⚪️ 未マウント"
+                        extra_info="internal_contaminated"
+                        ;;
+                    *)
+                        status_line="⚪️ 未マウント"
+                        ;;
+                esac
+            elif [[ "$actual_mount" == "$target_path" ]]; then
                 status_line="🟢 マウント済: ${actual_mount}"
             else
                 status_line="⚠️  マウント位置異常: ${actual_mount}"

@@ -1193,8 +1193,14 @@ get_volume_info_cached() {
         echo "${device}|${mount_point}"
         
         # Return status based on cached data
+        # IMPORTANT: Double-check mount_point to ensure cache accuracy
         if [[ "$exists" == "0" ]]; then
-            return 0  # Mounted
+            # Status says mounted, but verify mount_point is not empty
+            if [[ -n "$mount_point" ]]; then
+                return 0  # Mounted (verified)
+            else
+                return 2  # Cache inconsistency: status=0 but no mount point
+            fi
         elif [[ "$exists" == "1" ]]; then
             return 1  # Not exists
         else
