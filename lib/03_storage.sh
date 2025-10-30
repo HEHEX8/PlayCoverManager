@@ -442,30 +442,117 @@ _perform_rsync_transfer() {
     local dest_path=$2
     local sync_mode=$3  # "sync" (with --delete) or "copy" (without --delete)
     
-    local rsync_opts="-avH --progress"
+    local start_time=$(date +%s)
+    
+    # Count total files to transfer
+    print_info "転送ファイル数をカウント中..."
+    local total_files=$(/usr/bin/find "$source_path" -type f \
+        ! -path "*/.DS_Store" \
+        ! -path "*/.Spotlight-V100/*" \
+        ! -path "*/.fseventsd/*" \
+        ! -path "*/.Trashes/*" \
+        ! -path "*/.TemporaryItems/*" \
+        2>/dev/null | wc -l | /usr/bin/xargs)
+    
+    if (( total_files == 0 )); then
+        print_warning "転送するファイルがありません"
+        return 0
+    fi
+    
+    print_info "転送ファイル数: ${total_files}"
+    
+    if [[ "$sync_mode" == "sync" ]]; then
+        print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
+    fi
+    echo ""
+    
+    local rsync_opts="-avH --info=progress2"
     local exclude_opts="--exclude='.Spotlight-V100' --exclude='.fseventsd' --exclude='.Trashes' --exclude='.TemporaryItems' --exclude='.DS_Store' --exclude='.playcover_backup_*'"
     
     if [[ "$sync_mode" == "sync" ]]; then
         rsync_opts="$rsync_opts --delete"
-        print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
     else
         rsync_opts="$rsync_opts --ignore-errors"
     fi
     
-    echo ""
+    # Run rsync in background and monitor progress
+    local rsync_pid=""
+    local rsync_output="/tmp/rsync_output_$$"
     
-    # Execute rsync with all options
-    eval "/usr/bin/sudo /usr/bin/rsync $rsync_opts $exclude_opts \"$source_path/\" \"$dest_path/\""
+    (eval "/usr/bin/sudo /usr/bin/rsync $rsync_opts $exclude_opts \"$source_path/\" \"$dest_path/\"" > "$rsync_output" 2>&1) &
+    rsync_pid=$!
+    
+    # Monitor progress
+    local initial_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    local copied=0
+    
+    while kill -0 $rsync_pid 2>/dev/null; do
+        # Count files copied so far
+        local current_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        copied=$((current_count - initial_count))
+        
+        # Ensure copied doesn't exceed total_files
+        if (( copied > total_files )); then
+            copied=$total_files
+        fi
+        
+        # Calculate percentage and speed
+        local percent=0
+        if (( total_files > 0 )); then
+            percent=$(( copied * 100 / total_files ))
+        fi
+        
+        # Calculate speed (files per second)
+        local elapsed=$(($(date +%s) - start_time))
+        local speed=0
+        if (( elapsed > 0 )); then
+            speed=$(( copied / elapsed ))
+        fi
+        
+        # Progress bar (50 chars wide)
+        local bar_width=50
+        local filled=$(( percent * bar_width / 100 ))
+        local bar=""
+        for ((i=0; i<bar_width; i++)); do
+            if (( i < filled )); then
+                bar="${bar}█"
+            else
+                bar="${bar}░"
+            fi
+        done
+        
+        # Display progress with fixed width formatting
+        printf "\r[%s] %3d%% | %${#total_files}d/%d files | %4d files/s  " \
+            "$bar" "$percent" "$copied" "$total_files" "$speed"
+        
+        sleep 0.2
+    done
+    
+    # Wait for rsync to finish and get exit code
+    wait $rsync_pid
     local rsync_exit=$?
+    
+    # Final count
+    local final_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    copied=$((final_count - initial_count))
+    
+    # Clear progress line
+    printf "\r%*s\r" 100 ""
+    
+    # Clean up output file
+    /bin/rm -f "$rsync_output"
+    
+    local end_time=$(date +%s)
+    local elapsed=$((end_time - start_time))
     
     # Check rsync exit code (0, 23, 24 are acceptable)
     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
         echo ""
         print_success "データのコピーが完了しました"
         
-        local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
         local copied_size=$(get_container_size "$dest_path")
-        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+        print_info "  コピー完了: ${final_count} ファイル (${copied_size})"
+        print_info "  処理時間: ${elapsed}秒"
         return 0
     else
         echo ""
