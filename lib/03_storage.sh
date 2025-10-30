@@ -480,7 +480,9 @@ _perform_fcp_transfer() {
     local copy_exit=0
     if [[ "$copy_cmd" == "fcp" ]]; then
         # fcp: parallel copy with all CPU cores
-        /usr/bin/sudo fcp -r "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?
+        # Note: fcp copies contents, not the directory itself
+        # Use shell expansion to copy all files/dirs from source to dest
+        /usr/bin/sudo /bin/bash -c "fcp \"$source_path\"/* \"$dest_path/\"" 2>&1 || copy_exit=$?
     else
         # cp: standard recursive copy
         /usr/bin/sudo cp -a "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?
