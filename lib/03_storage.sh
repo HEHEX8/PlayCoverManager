@@ -449,44 +449,105 @@ _perform_data_transfer() {
 
 
 
-# Perform ditto-based data transfer (macOS native, fastest)
+# Perform ditto-based data transfer
 # Returns: 0 on success, 1 on failure
 _perform_ditto_transfer() {
     local source_path=$1
     local dest_path=$2
     local sync_mode=$3
     
-    if [[ "$sync_mode" == "sync" ]]; then
-        print_info "💡 ditto: macOS最適化同期コピー（削除されたファイルも反映）"
-    else
-        print_info "💡 ditto: macOS最適化コピー（リソースフォーク・拡張属性を保持）"
-    fi
-    echo ""
-    
     local start_time=$(date +%s)
     
-    # First, remove system files from source before copying
-    print_info "システムファイルを除外中..."
+    # Count total files to transfer
+    print_info "転送ファイル数をカウント中..."
+    local total_files=$(/usr/bin/find "$source_path" -type f \
+        ! -path "*/.DS_Store" \
+        ! -path "*/.Spotlight-V100/*" \
+        ! -path "*/.fseventsd/*" \
+        ! -path "*/.Trashes/*" \
+        ! -path "*/.TemporaryItems/*" \
+        2>/dev/null | wc -l | /usr/bin/xargs)
+    
+    if (( total_files == 0 )); then
+        print_warning "転送するファイルがありません"
+        return 0
+    fi
+    
+    print_info "転送ファイル数: ${total_files}"
+    echo ""
+    
+    # Remove system files from source before copying
     /usr/bin/sudo /bin/rm -rf "$source_path/.DS_Store" 2>/dev/null || true
     /usr/bin/sudo /bin/rm -rf "$source_path/.Spotlight-V100" 2>/dev/null || true
     /usr/bin/sudo /bin/rm -rf "$source_path/.fseventsd" 2>/dev/null || true
     /usr/bin/sudo /bin/rm -rf "$source_path/.Trashes" 2>/dev/null || true
     /usr/bin/sudo /bin/rm -rf "$source_path/.TemporaryItems" 2>/dev/null || true
     
-    # Copy using ditto with sudo
-    print_info "データ転送中..."
-    /usr/bin/sudo /usr/bin/ditto "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
-        # Show progress (filter out permission errors for system files)
-        if [[ ! "$line" =~ \.DS_Store ]] && \
-           [[ ! "$line" =~ \.Spotlight ]] && \
-           [[ ! "$line" =~ \.fseventsd ]] && \
-           [[ ! "$line" =~ \.Trashes ]] && \
-           [[ ! "$line" =~ \.TemporaryItems ]]; then
-            echo "$line"
+    # Start ditto in background and monitor progress
+    local ditto_pid=""
+    local progress_file="/tmp/ditto_progress_$$"
+    
+    # Run ditto in background
+    (/usr/bin/sudo /usr/bin/ditto -V "$source_path/" "$dest_path/" > "$progress_file" 2>&1) &
+    ditto_pid=$!
+    
+    # Monitor progress
+    local copied=0
+    local last_copied=0
+    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local spinner_idx=0
+    
+    while kill -0 $ditto_pid 2>/dev/null; do
+        # Count files copied so far
+        copied=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        
+        # Calculate percentage and speed
+        local percent=0
+        if (( total_files > 0 )); then
+            percent=$(( copied * 100 / total_files ))
         fi
+        
+        # Calculate speed (files per second)
+        local elapsed=$(($(date +%s) - start_time))
+        local speed=0
+        if (( elapsed > 0 )); then
+            speed=$(( copied / elapsed ))
+        fi
+        
+        # Progress bar (50 chars wide)
+        local bar_width=50
+        local filled=$(( percent * bar_width / 100 ))
+        local bar=""
+        for ((i=0; i<bar_width; i++)); do
+            if (( i < filled )); then
+                bar="${bar}█"
+            else
+                bar="${bar}░"
+            fi
+        done
+        
+        # Display progress
+        local spinner="${spinner_chars[$spinner_idx]}"
+        printf "\r${spinner} [${bar}] ${percent}%% | ${copied}/${total_files} ファイル | ${speed} files/s  "
+        
+        # Update spinner
+        spinner_idx=$(( (spinner_idx + 1) % ${#spinner_chars[@]} ))
+        
+        sleep 0.1
     done
     
-    local ditto_exit=${PIPESTATUS[0]}
+    # Wait for ditto to finish and get exit code
+    wait $ditto_pid
+    local ditto_exit=$?
+    
+    # Final count
+    copied=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    
+    # Clear progress line
+    printf "\r%*s\r" 100 ""
+    
+    # Remove progress file
+    /bin/rm -f "$progress_file" 2>/dev/null
     
     # Remove system files from destination
     /usr/bin/sudo /bin/rm -rf "$dest_path/.DS_Store" 2>/dev/null || true
@@ -499,7 +560,6 @@ _perform_ditto_transfer() {
     if [[ $ditto_exit -eq 0 ]] && [[ "$sync_mode" == "sync" ]]; then
         print_info "同期モード: 余分なファイルを削除中..."
         
-        # Find files in dest that don't exist in source and delete them
         local deleted=0
         while IFS= read -r dest_file; do
             local rel_path="${dest_file#$dest_path/}"
@@ -521,9 +581,8 @@ _perform_ditto_transfer() {
     echo ""
     if [[ $ditto_exit -eq 0 ]]; then
         print_success "データのコピーが完了しました"
-        local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
         local copied_size=$(get_container_size "$dest_path")
-        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+        print_info "  コピー完了: ${copied} ファイル (${copied_size})"
         print_info "  処理時間: ${elapsed}秒"
         return 0
     else
