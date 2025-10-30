@@ -455,8 +455,7 @@ _perform_cp_transfer() {
     echo ""
     
     # Use cp for reliable local disk copying
-    # cp -a is optimized by macOS and handles all edge cases properly
-    print_info "🚀 使用ツール: cp (macOS最適化済み)"
+    print_info "🚀 使用ツール: cp"
     
     if [[ "$sync_mode" == "sync" ]]; then
         print_info "💡 同期モード: 転送後に余分なファイルを削除"
@@ -469,9 +468,8 @@ _perform_cp_transfer() {
     # Execute copy
     local copy_exit=0
     
-    # Always use cp for reliable directory copying
-    # fcp doesn't handle existing files well and lacks sync capabilities
-    # cp -a preserves all attributes and is reliable for local disk operations
+    # Use cp -a for directory copying
+    # Preserves all attributes and handles existing files properly
     /usr/bin/sudo cp -av "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
         # Show progress by printing every 100th file
         if (( RANDOM % 100 == 0 )); then
