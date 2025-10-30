@@ -851,6 +851,9 @@ switch_storage_location() {
         clear
         print_header "ストレージ切替（内蔵⇄外部）"
         
+        # Preload all volume information into cache for fast display
+        preload_all_volume_cache
+        
         local mappings_content=$(read_mappings)
         
         if [[ -z "$mappings_content" ]]; then

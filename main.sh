@@ -97,7 +97,7 @@ main() {
             5)
                 eject_disk
                 ;;
-            0|q|Q)
+            [qQ])
                 clear
                 # Close Terminal window using AppleScript
                 osascript -e 'tell application "Terminal" to close first window' & exit 0

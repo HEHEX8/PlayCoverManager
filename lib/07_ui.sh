@@ -376,7 +376,7 @@ show_menu() {
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
-    echo "  ${LIGHT_GREEN}0.${NC} 終了  ${LIGHT_GRAY}q.${NC} 終了"
+    echo "  ${LIGHT_GRAY}q.${NC} 終了"
     echo ""
     echo "${DIM_GRAY}空Enterで最新の情報に更新${NC}"
     echo ""
