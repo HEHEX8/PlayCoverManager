@@ -873,7 +873,7 @@ individual_volume_control() {
     
     # Empty Enter - refresh cache and redisplay menu
     if [[ -z "$choice" ]]; then
-        invalidate_all_volume_caches
+        refresh_all_volume_caches
         individual_volume_control
         return
     fi
