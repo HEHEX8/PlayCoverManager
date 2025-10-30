@@ -1245,6 +1245,33 @@ invalidate_all_volume_caches() {
     VOLUME_STATE_CACHE=()
 }
 
+# Preload all volume information into cache
+# Call this before displaying main menu to populate cache with all volumes
+# Usage: preload_all_volume_cache
+preload_all_volume_cache() {
+    if [[ "$CACHE_ENABLED" != true ]]; then
+        return 0
+    fi
+    
+    # Read all volume names from mapping file
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 0
+    fi
+    
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Preload this volume's info into cache
+        get_volume_info_cached "$volume_name" >/dev/null
+    done < "$MAPPING_FILE"
+    
+    # Also preload PlayCover main volume
+    if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
+        get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
+    fi
+}
+
 # Temporarily disable cache for a code block
 # Usage:
 #   with_cache_disabled() {

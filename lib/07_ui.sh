@@ -331,6 +331,10 @@ show_quick_status() {
 show_menu() {
     clear
     
+    # Preload all volume information into cache for fast menu display
+    # This happens once per menu display cycle
+    preload_all_volume_cache
+    
     echo ""
     echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.1.0${NC}"
     echo ""
@@ -360,6 +364,8 @@ show_menu() {
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
     echo "  ${LIGHT_GREEN}0.${NC} 終了"
+    echo ""
+    echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
     echo ""
     echo -n "${CYAN}選択 (0-5):${NC} "
 }
