@@ -610,31 +610,6 @@ _handle_empty_external_to_internal() {
     return 0
 }
 
-# Cleanup and unmount after migration
-_cleanup_and_unmount() {
-    local mount_point=$1
-    local is_temp_mount=$2  # "true" or "false"
-    local volume_name=$3
-    local bundle_id=$4
-    
-    if [[ "$is_temp_mount" == "true" ]]; then
-        print_info "一時マウントをクリーンアップ中..."
-        unmount_with_fallback "$mount_point" "silent" "$volume_name" || true
-        /bin/sleep 1
-        cleanup_temp_dir "$mount_point" true
-        return 0
-    else
-        print_info "外部ボリュームをアンマウント中..."
-        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
-            print_error "外部ボリュームのアンマウントに失敗しました"
-            print_warning "ボリュームがまだマウントされている可能性があります"
-            print_info "手動でアンマウントしてください"
-            return 1
-        fi
-        return 0
-    fi
-}
-
 #######################################################
 # Storage Switching Functions
 #######################################################

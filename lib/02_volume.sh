@@ -366,70 +366,6 @@ mount_app_volume() {
 # Volume Creation Functions
 #######################################################
 
-# Create new APFS volume for app
-# Args: volume_name, disk_identifier, size_gb
-# Returns: 0 on success, 1 on failure
-create_app_volume() {
-    local volume_name=$1
-    local disk_identifier=$2
-    local size_gb=${3:-10}
-    
-    print_info "ボリュームを作成中: ${volume_name} (${size_gb}GB)"
-    
-    # Create APFS volume with specified size
-    if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$disk_identifier" APFS "$volume_name" -size "${size_gb}g" >/dev/null 2>&1; then
-        print_success "ボリュームの作成に成功しました"
-        # Invalidate cache after successful creation (new volume appeared)
-        invalidate_volume_cache "$volume_name"
-        return 0
-    else
-        print_error "ボリュームの作成に失敗しました"
-        return 1
-    fi
-}
-
-# Delete APFS volume
-# Args: volume_name
-# Returns: 0 on success, 1 on failure
-delete_app_volume() {
-    local volume_name=$1
-    
-    # Get all volume info in one call (more efficient than separate checks)
-    local vol_info=$(get_volume_info "$volume_name")
-    local vol_status=$?
-    
-    if [[ $vol_status -eq 1 ]]; then
-        print_warning "ボリューム '${volume_name}' は存在しません"
-        return 0
-    fi
-    
-    local device="${vol_info%%|*}"
-    local mount_point="${vol_info#*|}"
-    
-    if [[ -z "$device" ]]; then
-        print_error "ボリュームのデバイスノードを取得できませんでした"
-        return 1
-    fi
-    
-    print_info "ボリュームを削除中: ${volume_name}"
-    
-    # Unmount first if mounted
-    if [[ -n "$mount_point" ]]; then
-        unmount_with_fallback "$device" "silent" "$volume_name"
-    fi
-    
-    # Delete volume
-    if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
-        print_success "ボリュームの削除に成功しました"
-        # Invalidate cache after successful deletion
-        invalidate_volume_cache "$volume_name"
-        return 0
-    else
-        print_error "ボリュームの削除に失敗しました"
-        return 1
-    fi
-}
-
 #######################################################
 # Utility Functions
 #######################################################
@@ -457,31 +393,6 @@ check_playcover_volume_mount() {
         fi
     fi
     return 1
-}
-
-# Ensure PlayCover main volume is mounted (dependency for app volumes)
-# Returns: 0 if already mounted or successfully mounted, 1 on failure
-ensure_playcover_main_volume() {
-    # Check if already mounted
-    if check_playcover_volume_mount; then
-        return 0
-    fi
-    
-    # Get device in one call (more efficient than separate exists + get_device)
-    local device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
-    if [[ $? -ne 0 ]] || [[ -z "$device" ]]; then
-        return 1
-    fi
-    
-    # Create mount point if needed
-    /usr/bin/sudo /bin/mkdir -p "$PLAYCOVER_CONTAINER" 2>/dev/null
-    
-    # Mount PlayCover volume
-    if mount_volume "/dev/$device" "$PLAYCOVER_CONTAINER" "nobrowse" "silent"; then
-        return 0
-    else
-        return 1
-    fi
 }
 
 #######################################################

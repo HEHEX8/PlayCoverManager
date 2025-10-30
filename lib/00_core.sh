@@ -35,7 +35,7 @@
 #
 
 #######################################################
-# Color & Style Definitions
+# 色とスタイル定義
 #######################################################
 # 最適化済み: ターミナル背景 RGB(28,28,28) / #1C1C1C
 # 人間の色覚特性考慮: 眩しさ軽減 + 視認性向上
@@ -211,48 +211,6 @@ print_warning() {
 
 print_info() {
     echo "${INFO}ℹ️  $1${NC}"
-}
-
-print_highlight() {
-    echo "${HIGHLIGHT}▶ $1${NC}"
-}
-
-print_dim() {
-    echo "${DIM}${GRAY}$1${NC}"
-}
-
-print_bold() {
-    echo "${BOLD}${WHITE}$1${NC}"
-}
-
-print_underline() {
-    echo "${UNDERLINE}$1${NC}"
-}
-
-# Print functions with newline (ln versions)
-print_success_ln() {
-    echo "${SUCCESS}✅ $1${NC}"
-    echo ""
-}
-
-print_error_ln() {
-    echo "${ERROR}❌ $1${NC}"
-    echo ""
-}
-
-print_warning_ln() {
-    echo "${WARNING}⚠️  $1${NC}"
-    echo ""
-}
-
-print_info_ln() {
-    echo "${INFO}ℹ️  $1${NC}"
-    echo ""
-}
-
-print_highlight_ln() {
-    echo "${HIGHLIGHT}▶ $1${NC}"
-    echo ""
 }
 
 # Debug and verbose output functions (controlled by environment variables)
@@ -708,49 +666,6 @@ unmount_with_fallback() {
     fi
 }
 
-# Check mount status and compare with expected path
-# Args: volume_name, expected_path
-# Returns: 0 if mounted at expected path, 1 if not mounted, 2 if mounted elsewhere
-# Output: Current mount point (if mounted)
-check_mount_status() {
-    local volume_name="$1"
-    local expected_path="$2"
-    
-    local current_mount=$(get_mount_point "$volume_name")
-    
-    if [[ -z "$current_mount" ]]; then
-        return 1  # Not mounted
-    fi
-    
-    # Normalize paths for comparison
-    local normalized_current="${current_mount%/}"
-    local normalized_expected="${expected_path%/}"
-    
-    echo "$current_mount"
-    
-    if [[ "$normalized_current" == "$normalized_expected" ]]; then
-        return 0  # Correctly mounted
-    else
-        return 2  # Mounted at wrong location
-    fi
-}
-
-# Ensure directory exists with proper ownership
-# Args: directory_path, [owner_uid:gid]
-# Returns: 0 on success, 1 on failure
-ensure_directory() {
-    local dir_path="$1"
-    local owner="${2:-$(id -u):$(id -g)}"
-    
-    if [[ ! -d "$dir_path" ]]; then
-        /usr/bin/sudo /bin/mkdir -p "$dir_path" || return 1
-    fi
-    
-    /usr/bin/sudo /usr/sbin/chown -R "$owner" "$dir_path" || return 1
-    
-    return 0
-}
-
 # Validate volume and get its device
 # Args: volume_name
 # Returns: 0 on success, 1 on failure
@@ -770,84 +685,6 @@ validate_and_get_device() {
     
     echo "$device"
     return 0
-}
-
-# Safe unmount with app running check
-# Args: volume_name, bundle_id, display_name
-# Returns: 0 on success, 1 on failure (shows error)
-safe_unmount_volume() {
-    local volume_name="$1"
-    local bundle_id="$2"
-    local display_name="${3:-$volume_name}"
-    
-    # Check if app is running
-    if is_app_running "$bundle_id"; then
-        print_error "アプリ '${display_name}' が実行中のため、アンマウントできません"
-        return 1
-    fi
-    
-    # Get device
-    local device=$(validate_and_get_device "$volume_name")
-    if [[ $? -ne 0 ]]; then
-        print_error "ボリューム '${volume_name}' が見つかりません"
-        return 1
-    fi
-    
-    # Try unmount with force fallback
-    if unmount_with_fallback "$device" "silent"; then
-        return 0
-    else
-        print_error "ボリューム '${display_name}' のアンマウントに失敗しました"
-        return 1
-    fi
-}
-
-# Mount volume with existence and conflict checks
-# Args: volume_name, target_path, bundle_id, [display_name]
-# Returns: 0 on success, 1 on failure (shows error)
-safe_mount_volume() {
-    local volume_name="$1"
-    local target_path="$2"
-    local bundle_id="$3"
-    local display_name="${4:-$volume_name}"
-    
-    # Check if app is running
-    if is_app_running "$bundle_id"; then
-        print_error "アプリ '${display_name}' が実行中のため、マウントできません"
-        return 1
-    fi
-    
-    # Validate volume exists
-    if ! volume_exists "$volume_name"; then
-        print_error "ボリューム '${volume_name}' が見つかりません"
-        return 1
-    fi
-    
-    # Check current mount status
-    local current_mount=$(get_mount_point "$volume_name")
-    
-    if [[ -n "$current_mount" ]]; then
-        # Already mounted somewhere
-        if [[ "$current_mount" == "$target_path" ]]; then
-            # Already mounted at correct location
-            return 0
-        else
-            # Mounted at wrong location, need to remount
-            local device=$(get_volume_device "$volume_name")
-            if ! unmount_with_fallback "$device" "silent"; then
-                print_error "既存のマウントを解除できません"
-                return 1
-            fi
-        fi
-    fi
-    
-    # Now mount to target location
-    if mount_app_volume "$volume_name" "$target_path" "$bundle_id"; then
-        return 0
-    else
-        print_error "ボリューム '${display_name}' のマウントに失敗しました"
-        return 1
-    fi
 }
 
 # Quit app before volume operations
@@ -930,15 +767,6 @@ is_app_running() {
     fi
     
     /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1
-}
-
-# Get PlayCover external path
-get_playcover_external_path() {
-    if [[ -d "$PLAYCOVER_CONTAINER" ]]; then
-        echo "${PLAYCOVER_CONTAINER}/${PLAYCOVER_APP_NAME}"
-    else
-        echo ""
-    fi
 }
 
 # Exit with cleanup
@@ -1305,23 +1133,6 @@ with_cache_disabled() {
     local result=$?
     CACHE_ENABLED="$original_state"
     return $result
-}
-
-# Get cache statistics (for debugging/monitoring)
-# Output: Number of cached volumes and list of cached volume names
-get_cache_stats() {
-    local count=0
-    local volumes=()
-    
-    for key in "${(@k)VOLUME_STATE_CACHE}"; do
-        ((count++))
-        volumes+=("$key")
-    done
-    
-    echo "Cached volumes: $count"
-    if [[ $count -gt 0 ]]; then
-        echo "Volume names: ${(j:, :)volumes}"
-    fi
 }
 
 # Wrapper functions for backward compatibility with caching support

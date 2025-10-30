@@ -36,33 +36,6 @@ release_mapping_lock() {
 # Mapping File Operations
 #######################################################
 
-# Check if mapping file exists, create if not
-# Returns: 0 if exists, 1 if not found or created
-check_mapping_file() {
-    # Ensure data directory exists
-    if [[ ! -d "$DATA_DIR" ]]; then
-        print_info "データディレクトリを作成します: $DATA_DIR"
-        /bin/mkdir -p "$DATA_DIR"
-        
-        if [[ ! -d "$DATA_DIR" ]]; then
-            print_error "データディレクトリの作成に失敗しました"
-            return 1
-        fi
-    fi
-    
-    # Check if mapping file exists (don't create empty file)
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        return 1
-    fi
-    
-    # Check if mapping file has content
-    if [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
-        return 1
-    fi
-    
-    return 0
-}
-
 # Ensure mapping file exists (creates empty file if needed for installation)
 # Returns: 0 on success, 1 on failure
 ensure_mapping_file() {
@@ -258,20 +231,6 @@ get_recent_app() {
     
     if [[ -n "$recent_bundle_id" ]]; then
         echo "$recent_bundle_id"
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Check if specific app is the most recently launched
-# Args: bundle_id
-# Returns: 0 if this is the most recent, 1 if not
-is_recent_app() {
-    local bundle_id=$1
-    local recent=$(get_recent_app 2>/dev/null)
-    
-    if [[ "$recent" == "$bundle_id" ]]; then
         return 0
     else
         return 1

@@ -946,44 +946,6 @@ individual_volume_control() {
 }
 
 #######################################################
-# Mapping Info Display
-#######################################################
-
-show_mapping_info() {
-    clear
-    print_header "マッピング情報"
-    
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_warning "マッピングファイルが見つかりません"
-        wait_for_enter
-        return
-    fi
-    
-    local mappings_content=$(read_mappings)
-    
-    if [[ -z "$mappings_content" ]]; then
-        print_warning "登録されているアプリがありません"
-        wait_for_enter
-        return
-    fi
-    
-    echo "登録されているアプリ:"
-    echo ""
-    
-    local index=1
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        echo "  ${index}. ${GREEN}${display_name}${NC}"
-        echo "      ボリューム名: ${volume_name}"
-        echo "      Bundle ID: ${bundle_id}"
-        echo ""
-        ((index++))
-    done <<< "$mappings_content"
-    
-    echo -n "Enterキーで続行..."
-    read
-}
-
-#######################################################
 # Quick Launcher UI
 #######################################################
 
