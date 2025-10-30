@@ -476,16 +476,15 @@ _perform_rsync_transfer() {
     fi
     echo ""
     
-    local rsync_opts="-avH --info=progress2"
+    # Use macOS built-in rsync without --info=progress2 (not supported)
+    local rsync_opts="-a"  # Archive mode: recursive, preserve permissions, times, etc.
     local exclude_opts="--exclude='.Spotlight-V100' --exclude='.fseventsd' --exclude='.Trashes' --exclude='.TemporaryItems' --exclude='.DS_Store' --exclude='.playcover_backup_*'"
     
     if [[ "$sync_mode" == "sync" ]]; then
         rsync_opts="$rsync_opts --delete"
-    else
-        rsync_opts="$rsync_opts --ignore-errors"
     fi
     
-    # Run rsync in background and monitor progress
+    # Run rsync in background and monitor progress with custom implementation
     local rsync_pid=""
     local rsync_output="/tmp/rsync_output_$$"
     
