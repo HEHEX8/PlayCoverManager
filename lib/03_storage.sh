@@ -634,7 +634,7 @@ switch_storage_location() {
                 # Volume is mounted somewhere
                 if [[ "$actual_mount" == "$target_path" ]]; then
                     # Correctly mounted = external storage mode
-                    location_text="${BOLD}${BLUE}💾 外部ストレージモード${NC}"
+                    location_text="${BOLD}${BLUE}⚡ 外部ストレージモード${NC}"
                     free_space=$(get_external_drive_free_space "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                 else
@@ -771,7 +771,7 @@ switch_storage_location() {
                 ;;
             "external")
                 local external_free=$(get_external_drive_free_space "$volume_name")
-                echo "  ${BOLD}💾 ${CYAN}外部ストレージ${NC}"
+                echo "  ${BOLD}⚡ ${CYAN}外部ストレージ${NC}"
                 echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${external_free}${NC}"
                 ;;
             *)
@@ -804,8 +804,8 @@ switch_storage_location() {
                     storage_free_bytes=999999999999
                 fi
                 
-                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}💾外部${NC} ${LIGHT_GRAY}へ移動${NC}"
-                echo "  ${BOLD}💾${CYAN}外部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}⚡外部${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "  ${BOLD}⚡${CYAN}外部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "external")
                 action="internal"
@@ -814,7 +814,7 @@ switch_storage_location() {
                 storage_location="内蔵ドライブ"
                 storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 
-                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}💾外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}⚡外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
                 echo "  ${BOLD}🏠${CYAN}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "none")

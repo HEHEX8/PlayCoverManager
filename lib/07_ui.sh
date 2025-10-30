@@ -308,7 +308,7 @@ show_quick_status() {
         local status_parts=()
         
         if [[ $external_count -gt 0 ]]; then
-            status_parts+=("${SKY_BLUE}💾 外部マウント: ${external_count}件${NC}")
+            status_parts+=("${SKY_BLUE}⚡ 外部マウント: ${external_count}件${NC}")
         fi
         
         if [[ $internal_count -gt 0 ]]; then
@@ -479,7 +479,7 @@ show_installed_apps() {
             
             if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
                 # Volume is mounted at correct location = external storage
-                storage_icon="💾 外部"
+                storage_icon="⚡ 外部"
             elif [[ -n "$actual_mount" ]]; then
                 # Volume is mounted but at wrong location
                 storage_icon="⚠️  位置異常"
@@ -1089,7 +1089,7 @@ show_quick_launcher() {
             local storage_icon=""
             case "$storage_mode" in
                 "external"|"external_wrong_location"|"none")
-                    storage_icon="💾"
+                    storage_icon="⚡"
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
                     storage_icon="🏠"
@@ -1112,10 +1112,10 @@ show_quick_launcher() {
                 recent_count=1
             fi
             
-            # Format: [storage][sudo][recent] number. name
-            # Fixed width: storage(2) sudo(2) recent(3) = 7 chars for icons, then 2-digit number
+            # Format: [sudo][storage][recent] number. name
+            # Fixed width: sudo(2) storage(2) recent(3) = 7 chars for icons, then 2-digit number
             printf "%s%s%s%2d. %s\n" \
-                "$storage_icon" "$sudo_mark" "$recent_display" "$index" "$display_name"
+                "$sudo_mark" "$storage_icon" "$recent_display" "$index" "$display_name"
             ((index++))
         done
         
