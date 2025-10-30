@@ -490,13 +490,22 @@ show_installed_apps() {
                 storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                 
                 # Skip apps with no data in both display and selection modes
-                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]] || [[ "$storage_mode" == "unknown" ]]; then
+                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "unknown" ]]; then
+                    continue
+                fi
+                
+                # Skip if external volume exists but not mounted (unless it's in internal mode)
+                if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_contaminated" ]]; then
+                    # External volume exists but not mounted, and not in internal mode - skip
                     continue
                 fi
                 
                 case "$storage_mode" in
                     "internal_intentional")
                         storage_icon="🍎 内部"
+                        ;;
+                    "internal_intentional_empty")
+                        storage_icon="🍎 内部(空)"
                         ;;
                     "internal_contaminated")
                         storage_icon="⚠️  内蔵データ検出"

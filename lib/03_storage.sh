@@ -708,8 +708,16 @@ switch_storage_location() {
             
             # Skip apps with no data - check storage_mode first
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+            
+            # Skip if: 1) no data exists, 2) volume doesn't exist, 3) not mounted and not internal mode
             if [[ "$storage_mode" == "none" ]] || [[ $vol_status -eq 1 ]]; then
                 # Skip apps with no data or non-existent volumes
+                continue
+            fi
+            
+            # Skip if external volume exists but not mounted (unless it's in internal mode)
+            if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_intentional_empty" ]] && [[ "$storage_mode" != "internal_contaminated" ]]; then
+                # External volume exists but not mounted, and not in internal mode - skip
                 continue
             fi
             
