@@ -971,8 +971,8 @@ switch_storage_location() {
         print_separator
         echo ""
         echo "${BOLD}${UNDERLINE}切り替えるアプリを選択してください${NC}"
-        echo "  ${BOLD}${CYAN}[番号]${NC} : データ位置切替"
-        echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る  ${BOLD}${LIGHT_GRAY}[q]${NC} : 終了"
+        echo "  ${BOLD}${CYAN}1-${#mappings_array}.${NC} データ位置切替"
+        echo "  ${BOLD}${LIGHT_GRAY}0.${NC} 戻る  ${BOLD}${LIGHT_GRAY}q.${NC} 終了"
         echo ""
         echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
         echo ""

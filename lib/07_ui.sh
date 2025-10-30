@@ -673,7 +673,7 @@ app_management_menu() {
         echo "${BOLD}${UNDERLINE}操作を選択してください${NC}"
         echo "  ${BOLD}${GREEN}1.${NC} アプリをインストール"
         echo "  ${BOLD}${RED}2.${NC} アプリをアンインストール"
-        echo "  ${BOLD}${LIGHT_GRAY}0.${NC} メインメニューに戻る  ${BOLD}${LIGHT_GRAY}q.${NC} 終了"
+        echo "  ${BOLD}${LIGHT_GRAY}0.${NC} 戻る  ${BOLD}${LIGHT_GRAY}q.${NC} 終了"
         echo ""
         echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
         echo ""
@@ -889,10 +889,12 @@ individual_volume_control() {
     print_separator
     echo ""
     echo "${BOLD}${UNDERLINE}操作を選択してください:${NC}"
-    echo "  ${BOLD}${CYAN}[番号]${NC} : 個別マウント/アンマウント"
-    echo "  ${BOLD}${GREEN}[m]${NC}    : 全ボリュームをマウント"
-    echo "  ${BOLD}${YELLOW}[u]${NC}    : 全ボリュームをアンマウント"
-    echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}  : 戻る  ${BOLD}${LIGHT_GRAY}[q]${NC} : 終了"
+    if [[ ${#selectable_array[@]} -gt 0 ]]; then
+        echo "  ${BOLD}${CYAN}1-$((display_index-1)).${NC} 個別マウント/アンマウント"
+    fi
+    echo "  ${BOLD}${GREEN}m.${NC} 全ボリュームをマウント"
+    echo "  ${BOLD}${YELLOW}u.${NC} 全ボリュームをアンマウント"
+    echo "  ${BOLD}${LIGHT_GRAY}0.${NC} 戻る  ${BOLD}${LIGHT_GRAY}q.${NC} 終了"
     echo ""
     echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
     echo ""
@@ -1144,7 +1146,7 @@ show_quick_launcher() {
             help_line="${help_line}  ⭐:前回起動 Enterで起動"
         fi
         echo "$help_line"
-        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [0]:管理画面  [q]:終了  ${DIM_GRAY}[r]:更新${NC}"
+        echo "  ${BOLD}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}p.${NC}PlayCover  ${BOLD}0.${NC}管理画面  ${BOLD}q.${NC}終了  ${DIM_GRAY}r.更新${NC}"
         print_separator
         echo ""
         
