@@ -81,21 +81,38 @@ for method in "${methods[@]}"; do
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
             echo "並列ワーカー数: $num_workers"
             
-            # Use find -exec with xargs properly
+            # Create file list and split into chunks for workers
+            temp_list="/tmp/benchmark_list_$$.txt"
             find "$SOURCE_DIR" -type f \
                 ! -path "*/.DS_Store" \
                 ! -path "*/.Spotlight-V100/*" \
                 ! -path "*/.fseventsd/*" \
                 ! -path "*/.Trashes/*" \
                 ! -path "*/.TemporaryItems/*" \
-                -print0 2>/dev/null | \
-            xargs -0 -n 1 -P "$num_workers" sh -c '
-                src="$0"
-                rel="${src#'"$SOURCE_DIR"'/}"
-                dst="'"$dest_dir"'/$rel"
-                dstdir=$(dirname "$dst")
-                mkdir -p "$dstdir" 2>/dev/null && cp -p "$src" "$dst" 2>/dev/null
-            '
+                2>/dev/null > "$temp_list"
+            
+            total_files=$(wc -l < "$temp_list" | xargs)
+            files_per_worker=$(( (total_files + num_workers - 1) / num_workers ))
+            
+            # Split file list and process in parallel
+            split -l "$files_per_worker" "$temp_list" "/tmp/benchmark_split_$$_"
+            
+            for split_file in /tmp/benchmark_split_$$_*; do
+                (
+                    while IFS= read -r src; do
+                        rel="${src#$SOURCE_DIR/}"
+                        dst="$dest_dir/$rel"
+                        dstdir=$(dirname "$dst")
+                        mkdir -p "$dstdir" 2>/dev/null && cp -p "$src" "$dst" 2>/dev/null
+                    done < "$split_file"
+                ) &
+            done
+            
+            # Wait for all workers to complete
+            wait
+            
+            # Cleanup
+            rm -f "$temp_list" /tmp/benchmark_split_$$_*
             ;;
     esac
     
