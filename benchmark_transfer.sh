@@ -21,13 +21,6 @@ if [[ $# -lt 2 ]]; then
     echo "Usage: $0 <source_dir> <dest_base_dir>"
     echo ""
     echo "Example: $0 /Volumes/External/data /tmp/benchmark"
-    echo ""
-    echo "This script will:"
-    echo "  1. Test rsync transfer"
-    echo "  2. Test cp transfer"
-    echo "  3. Test ditto transfer"
-    echo "  4. Test parallel cp transfer (xargs -P)"
-    echo "  5. Compare results"
     exit 1
 fi
 
@@ -45,10 +38,7 @@ if [[ -d "$DEST_BASE" ]]; then
     echo "既存のベンチマークディレクトリを削除中..."
     chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
     chmod -R u+w "$DEST_BASE" 2>/dev/null || true
-    rm -rf "$DEST_BASE" 2>/dev/null || {
-        echo "⚠️  通常削除失敗、sudoで削除を試みます..."
-        sudo rm -rf "$DEST_BASE"
-    }
+    rm -rf "$DEST_BASE" 2>/dev/null || sudo rm -rf "$DEST_BASE"
 fi
 
 mkdir -p "$DEST_BASE"
@@ -76,15 +66,12 @@ for method in "${methods[@]}"; do
     
     print_header "テスト: $method"
     
-    # Clean previous test with proper permissions
+    # Clean previous test
     if [[ -d "$dest_dir" ]]; then
         echo "前回のテストデータを削除中..."
         chflags -R nouchg,nouappnd "$dest_dir" 2>/dev/null || true
         chmod -R u+w "$dest_dir" 2>/dev/null || true
-        rm -rf "$dest_dir" 2>/dev/null || {
-            echo "⚠️  通常削除失敗、sudoで削除を試みます..."
-            sudo rm -rf "$dest_dir"
-        }
+        rm -rf "$dest_dir" 2>/dev/null || sudo rm -rf "$dest_dir"
     fi
     
     mkdir -p "$dest_dir"
@@ -101,68 +88,43 @@ for method in "${methods[@]}"; do
                 --exclude='.fseventsd' \
                 --exclude='.Trashes' \
                 --exclude='.TemporaryItems' \
-                "$SOURCE_DIR/" "$dest_dir/" 2>&1 | \
-                grep -E "warning|error" || true
+                "$SOURCE_DIR/" "$dest_dir/" >/dev/null 2>&1
             ;;
+            
         "cp")
-            # Create file list
-            temp_list="/tmp/benchmark_cp_$$.txt"
-            find "$SOURCE_DIR" -type f \
-                ! -path "*/.DS_Store" \
-                ! -path "*/.Spotlight-V100/*" \
-                ! -path "*/.fseventsd/*" \
-                ! -path "*/.Trashes/*" \
-                ! -path "*/.TemporaryItems/*" \
-                2>/dev/null > "$temp_list"
-            
-            total=$(wc -l < "$temp_list" | xargs)
-            count=0
-            
-            while IFS= read -r file; do
-                rel_path="${file#$SOURCE_DIR/}"
-                dest_file="$dest_dir/$rel_path"
-                dest_subdir=$(dirname "$dest_file")
-                mkdir -p "$dest_subdir" 2>/dev/null
-                
-                if cp -p "$file" "$dest_file" 2>/dev/null; then
-                    ((count++))
-                    if (( count % 500 == 0 )); then
-                        printf "\r処理中: %d/%d ファイル (%.1f%%)" "$count" "$total" "$(( count * 100.0 / total ))"
-                    fi
-                fi
-            done < "$temp_list"
-            
-            rm -f "$temp_list"
-            echo ""
+            # Use tar pipe for reliable file copy
+            (cd "$SOURCE_DIR" && tar cf - \
+                --exclude '.DS_Store' \
+                --exclude '.Spotlight-V100' \
+                --exclude '.fseventsd' \
+                --exclude '.Trashes' \
+                --exclude '.TemporaryItems' \
+                . ) | (cd "$dest_dir" && tar xf - ) 2>/dev/null
             ;;
+            
         "ditto")
-            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | \
-                grep -E "warning|error" | head -10 || true
+            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" >/dev/null 2>&1
             ;;
+            
         "parallel")
+            # Parallel cp with xargs -P
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
             echo "並列ワーカー数: $num_workers"
             
-            # Create file list
-            temp_list="/tmp/benchmark_parallel_$$.txt"
             find "$SOURCE_DIR" -type f \
                 ! -path "*/.DS_Store" \
                 ! -path "*/.Spotlight-V100/*" \
                 ! -path "*/.fseventsd/*" \
                 ! -path "*/.Trashes/*" \
                 ! -path "*/.TemporaryItems/*" \
-                2>/dev/null > "$temp_list"
-            
-            cat "$temp_list" | xargs -P "$num_workers" -I {} sh -c "
-                file=\"{}\"
-                rel_path=\"\${file#$SOURCE_DIR/}\"
-                dest_file=\"$dest_dir/\$rel_path\"
-                dest_subdir=\$(dirname \"\$dest_file\")
-                mkdir -p \"\$dest_subdir\" 2>/dev/null
-                cp -p \"\$file\" \"\$dest_file\" 2>/dev/null
-            " 2>&1 | head -10 || true
-            
-            rm -f "$temp_list"
+                -print0 2>/dev/null | \
+            xargs -0 -P "$num_workers" -I {} sh -c '
+                src="$1"
+                rel="${src#'"$SOURCE_DIR"'/}"
+                dst="'"$dest_dir"'/$rel"
+                dir=$(dirname "$dst")
+                mkdir -p "$dir" 2>/dev/null && cp -p "$src" "$dst" 2>/dev/null
+            ' _ {} >/dev/null 2>&1
             ;;
     esac
     
@@ -191,7 +153,6 @@ print_header "ベンチマーク結果サマリー"
 echo "転送方法別の処理時間:"
 echo ""
 
-# Sort by time
 for method in "${methods[@]}"; do
     time=${results[$method]}
     files=${file_counts[$method]}
@@ -220,9 +181,6 @@ if [[ "$cleanup" == "y" ]]; then
     echo "クリーンアップ中..."
     chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
     chmod -R u+w "$DEST_BASE" 2>/dev/null || true
-    rm -rf "$DEST_BASE" 2>/dev/null || {
-        echo "⚠️  通常削除失敗、sudoで削除を試みます..."
-        sudo rm -rf "$DEST_BASE"
-    }
+    rm -rf "$DEST_BASE" 2>/dev/null || sudo rm -rf "$DEST_BASE"
     echo "✅ 完了"
 fi
