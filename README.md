@@ -313,6 +313,73 @@ IPAインストール完了を正確に検知するため、2パターン対応�
 
 ---
 
+## 🧪 開発者向け情報
+
+### Bash互換性テスト
+
+このプロジェクトはmacOS上でzshで実行することを想定していますが、開発・テスト目的でbash環境でも構文チェックが可能です。
+
+```bash
+# Bash互換性テストを実行（sandbox環境など）
+bash test_bash.sh
+```
+
+**出力例:**
+```
+==========================================
+🧪 PlayCover Manager - Bash Compatibility Test
+==========================================
+
+📂 Working Directory: /home/user/webapp
+🐚 Shell: bash 5.2.15(1)-release
+
+📥 Loading compatibility layer...
+   ✅ Compatibility layer loaded
+
+🔍 Syntax Check...
+   ✅ main.sh
+   ✅ lib/00_compat.sh
+   ✅ lib/00_core.sh
+   ...
+
+🎯 Function Definition Check...
+   ✅ print_success
+   ✅ print_error
+   ...
+
+⚠️  Zsh-specific Syntax Check...
+   - ${(@)array} 構文: 15箇所
+   - ${(%):-%x} 構文: 4箇所
+   - declare -A（連想配列）: 1箇所
+
+✅ 全ての検証に合格しました！
+```
+
+**注意:**
+- このテストは**構文チェックのみ**です（実行テストではありません）
+- zsh固有の構文（`${(@)array}`等）は本番環境（macOS）でのみ完全に動作します
+- 本番環境では必ずzshで実行してください
+
+### 互換性レイヤー
+
+`lib/00_compat.sh` は、bash環境での開発・テストをサポートするための互換性レイヤーです：
+
+- シェル検出（zsh/bash）
+- 配列操作ヘルパー関数
+- スクリプトディレクトリ取得の互換版
+- 互換性チェック機能
+
+**使用方法:**
+```bash
+# 互換性レイヤーを読み込み
+source lib/00_compat.sh
+
+# 現在のシェルを確認
+echo $CURRENT_SHELL  # "zsh" または "bash"
+```
+
+---
+
 ## 🐛 バグ報告
 
 バグを発見した場合は、[Issues](https://github.com/HEHEX8/PlayCoverManager/issues) で以下の情報と共に報告してください：
