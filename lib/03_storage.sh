@@ -465,32 +465,63 @@ _perform_cp_transfer() {
     print_info "データ転送中..."
     echo ""
     
-    # Execute copy
+    # Execute copy with verbose output
     local copy_exit=0
+    local file_count=0
+    local show_interval=50  # ファイル数が少ない場合は全て表示、多い場合は間引き
     
-    # Use cp -a for directory copying
-    # Preserves all attributes and handles existing files properly
+    # ファイル数に応じて表示間隔を調整
+    if [[ $total_files -gt 500 ]]; then
+        show_interval=100  # 500ファイル以上なら100ファイルごと
+    elif [[ $total_files -gt 100 ]]; then
+        show_interval=50   # 100-500ファイルなら50ファイルごと
+    else
+        show_interval=10   # 100ファイル以下なら10ファイルごと
+    fi
+    
+    # cpの-vオプションでファイル名を表示しながらコピー
     /usr/bin/sudo cp -av "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
-        # Show progress by printing every 100th file
-        if (( RANDOM % 100 == 0 )); then
-            echo -n "."
+        file_count=$((file_count + 1))
+        
+        # 定期的にファイル名を表示（長いパスは省略）
+        if (( file_count % show_interval == 0 )); then
+            # ファイルパスから最後の部分のみ抽出
+            local filename=$(basename "$line" 2>/dev/null || echo "$line")
+            # 長すぎるファイル名は省略
+            if [[ ${#filename} -gt 60 ]]; then
+                filename="${filename:0:30}...${filename: -27}"
+            fi
+            echo "  📄 ${file_count}/${total_files} - ${filename}"
         fi
     done
     copy_exit=${PIPESTATUS[0]}
     
     if [[ $copy_exit -eq 0 ]]; then
-        # Handle sync mode: delete files in dest that don't exist in source
+        # 同期モード: 転送元に存在しないファイルを削除
         if [[ "$sync_mode" == "sync" ]]; then
             echo ""
             print_info "同期モード: 余分なファイルを削除中..."
             
-            # Find files in dest that don't exist in source
+            local delete_count=0
+            # 転送先のファイルを検索
             while IFS= read -r dest_file; do
                 local rel_path="${dest_file#$dest_path/}"
+                # 転送元に存在しないファイルを削除
                 if [[ ! -e "$source_path/$rel_path" ]]; then
                     /usr/bin/sudo /bin/rm -rf "$dest_file" 2>/dev/null
+                    delete_count=$((delete_count + 1))
+                    # 10ファイルごとに進捗表示
+                    if (( delete_count % 10 == 0 )); then
+                        echo "  🗑️  削除中: ${delete_count} ファイル..."
+                    fi
                 fi
             done < <(/usr/bin/find "$dest_path" -mindepth 1 2>/dev/null)
+            
+            if [[ $delete_count -gt 0 ]]; then
+                print_info "  削除完了: ${delete_count} ファイル"
+            else
+                print_info "  削除対象なし（既に同期済み）"
+            fi
         fi
         
         echo ""
