@@ -477,7 +477,7 @@ show_installed_apps() {
             local vol_status=$?
             local storage_icon=""
             
-            # Check storage mode first to filter out apps with no data
+            # Check storage mode to determine icon
             local storage_mode=""
             if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
                 # Volume is mounted at correct location = external storage
@@ -485,18 +485,33 @@ show_installed_apps() {
             elif [[ -n "$actual_mount" ]]; then
                 # Volume is mounted but at wrong location
                 storage_icon="⚠️  位置異常"
+            elif [[ $vol_status -eq 2 ]]; then
+                # Volume exists but not mounted
+                storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                
+                case "$storage_mode" in
+                    "internal_intentional")
+                        storage_icon="🍎 内部"
+                        ;;
+                    "internal_intentional_empty")
+                        storage_icon="🍎 内部(空)"
+                        ;;
+                    "internal_contaminated")
+                        storage_icon="⚠️  内蔵データ検出"
+                        ;;
+                    "none")
+                        storage_icon="💤 未マウント"
+                        ;;
+                    *)
+                        storage_icon="？ 不明"
+                        ;;
+                esac
             else
                 # Volume not mounted - check if internal storage has data
                 storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                 
-                # Skip apps with no data in both display and selection modes
+                # Skip apps with no data and unknown storage mode
                 if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "unknown" ]]; then
-                    continue
-                fi
-                
-                # Skip if external volume exists but not mounted (unless it's in internal mode)
-                if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_contaminated" ]]; then
-                    # External volume exists but not mounted, and not in internal mode - skip
                     continue
                 fi
                 

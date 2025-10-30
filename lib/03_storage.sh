@@ -751,12 +751,14 @@ switch_storage_location() {
             local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
             local vol_status=$?
             
-            # Skip apps with no data - check storage_mode first
-            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-            if [[ "$storage_mode" == "none" ]] || [[ $vol_status -eq 1 ]]; then
-                # Skip apps with no data or non-existent volumes
+            # Skip only non-existent volumes
+            if [[ $vol_status -eq 1 ]]; then
+                # Skip apps with non-existent volumes
                 continue
             fi
+            
+            # Check storage mode after mount status check
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
             
             # Add to selectable array only if it has data
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
@@ -779,8 +781,8 @@ switch_storage_location() {
                     free_space=$(get_external_drive_free_space "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${actual_mount}${NC}"
                 fi
-            else
-                # Volume not mounted (status 2) or mount point empty - check internal storage
+            elif [[ $vol_status -eq 2 ]]; then
+                # Volume exists but not mounted
                 case "$storage_mode" in
                     "internal_intentional")
                         location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
@@ -788,7 +790,31 @@ switch_storage_location() {
                         usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                         ;;
                     "internal_intentional_empty")
+                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "internal_contaminated")
+                        location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "none")
+                        # Volume exists but unmounted, no internal data
+                        location_text="${BOLD}${GRAY}💤 未マウント${NC}"
+                        usage_text="${GRAY}外部ボリュームはマウントされていません${NC}"
+                        ;;
+                esac
+            else
+                # Volume not mounted or mount point empty - check internal storage
+                case "$storage_mode" in
+                    "internal_intentional")
                         location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
+                        free_space=$(get_storage_free_space "$HOME")
+                        usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                        ;;
+                    "internal_intentional_empty")
+                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
                         free_space=$(get_storage_free_space "$HOME")
                         usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                         ;;
@@ -812,7 +838,7 @@ switch_storage_location() {
         echo ""
         echo "${BOLD}${UNDERLINE}切り替えるアプリを選択してください${NC}"
         echo "  ${BOLD}${CYAN}[番号]${NC} : データ位置切替"
-        echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
+        echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る  ${BOLD}${LIGHT_GRAY}[q]${NC} : 終了"
         echo ""
         echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
         echo ""
@@ -827,6 +853,11 @@ switch_storage_location() {
         
         if [[ "$choice" == "0" ]]; then
             return
+        fi
+        
+        if [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
+            clear
+            osascript -e 'tell application "Terminal" to close first window' & exit 0
         fi
         
         if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#mappings_array} ]]; then
@@ -844,8 +875,29 @@ switch_storage_location() {
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         
+        # Check volume mount status first
+        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+        local vol_status=$?
+        
         # Check current storage mode (enhanced with external volume mount check)
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+        
+        # Handle unmounted external volume (except intentional internal modes)
+        if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_intentional_empty" ]]; then
+            clear
+            print_header "${display_name} のストレージ切替"
+            echo ""
+            print_error "外部ボリュームがマウントされていません"
+            echo ""
+            echo "${BOLD}推奨される操作:${NC}"
+            echo "  ${LIGHT_GREEN}1.${NC} ボリューム管理 → 個別ボリューム操作 → マウント"
+            echo "  ${LIGHT_GREEN}2.${NC} または、ボリューム管理 → 全ボリュームをマウント"
+            echo ""
+            if prompt_confirmation "ボリューム管理画面を開きますか？" "y/N"; then
+                individual_volume_control
+            fi
+            continue
+        fi
         
         # Handle external volume mounted at wrong location
         if [[ "$storage_mode" == "external_wrong_location" ]]; then
