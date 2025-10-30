@@ -656,10 +656,7 @@ run_initial_setup() {
         install_playcover
     fi
     
-    # Step 4.5: fcp check (required for fast file transfers)
-    check_fcp_installation
-    # Note: check_fcp_installation handles its own prompts and installation
-    
+
     # Only do volume setup if needed
     if [[ "$need_volume_setup" == false ]]; then
         clear

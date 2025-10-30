@@ -45,22 +45,7 @@ main() {
         fi
     fi
     
-    # Check if fcp is installed (required for fast transfers)
-    if ! command -v fcp >/dev/null 2>&1; then
-        clear
-        print_warning "高速コピーツール (fcp) が見つかりません"
-        print_info "fcpはファイル転送を20-30%高速化します"
-        echo ""
-        
-        if prompt_confirmation "fcpをインストールしますか？" "Y/n"; then
-            check_fcp_installation
-        else
-            print_info "標準のcpコマンドを使用します（fcpより遅くなります）"
-            echo ""
-            wait_for_enter
-        fi
-    fi
-    
+
     # Clean up duplicate entries in mapping file
     deduplicate_mappings
     

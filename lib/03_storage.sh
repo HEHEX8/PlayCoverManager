@@ -435,9 +435,9 @@ _mount_for_capacity_check() {
     fi
 }
 
-# Perform fast file copy using fcp (or cp as fallback)
+# Perform file transfer using cp (optimized for macOS local disks)
 # Returns: 0 on success, 1 on failure
-_perform_fcp_transfer() {
+_perform_cp_transfer() {
     local source_path=$1
     local dest_path=$2
     local sync_mode=$3  # "sync" (with --delete) or "copy" (without --delete)
@@ -454,19 +454,9 @@ _perform_fcp_transfer() {
     print_info "  データサイズ: ${source_size}"
     echo ""
     
-    # Determine which copy command to use
-    local copy_cmd=""
-    local copy_name=""
-    
-    if command -v fcp >/dev/null 2>&1; then
-        copy_cmd="fcp"
-        copy_name="fcp (高速並列コピー)"
-    else
-        copy_cmd="cp"
-        copy_name="cp (標準コピー)"
-    fi
-    
-    print_info "🚀 使用ツール: ${copy_name}"
+    # Use cp for reliable local disk copying
+    # cp -a is optimized by macOS and handles all edge cases properly
+    print_info "🚀 使用ツール: cp (macOS最適化済み)"
     
     if [[ "$sync_mode" == "sync" ]]; then
         print_info "💡 同期モード: 転送後に余分なファイルを削除"
@@ -478,26 +468,17 @@ _perform_fcp_transfer() {
     
     # Execute copy
     local copy_exit=0
-    if [[ "$copy_cmd" == "fcp" ]]; then
-        # fcp: parallel copy with all CPU cores
-        # Usage: fcp source... destination_directory
-        # To copy directory contents, use glob pattern
-        # Note: fcp has no -r flag, it automatically handles directories
-        
-        # First, ensure destination directory exists
-        /usr/bin/sudo /bin/mkdir -p "$dest_path"
-        
-        # Copy all contents from source to destination
-        # Use find to get all files/dirs and pass to fcp
-        # This avoids glob expansion issues with hidden files
-        cd "$source_path" && \
-        /usr/bin/sudo /usr/bin/find . -mindepth 1 -maxdepth 1 -print0 | \
-        /usr/bin/xargs -0 -I {} /usr/bin/sudo fcp {} "$dest_path/" 2>&1
-        copy_exit=$?
-    else
-        # cp: standard recursive copy
-        /usr/bin/sudo cp -a "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?
-    fi
+    
+    # Always use cp for reliable directory copying
+    # fcp doesn't handle existing files well and lacks sync capabilities
+    # cp -a preserves all attributes and is reliable for local disk operations
+    /usr/bin/sudo cp -av "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
+        # Show progress by printing every 100th file
+        if (( RANDOM % 100 == 0 )); then
+            echo -n "."
+        fi
+    done
+    copy_exit=${PIPESTATUS[0]}
     
     if [[ $copy_exit -eq 0 ]]; then
         # Handle sync mode: delete files in dest that don't exist in source
@@ -1077,7 +1058,7 @@ perform_internal_to_external_migration() {
     
     # Copy data from internal to external (using unified helper)
     print_info "データを同期転送中... (進捗が表示されます)"
-    if ! _perform_fcp_transfer "$source_path" "$temp_mount" "sync"; then
+    if ! _perform_cp_transfer "$source_path" "$temp_mount" "sync"; then
         print_info "一時マウントをクリーンアップ中..."
         unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
@@ -1307,7 +1288,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _perform_fcp_transfer "$source_mount" "$target_path" "copy"; then
+    if ! _perform_cp_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
