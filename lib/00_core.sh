@@ -1083,18 +1083,50 @@ preload_all_volume_cache() {
         return 0
     fi
     
+    # Count total volumes
+    local total_volumes=0
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        ((total_volumes++))
+    done < "$MAPPING_FILE"
+    
+    # Add PlayCover volume to count
+    if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
+        ((total_volumes++))
+    fi
+    
+    # Only show progress if there are volumes to load
+    if (( total_volumes == 0 )); then
+        CACHE_PRELOADED=true
+        return 0
+    fi
+    
+    local start_time=$(date +%s)
+    local loaded=0
+    
+    # Show initial progress
+    printf "ボリューム情報を読み込み中... "
+    
+    # Preload volumes with progress
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
         
-        # Preload this volume's info into cache
         get_volume_info_cached "$volume_name" >/dev/null
+        ((loaded++))
+        
+        # Show simple counter progress (fast, minimal overhead)
+        printf "\rボリューム情報を読み込み中... %d/%d" "$loaded" "$total_volumes"
     done < "$MAPPING_FILE"
     
     # Also preload PlayCover main volume
     if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
         get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
+        ((loaded++))
+        printf "\rボリューム情報を読み込み中... %d/%d" "$loaded" "$total_volumes"
     fi
+    
+    # Clear progress line and show completion
+    printf "\r%*s\r" 50 ""
     
     # Mark as preloaded
     CACHE_PRELOADED=true
