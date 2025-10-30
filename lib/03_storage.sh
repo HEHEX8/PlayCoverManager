@@ -435,124 +435,43 @@ _mount_for_capacity_check() {
     fi
 }
 
-# データ転送を実行（rsync使用、同一ファイル自動スキップ）
-# 戻り値: 成功時0、失敗時1
-_perform_cp_transfer() {
+# Perform rsync data transfer with common options
+# Returns: 0 on success, 1 on failure
+_perform_rsync_transfer() {
     local source_path=$1
     local dest_path=$2
-    local sync_mode=$3  # "sync" (削除あり) or "copy" (削除なし)
+    local sync_mode=$3  # "sync" (with --delete) or "copy" (without --delete)
     
-    print_info "データ転送を準備中..."
+    local rsync_opts="-avH --progress"
+    local exclude_opts="--exclude='.Spotlight-V100' --exclude='.fseventsd' --exclude='.Trashes' --exclude='.TemporaryItems' --exclude='.DS_Store' --exclude='.playcover_backup_*'"
     
-    # ファイル数とサイズを取得
-    local total_files=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    local source_size=$(get_container_size "$source_path")
-    
-    echo ""
-    print_info "📊 転送情報:"
-    print_info "  ファイル数: ${total_files}"
-    print_info "  データサイズ: ${source_size}"
-    echo ""
-    
-    # rsyncのパスを決定（Homebrew版を優先）
-    local rsync_cmd=""
-    local rsync_type=""
-    
-    if [[ -x "/opt/homebrew/bin/rsync" ]]; then
-        rsync_cmd="/opt/homebrew/bin/rsync"
-        rsync_type="homebrew"
-        print_info "🚀 使用ツール: rsync (Homebrew版)"
-    elif [[ -x "/usr/bin/rsync" ]]; then
-        rsync_cmd="/usr/bin/rsync"
-        local version_output=$("$rsync_cmd" --version 2>/dev/null | head -n 1)
-        
-        # --info=progress2が使えるかテスト
-        if "$rsync_cmd" --info=progress2 --help >/dev/null 2>&1; then
-            rsync_type="modern"
-            print_info "🚀 使用ツール: rsync (システム版)"
-        else
-            rsync_type="legacy"
-            print_warning "🚀 使用ツール: rsync (システム版 - 旧版)"
-            print_warning "⚠️  進捗表示が制限されています"
-            print_warning "💡 Homebrew版rsyncで改善できます: brew install rsync"
-        fi
-    else
-        print_error "rsync が見つかりません"
-        return 1
-    fi
-    
-    # rsyncのバージョン表示
-    local rsync_version=$("$rsync_cmd" --version 2>/dev/null | head -n 1)
-    print_info "  ${rsync_version}"
-    
-    # 同期モードの説明
     if [[ "$sync_mode" == "sync" ]]; then
-        print_info "💡 同期モード: 同一ファイルはスキップ、余分なファイルは削除"
+        rsync_opts="$rsync_opts --delete"
+        print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
     else
-        print_info "💡 コピーモード: 同一ファイルはスキップ、既存ファイルは保持"
+        rsync_opts="$rsync_opts --ignore-errors"
     fi
     
     echo ""
-    print_info "データ転送中..."
-    echo ""
     
-    # rsyncオプション設定
-    local rsync_opts="-av"
+    # Execute rsync with all options
+    eval "/usr/bin/sudo /usr/bin/rsync $rsync_opts $exclude_opts \"$source_path/\" \"$dest_path/\""
+    local rsync_exit=$?
     
-    # 同期モードなら--deleteオプションを追加
-    if [[ "$sync_mode" == "sync" ]]; then
-        rsync_opts="${rsync_opts} --delete"
-    fi
-    
-    # 進捗表示オプション（--info=progress2対応状況で選択）
-    if [[ "$rsync_type" == "legacy" ]]; then
-        # --info=progress2非対応: --progressのみ使用
-        rsync_opts="${rsync_opts} --progress"
-    else
-        # --info=progress2対応: %表示使用
-        rsync_opts="${rsync_opts} --info=progress2"
-    fi
-    
-    # rsync実行
-    local rsync_exit=0
-    /usr/bin/sudo "$rsync_cmd" $rsync_opts "$source_path/" "$dest_path/" 2>&1
-    rsync_exit=$?
-    
-    if [[ $rsync_exit -eq 0 ]]; then
+    # Check rsync exit code (0, 23, 24 are acceptable)
+    if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
         echo ""
-        print_success "データの転送が完了しました"
+        print_success "データのコピーが完了しました"
         
         local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
         local copied_size=$(get_container_size "$dest_path")
-        print_info "  転送完了: ${copied_count} ファイル (${copied_size})"
-        
-        # スキップされたファイルの説明
-        if [[ "$sync_mode" == "sync" ]]; then
-            print_info "  💡 同一ファイルは自動スキップされました"
-        fi
-        
+        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
         return 0
     else
         echo ""
-        print_error "データの転送に失敗しました (終了コード: $rsync_exit)"
+        print_error "データのコピーに失敗しました"
         return 1
     fi
-}
-
-# Show migration success message
-_show_migration_success() {
-    local storage_type=$1  # "external" or "internal"
-    local target_path=$2
-    
-    echo ""
-    print_success "ストレージ切り替えが完了しました"
-    
-    if [[ "$storage_type" == "external" ]]; then
-        print_info "保存場所: ⚡ 外部ストレージ"
-    else
-        print_info "保存場所: 🍎 内蔵ストレージ"
-    fi
-    print_info "パス: ${target_path}"
 }
 
 # Handle empty volume switching (no data to transfer)
@@ -642,6 +561,31 @@ _handle_empty_external_to_internal() {
     return 0
 }
 
+# Cleanup and unmount after migration
+_cleanup_and_unmount() {
+    local mount_point=$1
+    local is_temp_mount=$2  # "true" or "false"
+    local volume_name=$3
+    local bundle_id=$4
+    
+    if [[ "$is_temp_mount" == "true" ]]; then
+        print_info "一時マウントをクリーンアップ中..."
+        unmount_with_fallback "$mount_point" "silent" "$volume_name" || true
+        /bin/sleep 1
+        cleanup_temp_dir "$mount_point" true
+        return 0
+    else
+        print_info "外部ボリュームをアンマウント中..."
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "外部ボリュームのアンマウントに失敗しました"
+            print_warning "ボリュームがまだマウントされている可能性があります"
+            print_info "手動でアンマウントしてください"
+            return 1
+        fi
+        return 0
+    fi
+}
+
 #######################################################
 # Storage Switching Functions
 #######################################################
@@ -677,7 +621,7 @@ switch_storage_location() {
             
             # Skip apps with no data - check storage_mode first
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-            if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "unknown" ]] || [[ $vol_status -eq 1 ]]; then
+            if [[ "$storage_mode" == "none" ]] || [[ $vol_status -eq 1 ]]; then
                 # Skip apps with no data or non-existent volumes
                 continue
             fi
@@ -1063,7 +1007,7 @@ perform_internal_to_external_migration() {
     
     # Copy data from internal to external (using unified helper)
     print_info "データを同期転送中... (進捗が表示されます)"
-    if ! _perform_cp_transfer "$source_path" "$temp_mount" "sync"; then
+    if ! _perform_rsync_transfer "$source_path" "$temp_mount" "sync"; then
         print_info "一時マウントをクリーンアップ中..."
         unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
@@ -1293,7 +1237,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _perform_cp_transfer "$source_mount" "$target_path" "copy"; then
+    if ! _perform_rsync_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
