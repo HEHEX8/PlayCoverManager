@@ -308,7 +308,7 @@ show_quick_status() {
         local status_parts=()
         
         if [[ $external_count -gt 0 ]]; then
-            status_parts+=("${SKY_BLUE}🔌 外部マウント: ${external_count}件${NC}")
+            status_parts+=("${SKY_BLUE}💾 外部マウント: ${external_count}件${NC}")
         fi
         
         if [[ $internal_count -gt 0 ]]; then
@@ -479,7 +479,7 @@ show_installed_apps() {
             
             if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
                 # Volume is mounted at correct location = external storage
-                storage_icon="🔌 外部"
+                storage_icon="💾 外部"
             elif [[ -n "$actual_mount" ]]; then
                 # Volume is mounted but at wrong location
                 storage_icon="⚠️  位置異常"
@@ -1089,7 +1089,7 @@ show_quick_launcher() {
             local storage_icon=""
             case "$storage_mode" in
                 "external"|"external_wrong_location"|"none")
-                    storage_icon="🔌"
+                    storage_icon="💾"
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
                     storage_icon="🏠"
@@ -1120,19 +1120,14 @@ show_quick_launcher() {
         done
         
         echo ""
-        echo ""
         print_separator
-        echo "  🔐     : 要管理者権限"
+        # Compact help: icons and actions in one line when possible
+        local help_line="  🔐:要管理者権限"
         if [[ $recent_count -gt 0 ]]; then
-            echo "  ⭐     : 前回起動アプリ そのままEnterで起動"
+            help_line="${help_line}  ⭐:前回起動 Enterで起動"
         fi
-        echo "  [1-${#apps_info[@]}]  : アプリを起動"
-        echo ""
-        echo "  [p]    : PlayCoverを起動（設定変更用）"
-        echo "  [m]    : 管理メニュー"
-        echo "  [0]    : 終了"
-        echo ""
-        echo "${DIM_GRAY}[r]キーで最新の情報に更新${NC}"
+        echo "$help_line"
+        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [m]:管理メニュー  [0]:終了  ${DIM_GRAY}[r]:更新${NC}"
         print_separator
         echo ""
         
