@@ -275,7 +275,7 @@ get_storage_mode() {
     
     # If volume name is provided, check external volume mount status first
     if [[ -n "$volume_name" ]]; then
-        local current_mount=$(validate_and_get_mount_point "$volume_name")
+        local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
         local vol_status=$?
         
         if [[ $vol_status -eq 0 ]] && [[ -n "$current_mount" ]]; then
