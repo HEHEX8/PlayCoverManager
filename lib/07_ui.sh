@@ -634,10 +634,16 @@ app_management_menu() {
         echo "  ${BOLD}${RED}2.${NC} アプリをアンインストール"
         echo "  ${BOLD}${LIGHT_GRAY}0.${NC} メインメニューに戻る"
         echo ""
+        echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
+        echo ""
         echo -n "${BOLD}${YELLOW}選択: ${NC}"
         read choice
         
         case "$choice" in
+            "")
+                # Empty Enter - refresh cache and redisplay menu
+                invalidate_all_volume_caches
+                ;;
             1)
                 install_workflow
                 ;;
@@ -847,8 +853,17 @@ individual_volume_control() {
     echo "  ${BOLD}${YELLOW}[u]${NC}    : 全ボリュームをアンマウント"
     echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
     echo ""
+    echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
+    echo ""
     echo -n "選択: "
     read choice
+    
+    # Empty Enter - refresh cache and redisplay menu
+    if [[ -z "$choice" ]]; then
+        invalidate_all_volume_caches
+        individual_volume_control
+        return
+    fi
     
     if [[ "$choice" == "0" ]]; then
         return
@@ -1097,6 +1112,7 @@ show_quick_launcher() {
         echo "  [1-${#apps_info[@]}]  : アプリを起動"
         echo ""
         echo "  [p]    : PlayCoverを起動（設定変更用）"
+        echo "  [r]    : 状態を再取得（キャッシュ更新）"
         echo "  [m]    : 管理メニュー"
         echo "  [0]    : 終了"
         print_separator
@@ -1106,6 +1122,11 @@ show_quick_launcher() {
         read "choice?選択: "
         
         case "$choice" in
+            [rR])
+                # Refresh cache - invalidate and redisplay
+                invalidate_all_volume_caches
+                continue
+                ;;
             "")
                 # Empty input (Enter key) - launch most recent app if exists
                 if [[ $recent_count -gt 0 ]] && [[ -n "$most_recent_bundle_id" ]]; then

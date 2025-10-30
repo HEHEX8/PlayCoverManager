@@ -681,8 +681,16 @@ switch_storage_location() {
         echo "  ${BOLD}${CYAN}[番号]${NC} : データ位置切替"
         echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
         echo ""
+        echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
+        echo ""
         echo -n "${BOLD}${YELLOW}選択:${NC} "
         read choice
+        
+        # Empty Enter - refresh cache and redisplay menu
+        if [[ -z "$choice" ]]; then
+            invalidate_all_volume_caches
+            continue
+        fi
         
         if [[ "$choice" == "0" ]]; then
             return
