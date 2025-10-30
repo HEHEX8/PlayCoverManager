@@ -990,6 +990,10 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover クイックランチャー"
         
+        # Preload all volume information into cache for fast display
+        # This ensures quick launcher is as fast as management screens
+        preload_all_volume_cache
+        
         # Check PlayCover volume mount status using cached data
         local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
         local pc_vol_status=$?

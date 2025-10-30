@@ -1371,8 +1371,8 @@ get_launchable_apps() {
         
         # Check if app has external mapping
         if [[ -n "$volume_name" ]]; then
-            # Check if volume physically exists (connected to Mac)
-            if ! volume_exists "$volume_name"; then
+            # Check if volume physically exists (connected to Mac) - use cached version
+            if ! volume_exists_cached "$volume_name"; then
                 # Volume not connected - cannot launch
                 continue
             fi
