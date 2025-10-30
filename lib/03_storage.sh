@@ -435,6 +435,34 @@ _mount_for_capacity_check() {
     fi
 }
 
+# Unified data transfer function with method selection
+# Returns: 0 on success, 1 on failure
+_perform_data_transfer() {
+    local source_path=$1
+    local dest_path=$2
+    local sync_mode=$3  # "sync" or "copy"
+    local transfer_method=${4:-"rsync"}  # "rsync", "cp", "ditto", "parallel"
+    
+    case "$transfer_method" in
+        "rsync")
+            _perform_rsync_transfer "$source_path" "$dest_path" "$sync_mode"
+            ;;
+        "cp")
+            _perform_cp_transfer "$source_path" "$dest_path" "$sync_mode"
+            ;;
+        "ditto")
+            _perform_ditto_transfer "$source_path" "$dest_path" "$sync_mode"
+            ;;
+        "parallel")
+            _perform_parallel_cp_transfer "$source_path" "$dest_path" "$sync_mode"
+            ;;
+        *)
+            print_error "不明な転送方法: $transfer_method"
+            return 1
+            ;;
+    esac
+}
+
 # Perform rsync data transfer with common options
 # Returns: 0 on success, 1 on failure
 _perform_rsync_transfer() {
@@ -469,6 +497,201 @@ _perform_rsync_transfer() {
         return 0
     else
         echo ""
+        print_error "データのコピーに失敗しました"
+        return 1
+    fi
+}
+
+# Perform cp-based data transfer
+# Returns: 0 on success, 1 on failure
+_perform_cp_transfer() {
+    local source_path=$1
+    local dest_path=$2
+    local sync_mode=$3
+    
+    print_info "💡 cp転送モード: シンプルで高速なコピー"
+    echo ""
+    
+    local start_time=$(date +%s)
+    
+    # Create file list
+    local temp_list="/tmp/cp_transfer_$$.txt"
+    /usr/bin/find "$source_path" -type f ! -type l \
+        ! -path "*/.DS_Store" \
+        ! -path "*/.Spotlight-V100/*" \
+        ! -path "*/.fseventsd/*" \
+        ! -path "*/.Trashes/*" \
+        ! -path "*/.TemporaryItems/*" \
+        2>/dev/null > "$temp_list"
+    
+    local total_files=$(wc -l < "$temp_list" | /usr/bin/xargs)
+    print_info "転送ファイル数: ${total_files}"
+    
+    if (( total_files == 0 )); then
+        /bin/rm -f "$temp_list"
+        print_warning "転送するファイルがありません"
+        return 0
+    fi
+    
+    # Copy files with progress
+    local copied=0
+    local failed=0
+    while IFS= read -r source_file; do
+        local rel_path="${source_file#$source_path/}"
+        local dest_file="$dest_path/$rel_path"
+        local dest_dir=$(dirname "$dest_file")
+        
+        # Create directory if needed
+        if [[ ! -d "$dest_dir" ]]; then
+            /bin/mkdir -p "$dest_dir" 2>/dev/null || {
+                ((failed++))
+                continue
+            }
+        fi
+        
+        # Copy file preserving metadata
+        if /bin/cp -p "$source_file" "$dest_file" 2>/dev/null; then
+            ((copied++))
+        else
+            ((failed++))
+        fi
+        
+        # Progress display (every 100 files)
+        if (( (copied + failed) % 100 == 0 )); then
+            local percent=$(( (copied + failed) * 100 / total_files ))
+            printf "\r進捗: %d/%d ファイル (%d%%)  " $((copied + failed)) "$total_files" "$percent"
+        fi
+    done < "$temp_list"
+    
+    /bin/rm -f "$temp_list"
+    
+    local end_time=$(date +%s)
+    local elapsed=$((end_time - start_time))
+    
+    echo ""
+    echo ""
+    if (( failed == 0 )); then
+        print_success "データのコピーが完了しました"
+        print_info "  コピー: ${copied} ファイル"
+        print_info "  処理時間: ${elapsed}秒"
+        return 0
+    else
+        print_error "データのコピーに失敗しました"
+        print_info "  成功: ${copied} ファイル"
+        print_info "  失敗: ${failed} ファイル"
+        return 1
+    fi
+}
+
+# Perform ditto-based data transfer (macOS native)
+# Returns: 0 on success, 1 on failure
+_perform_ditto_transfer() {
+    local source_path=$1
+    local dest_path=$2
+    local sync_mode=$3
+    
+    print_info "💡 ditto転送モード: macOS最適化コピー（リソースフォーク・拡張属性を保持）"
+    echo ""
+    
+    local start_time=$(date +%s)
+    
+    # ditto with progress simulation (ditto doesn't have built-in progress)
+    # -V: verbose, -rsrc: copy resource forks
+    /usr/bin/ditto -V "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
+        echo "$line"
+    done
+    
+    local ditto_exit=$?
+    local end_time=$(date +%s)
+    local elapsed=$((end_time - start_time))
+    
+    echo ""
+    if [[ $ditto_exit -eq 0 ]]; then
+        print_success "データのコピーが完了しました"
+        local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        local copied_size=$(get_container_size "$dest_path")
+        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+        print_info "  処理時間: ${elapsed}秒"
+        return 0
+    else
+        print_error "データのコピーに失敗しました"
+        return 1
+    fi
+}
+
+# Perform parallel cp transfer using xargs
+# Returns: 0 on success, 1 on failure
+_perform_parallel_cp_transfer() {
+    local source_path=$1
+    local dest_path=$2
+    local sync_mode=$3
+    
+    # Determine number of parallel workers (CPU cores)
+    local num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+    
+    print_info "💡 並列cp転送モード: xargs -Pによる並列コピー"
+    print_info "  ワーカー数: ${num_workers} (CPU論理コア数)"
+    echo ""
+    
+    local start_time=$(date +%s)
+    
+    # Create file list with relative paths
+    local temp_list="/tmp/parallel_cp_$$.txt"
+    /usr/bin/find "$source_path" -type f ! -type l \
+        ! -path "*/.DS_Store" \
+        ! -path "*/.Spotlight-V100/*" \
+        ! -path "*/.fseventsd/*" \
+        ! -path "*/.Trashes/*" \
+        ! -path "*/.TemporaryItems/*" \
+        2>/dev/null | while IFS= read -r source_file; do
+            echo "${source_file#$source_path/}"
+        done > "$temp_list"
+    
+    local total_files=$(wc -l < "$temp_list" | /usr/bin/xargs)
+    print_info "転送ファイル数: ${total_files}"
+    
+    if (( total_files == 0 )); then
+        /bin/rm -f "$temp_list"
+        print_warning "転送するファイルがありません"
+        return 0
+    fi
+    
+    # Parallel copy using xargs -P
+    # Define copy function for xargs
+    local copy_func="copy_file_func_$$() {
+        local rel_path=\$1
+        local source_path='$source_path'
+        local dest_path='$dest_path'
+        local source_file=\"\$source_path/\$rel_path\"
+        local dest_file=\"\$dest_path/\$rel_path\"
+        local dest_dir=\$(dirname \"\$dest_file\")
+        
+        # Create directory
+        /bin/mkdir -p \"\$dest_dir\" 2>/dev/null || return 1
+        
+        # Copy file
+        /bin/cp -p \"\$source_file\" \"\$dest_file\" 2>/dev/null || return 1
+    }"
+    
+    # Execute parallel copy
+    eval "$copy_func"
+    cat "$temp_list" | /usr/bin/xargs -P "$num_workers" -I {} /bin/zsh -c "copy_file_func_$$ {}"
+    local copy_exit=$?
+    
+    /bin/rm -f "$temp_list"
+    
+    local end_time=$(date +%s)
+    local elapsed=$((end_time - start_time))
+    
+    echo ""
+    if [[ $copy_exit -eq 0 ]]; then
+        print_success "データのコピーが完了しました"
+        local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        local copied_size=$(get_container_size "$dest_path")
+        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+        print_info "  処理時間: ${elapsed}秒"
+        return 0
+    else
         print_error "データのコピーに失敗しました"
         return 1
     fi
@@ -1006,8 +1229,11 @@ perform_internal_to_external_migration() {
     print_info "  データサイズ: ${total_size}"
     
     # Copy data from internal to external (using unified helper)
-    print_info "データを同期転送中... (進捗が表示されます)"
-    if ! _perform_rsync_transfer "$source_path" "$temp_mount" "sync"; then
+    # Transfer method can be set via environment variable: PLAYCOVER_TRANSFER_METHOD
+    # Options: rsync (default), cp, ditto, parallel
+    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-rsync}"
+    print_info "データを同期転送中... (転送方法: ${transfer_method})"
+    if ! _perform_data_transfer "$source_path" "$temp_mount" "sync" "$transfer_method"; then
         print_info "一時マウントをクリーンアップ中..."
         unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
@@ -1237,7 +1463,9 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _perform_rsync_transfer "$source_mount" "$target_path" "copy"; then
+    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-rsync}"
+    print_info "データを転送中... (転送方法: ${transfer_method})"
+    if ! _perform_data_transfer "$source_mount" "$target_path" "copy" "$transfer_method"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."

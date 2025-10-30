@@ -313,6 +313,67 @@ IPAインストール完了を正確に検知するため、2パターン対応�
 
 ---
 
+## ⚡ 転送方法のベンチマーク
+
+PlayCover Manager v5.1.0 以降では、4種類の転送方法を選択可能です:
+
+### 転送方法の比較
+
+| 方法 | 説明 | 特徴 |
+|------|------|------|
+| **rsync** (デフォルト) | Mac内蔵rsync | 安定性重視、再開可能、単一スレッド |
+| **cp** | BSD標準cp | シンプル、高速（rsyncより約20%速い） |
+| **ditto** | macOS専用コマンド | リソースフォーク・拡張属性を完全保持 |
+| **parallel** | xargs -P並列cp | 最速（複数CPUコアを活用）|
+
+### 転送方法の選択
+
+環境変数 `PLAYCOVER_TRANSFER_METHOD` で選択:
+
+```bash
+# rsync（デフォルト）
+./main.sh
+
+# cpで実行
+export PLAYCOVER_TRANSFER_METHOD=cp
+./main.sh
+
+# dittoで実行
+export PLAYCOVER_TRANSFER_METHOD=ditto
+./main.sh
+
+# 並列cpで実行
+export PLAYCOVER_TRANSFER_METHOD=parallel
+./main.sh
+```
+
+### ベンチマーク実行
+
+独自のベンチマークを実行して最適な方法を確認できます:
+
+```bash
+# ベンチマーク実行
+./benchmark_transfer.sh /path/to/source /path/to/dest
+
+# 例: ゼンレスゾーンゼロのデータでテスト
+./benchmark_transfer.sh \
+  "/Volumes/MyExternalSSD/PlayCover/ゼンレスゾーンゼロ" \
+  "/tmp/benchmark_test"
+```
+
+**ベンチマーク内容:**
+- 4種類の転送方法を順次実行
+- 各方法の処理時間を計測
+- ファイル数の検証
+- 最速方法を自動判定
+
+**推奨:**
+- **安定性重視**: rsync（デフォルト）
+- **速度重視**: parallel（多数の小ファイルに最適）
+- **macOS互換性**: ditto（リソースフォーク保持が必要な場合）
+
+---
+
 ## 🐛 バグ報告
 
 バグを発見した場合は、[Issues](https://github.com/HEHEX8/PlayCoverManager/issues) で以下の情報と共に報告してください：
