@@ -1,6 +1,5 @@
 #!/bin/zsh
 # PlayCover Manager Transfer Method Benchmark
-# Compares rsync, cp, ditto, and parallel transfer methods
 
 print_header() {
     echo ""
@@ -14,24 +13,20 @@ print_result() {
     printf "%-20s: %s\n" "$1" "$2"
 }
 
-# Check arguments
 if [[ $# -lt 2 ]]; then
     echo "Usage: $0 <source_dir> <dest_base_dir>"
-    echo ""
-    echo "Example: $0 /Volumes/External/data /tmp/benchmark"
     exit 1
 fi
 
 SOURCE_DIR="$1"
 DEST_BASE="$2"
 
-# Validate source
 if [[ ! -d "$SOURCE_DIR" ]]; then
     echo "Error: Source directory does not exist: $SOURCE_DIR"
     exit 1
 fi
 
-# Clean dest base
+# Clean dest
 if [[ -d "$DEST_BASE" ]]; then
     echo "既存のベンチマークディレクトリを削除中..."
     rm -rf "$DEST_BASE" 2>/dev/null || sudo rm -rf "$DEST_BASE"
@@ -51,7 +46,6 @@ SOURCE_SIZE=$(du -sh "$SOURCE_DIR" 2>/dev/null | awk '{print $1}')
 print_result "ファイル数" "$FILE_COUNT"
 print_result "データサイズ" "$SOURCE_SIZE"
 
-# Test methods
 declare -A results
 declare -A file_counts
 methods=("rsync" "ditto" "parallel")
@@ -61,7 +55,6 @@ for method in "${methods[@]}"; do
     
     print_header "テスト: $method"
     
-    # Clean previous test
     rm -rf "$dest_dir" 2>/dev/null || sudo rm -rf "$dest_dir"
     mkdir -p "$dest_dir"
     
@@ -80,6 +73,7 @@ for method in "${methods[@]}"; do
             ;;
             
         "ditto")
+            # dittoは特殊ファイルも含めてコピーするのでファイル数が多くなる
             /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | grep -i error || true
             ;;
             
@@ -87,34 +81,39 @@ for method in "${methods[@]}"; do
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
             echo "並列ワーカー数: $num_workers"
             
-            # Create file list without special directories
-            temp_list="/tmp/benchmark_list_$$.txt"
+            # Use find -exec with xargs properly
             find "$SOURCE_DIR" -type f \
                 ! -path "*/.DS_Store" \
                 ! -path "*/.Spotlight-V100/*" \
                 ! -path "*/.fseventsd/*" \
                 ! -path "*/.Trashes/*" \
                 ! -path "*/.TemporaryItems/*" \
-                2>/dev/null > "$temp_list"
-            
-            # Use xargs for parallel copy
-            cat "$temp_list" | xargs -P "$num_workers" -I SRCFILE sh -c '
-                src="SRCFILE"
+                -print0 2>/dev/null | \
+            xargs -0 -n 1 -P "$num_workers" sh -c '
+                src="$0"
                 rel="${src#'"$SOURCE_DIR"'/}"
                 dst="'"$dest_dir"'/$rel"
                 dstdir=$(dirname "$dst")
-                mkdir -p "$dstdir" && cp -p "$src" "$dst"
-            ' 2>&1 | head -20 || true
-            
-            rm -f "$temp_list"
+                mkdir -p "$dstdir" 2>/dev/null && cp -p "$src" "$dst" 2>/dev/null
+            '
             ;;
     esac
     
     end_time=$(date +%s)
     elapsed=$((end_time - start_time))
     
-    # Verify results
-    copied_files=$(find "$dest_dir" -type f 2>/dev/null | wc -l | xargs)
+    # Verify (dittoは特殊ファイルも含むので除外してカウント)
+    if [[ "$method" == "ditto" ]]; then
+        copied_files=$(find "$dest_dir" -type f \
+            ! -path "*/.DS_Store" \
+            ! -path "*/.Spotlight-V100/*" \
+            ! -path "*/.fseventsd/*" \
+            ! -path "*/.Trashes/*" \
+            ! -path "*/.TemporaryItems/*" \
+            2>/dev/null | wc -l | xargs)
+    else
+        copied_files=$(find "$dest_dir" -type f 2>/dev/null | wc -l | xargs)
+    fi
     
     results[$method]=$elapsed
     file_counts[$method]=$copied_files
@@ -125,7 +124,8 @@ for method in "${methods[@]}"; do
     if (( copied_files == FILE_COUNT )); then
         echo "✅ 転送成功"
     else
-        echo "⚠️  警告: ファイル数が一致しません（差分: $((FILE_COUNT - copied_files))）"
+        diff=$((FILE_COUNT - copied_files))
+        echo "⚠️  警告: ファイル数が一致しません（差分: $diff）"
     fi
 done
 
@@ -145,7 +145,7 @@ done
 
 echo ""
 
-# Find fastest among successful methods
+# Find fastest
 fastest_method=""
 fastest_time=999999
 for method in "${methods[@]}"; do
@@ -162,7 +162,7 @@ done
 if [[ -n "$fastest_method" ]]; then
     echo "🏆 最速: $fastest_method (${fastest_time}秒)"
 else
-    echo "⚠️  全ての方法で失敗しました"
+    echo "⚠️  完全成功した方法がありません"
 fi
 
 # Cleanup
