@@ -943,8 +943,16 @@ uninstall_workflow() {
     echo "  ${RED}一括削除${NC}: ${RED}ALL${NC} を入力（すべてのアプリを一度に削除）"
     echo "  ${CYAN}キャンセル${NC}: 0 を入力"
     echo ""
+    echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
+    echo ""
     echo -n "${ORANGE}選択:${NC} "
     read app_choice
+    
+    # Empty Enter - refresh cache and redisplay menu
+    if [[ -z "$app_choice" ]]; then
+        refresh_all_volume_caches
+        continue
+    fi
     
     # Check for batch uninstall
     if [[ "$app_choice" == "ALL" ]] || [[ "$app_choice" == "all" ]]; then

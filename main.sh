@@ -79,7 +79,7 @@ main() {
         case "$choice" in
             "")
                 # Empty Enter - refresh cache and redisplay menu
-                invalidate_all_volume_caches
+                refresh_all_volume_caches
                 ;;
             1)
                 show_quick_launcher

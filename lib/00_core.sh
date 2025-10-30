@@ -1248,6 +1248,15 @@ invalidate_all_volume_caches() {
     CACHE_PRELOADED=false  # Reset preload flag to allow next preload
 }
 
+# Refresh cache by invalidating and immediately reloading
+# This is the recommended function to call when user requests cache refresh (empty Enter)
+# It ensures cache is immediately updated, avoiding re-preload when returning to menu
+# Usage: refresh_all_volume_caches
+refresh_all_volume_caches() {
+    invalidate_all_volume_caches
+    preload_all_volume_cache
+}
+
 # Preload all volume information into cache
 # Call this before displaying main menu to populate cache with all volumes
 # Only preloads on first call - subsequent calls are skipped for performance

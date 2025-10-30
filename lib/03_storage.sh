@@ -694,7 +694,7 @@ switch_storage_location() {
         
         # Empty Enter - refresh cache and redisplay menu
         if [[ -z "$choice" ]]; then
-            invalidate_all_volume_caches
+            refresh_all_volume_caches
             continue
         fi
         

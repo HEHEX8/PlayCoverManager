@@ -655,7 +655,7 @@ app_management_menu() {
         case "$choice" in
             "")
                 # Empty Enter - refresh cache and redisplay menu
-                invalidate_all_volume_caches
+                refresh_all_volume_caches
                 ;;
             1)
                 install_workflow
@@ -1137,7 +1137,7 @@ show_quick_launcher() {
         case "$choice" in
             [rR])
                 # Refresh cache - invalidate and redisplay
-                invalidate_all_volume_caches
+                refresh_all_volume_caches
                 continue
                 ;;
             "")
