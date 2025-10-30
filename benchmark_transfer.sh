@@ -2,8 +2,6 @@
 # PlayCover Manager Transfer Method Benchmark
 # Compares rsync, cp, ditto, and parallel transfer methods
 
-set -e
-
 print_header() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -33,17 +31,14 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
-# Clean and create dest base
+# Clean dest base
 if [[ -d "$DEST_BASE" ]]; then
     echo "既存のベンチマークディレクトリを削除中..."
-    chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
-    chmod -R u+w "$DEST_BASE" 2>/dev/null || true
     rm -rf "$DEST_BASE" 2>/dev/null || sudo rm -rf "$DEST_BASE"
 fi
-
 mkdir -p "$DEST_BASE"
 
-# Count files (excluding special directories)
+# Count files
 print_header "ソースディレクトリ分析"
 FILE_COUNT=$(find "$SOURCE_DIR" -type f \
     ! -path "*/.DS_Store" \
@@ -59,7 +54,7 @@ print_result "データサイズ" "$SOURCE_SIZE"
 # Test methods
 declare -A results
 declare -A file_counts
-methods=("rsync" "cp" "ditto" "parallel")
+methods=("rsync" "ditto" "parallel")
 
 for method in "${methods[@]}"; do
     dest_dir="$DEST_BASE/test_$method"
@@ -67,64 +62,51 @@ for method in "${methods[@]}"; do
     print_header "テスト: $method"
     
     # Clean previous test
-    if [[ -d "$dest_dir" ]]; then
-        echo "前回のテストデータを削除中..."
-        chflags -R nouchg,nouappnd "$dest_dir" 2>/dev/null || true
-        chmod -R u+w "$dest_dir" 2>/dev/null || true
-        rm -rf "$dest_dir" 2>/dev/null || sudo rm -rf "$dest_dir"
-    fi
-    
+    rm -rf "$dest_dir" 2>/dev/null || sudo rm -rf "$dest_dir"
     mkdir -p "$dest_dir"
     
-    # Run test
     echo "転送開始..."
     start_time=$(date +%s)
     
     case "$method" in
         "rsync")
-            /usr/bin/rsync -aH \
+            /usr/bin/rsync -aH --quiet \
                 --exclude='.DS_Store' \
                 --exclude='.Spotlight-V100' \
                 --exclude='.fseventsd' \
                 --exclude='.Trashes' \
                 --exclude='.TemporaryItems' \
-                "$SOURCE_DIR/" "$dest_dir/" >/dev/null 2>&1
-            ;;
-            
-        "cp")
-            # Use tar pipe for reliable file copy
-            (cd "$SOURCE_DIR" && tar cf - \
-                --exclude '.DS_Store' \
-                --exclude '.Spotlight-V100' \
-                --exclude '.fseventsd' \
-                --exclude '.Trashes' \
-                --exclude '.TemporaryItems' \
-                . ) | (cd "$dest_dir" && tar xf - ) 2>/dev/null
+                "$SOURCE_DIR/" "$dest_dir/"
             ;;
             
         "ditto")
-            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" >/dev/null 2>&1
+            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | grep -i error || true
             ;;
             
         "parallel")
-            # Parallel cp with xargs -P
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
             echo "並列ワーカー数: $num_workers"
             
+            # Create file list without special directories
+            temp_list="/tmp/benchmark_list_$$.txt"
             find "$SOURCE_DIR" -type f \
                 ! -path "*/.DS_Store" \
                 ! -path "*/.Spotlight-V100/*" \
                 ! -path "*/.fseventsd/*" \
                 ! -path "*/.Trashes/*" \
                 ! -path "*/.TemporaryItems/*" \
-                -print0 2>/dev/null | \
-            xargs -0 -P "$num_workers" -I {} sh -c '
-                src="$1"
+                2>/dev/null > "$temp_list"
+            
+            # Use xargs for parallel copy
+            cat "$temp_list" | xargs -P "$num_workers" -I SRCFILE sh -c '
+                src="SRCFILE"
                 rel="${src#'"$SOURCE_DIR"'/}"
                 dst="'"$dest_dir"'/$rel"
-                dir=$(dirname "$dst")
-                mkdir -p "$dir" 2>/dev/null && cp -p "$src" "$dst" 2>/dev/null
-            ' _ {} >/dev/null 2>&1
+                dstdir=$(dirname "$dst")
+                mkdir -p "$dstdir" && cp -p "$src" "$dst"
+            ' 2>&1 | head -20 || true
+            
+            rm -f "$temp_list"
             ;;
     esac
     
@@ -143,7 +125,7 @@ for method in "${methods[@]}"; do
     if (( copied_files == FILE_COUNT )); then
         echo "✅ 転送成功"
     else
-        echo "⚠️  警告: ファイル数が一致しません"
+        echo "⚠️  警告: ファイル数が一致しません（差分: $((FILE_COUNT - copied_files))）"
     fi
 done
 
@@ -156,31 +138,38 @@ echo ""
 for method in "${methods[@]}"; do
     time=${results[$method]}
     files=${file_counts[$method]}
-    printf "  %-10s: %3d秒 (%d/%d ファイル)\n" "$method" "$time" "$files" "$FILE_COUNT"
+    success_rate=$(( files * 100 / FILE_COUNT ))
+    printf "  %-10s: %3d秒 (%d/%d ファイル = %d%%)\n" \
+        "$method" "$time" "$files" "$FILE_COUNT" "$success_rate"
 done
 
 echo ""
 
-# Find fastest
+# Find fastest among successful methods
 fastest_method=""
 fastest_time=999999
 for method in "${methods[@]}"; do
-    time=${results[$method]}
-    if (( time < fastest_time )); then
-        fastest_time=$time
-        fastest_method=$method
+    files=${file_counts[$method]}
+    if (( files == FILE_COUNT )); then
+        time=${results[$method]}
+        if (( time < fastest_time )); then
+            fastest_time=$time
+            fastest_method=$method
+        fi
     fi
 done
 
-echo "🏆 最速: $fastest_method (${fastest_time}秒)"
+if [[ -n "$fastest_method" ]]; then
+    echo "🏆 最速: $fastest_method (${fastest_time}秒)"
+else
+    echo "⚠️  全ての方法で失敗しました"
+fi
 
 # Cleanup
 echo ""
 read "cleanup?テストデータを削除しますか？ (y/n): "
 if [[ "$cleanup" == "y" ]]; then
     echo "クリーンアップ中..."
-    chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
-    chmod -R u+w "$DEST_BASE" 2>/dev/null || true
     rm -rf "$DEST_BASE" 2>/dev/null || sudo rm -rf "$DEST_BASE"
     echo "✅ 完了"
 fi
