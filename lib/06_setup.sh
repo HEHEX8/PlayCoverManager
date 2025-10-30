@@ -248,22 +248,41 @@ check_rsync_installation() {
     elif [[ -x "$system_rsync" ]]; then
         local rsync_version=$("$system_rsync" --version | head -n 1)
         
-        # rsyncのタイプを判定（GNU rsync or openrsync）
-        if [[ "$rsync_version" == *"openrsync"* ]]; then
-            print_error "⚠️  システム標準の openrsync が検出されました"
+        # --info=progress2が使えるかテスト
+        if "$system_rsync" --info=progress2 --help >/dev/null 2>&1; then
+            # 使える場合は推奨レベル（動作はする）
+            print_warning "システム標準の rsync が存在します"
+            print_info "${rsync_version}"
+            print_info "パス: ${system_rsync}"
+            print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
+            
+            if command -v brew >/dev/null 2>&1; then
+                echo ""
+                if prompt_confirmation "Homebrew版 rsync をインストールしますか？（推奨）" "Y/n"; then
+                    install_rsync
+                    return $?
+                else
+                    echo ""
+                    print_warning "⚠️  システム版rsyncを使用します"
+                    print_info "💡 後で 'brew install rsync' でインストール可能です"
+                fi
+            fi
+            return 0
+        else
+            # 使えない場合は必須インストール
+            print_error "⚠️  システム標準の rsync は機能が不十分です"
             print_info "${rsync_version}"
             print_info "パス: ${system_rsync}"
             echo ""
-            print_error "❌ openrsync は機能が不十分です:"
+            print_error "❌ このバージョンの rsync は必要な機能をサポートしていません:"
+            print_error "   • --info=progress2 オプション非対応"
             print_error "   • 進捗表示が詳細ではない（%表示なし）"
             print_error "   • 転送速度・残り時間が表示されない"
-            print_error "   • 一部のオプションがサポートされていない"
             echo ""
             print_info "✅ Homebrew版 rsync が必要です:"
             print_info "   • 全体の進捗を%で表示"
             print_info "   • 転送速度と残り時間をリアルタイム表示"
             print_info "   • より高速なデータ転送"
-            print_info "   • 完全な機能セット"
             echo ""
             
             # Homebrew版rsyncのインストールは必須
@@ -279,7 +298,7 @@ check_rsync_installation() {
                 else
                     echo ""
                     print_error "❌ Homebrew版 rsync のインストールが必要です"
-                    print_error "このツールは rsync なしでは動作しません"
+                    print_error "このツールは適切なバージョンの rsync なしでは動作しません"
                     print_info "💡 後で以下のコマンドでインストールしてください:"
                     print_info "   brew install rsync"
                     echo ""
@@ -291,25 +310,6 @@ check_rsync_installation() {
                 print_error "Homebrew をインストールしてから再度実行してください"
                 return 1
             fi
-        else
-            print_warning "システム標準の rsync が存在します"
-            print_info "${rsync_version}"
-            print_info "パス: ${system_rsync}"
-            print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
-            
-            # GNU rsyncの場合は推奨レベル（動作はする）
-            if command -v brew >/dev/null 2>&1; then
-                echo ""
-                if prompt_confirmation "Homebrew版 rsync をインストールしますか？（推奨）" "Y/n"; then
-                    install_rsync
-                    return $?
-                else
-                    echo ""
-                    print_warning "⚠️  システム版rsyncを使用します"
-                    print_info "💡 後で 'brew install rsync' でインストール可能です"
-                fi
-            fi
-            return 0
         fi
     else
         print_error "rsync が見つかりません"
