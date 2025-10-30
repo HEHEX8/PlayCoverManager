@@ -767,7 +767,7 @@ switch_storage_location() {
         echo ""
         echo "${BOLD}${UNDERLINE}切り替えるアプリを選択してください${NC}"
         echo "  ${BOLD}${CYAN}[番号]${NC} : データ位置切替"
-        echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
+        echo "  ${BOLD}${LIGHT_GRAY}[0/q]${NC}  : 戻る"
         echo ""
         echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
         echo ""
@@ -780,7 +780,7 @@ switch_storage_location() {
             continue
         fi
         
-        if [[ "$choice" == "0" ]]; then
+        if [[ "$choice" == "0" ]] || [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
             return
         fi
         

@@ -376,11 +376,11 @@ show_menu() {
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
-    echo "  ${LIGHT_GREEN}0.${NC} 終了"
+    echo "  ${LIGHT_GREEN}0/q.${NC} 終了"
     echo ""
     echo "${DIM_GRAY}空Enterで最新の情報に更新${NC}"
     echo ""
-    echo -n "${CYAN}選択 (0-5):${NC} "
+    echo -n "${CYAN}選択 (0-5/q):${NC} "
 }
 
 #######################################################
@@ -649,7 +649,7 @@ app_management_menu() {
         echo "${BOLD}${UNDERLINE}操作を選択してください${NC}"
         echo "  ${BOLD}${GREEN}1.${NC} アプリをインストール"
         echo "  ${BOLD}${RED}2.${NC} アプリをアンインストール"
-        echo "  ${BOLD}${LIGHT_GRAY}0.${NC} メインメニューに戻る"
+        echo "  ${BOLD}${LIGHT_GRAY}0/q.${NC} メインメニューに戻る"
         echo ""
         echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
         echo ""
@@ -868,7 +868,7 @@ individual_volume_control() {
     echo "  ${BOLD}${CYAN}[番号]${NC} : 個別マウント/アンマウント"
     echo "  ${BOLD}${GREEN}[m]${NC}    : 全ボリュームをマウント"
     echo "  ${BOLD}${YELLOW}[u]${NC}    : 全ボリュームをアンマウント"
-    echo "  ${BOLD}${LIGHT_GRAY}[0]${NC}    : 戻る"
+    echo "  ${BOLD}${LIGHT_GRAY}[0/q]${NC}  : 戻る"
     echo ""
     echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
     echo ""
@@ -882,7 +882,7 @@ individual_volume_control() {
         return
     fi
     
-    if [[ "$choice" == "0" ]]; then
+    if [[ "$choice" == "0" ]] || [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
         return
     fi
     
@@ -1120,7 +1120,7 @@ show_quick_launcher() {
             help_line="${help_line}  ⭐:前回起動 Enterで起動"
         fi
         echo "$help_line"
-        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [m]:管理メニュー  [0]:終了  ${DIM_GRAY}[r]:更新${NC}"
+        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [0/m]:管理画面  [q]:終了  ${DIM_GRAY}[r]:更新${NC}"
         print_separator
         echo ""
         
@@ -1181,7 +1181,10 @@ show_quick_launcher() {
                     continue
                 fi
                 ;;
-            0)
+            0|[mM])
+                return 0  # Go to main menu
+                ;;
+            q|Q)
                 clear
                 # Close Terminal window using AppleScript
                 osascript -e 'tell application "Terminal" to close first window' & exit 0
@@ -1192,9 +1195,6 @@ show_quick_launcher() {
                 echo ""
                 prompt_continue
                 continue  # Redisplay quick launcher
-                ;;
-            [mM])
-                return 0  # Go to main menu
                 ;;
             [1-9]|[1-9][0-9])
                 if [[ $choice -ge 1 ]] && [[ $choice -le ${#apps_info[@]} ]]; then
