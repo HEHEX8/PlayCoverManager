@@ -435,16 +435,16 @@ _mount_for_capacity_check() {
     fi
 }
 
-# Perform file transfer using cp (optimized for macOS local disks)
-# Returns: 0 on success, 1 on failure
+# データ転送を実行（rsync使用、同一ファイル自動スキップ）
+# 戻り値: 成功時0、失敗時1
 _perform_cp_transfer() {
     local source_path=$1
     local dest_path=$2
-    local sync_mode=$3  # "sync" (with --delete) or "copy" (without --delete)
+    local sync_mode=$3  # "sync" (削除あり) or "copy" (削除なし)
     
     print_info "データ転送を準備中..."
     
-    # Count total files and size
+    # ファイル数とサイズを取得
     local total_files=$(/usr/bin/find "$source_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
     local source_size=$(get_container_size "$source_path")
     
@@ -454,86 +454,68 @@ _perform_cp_transfer() {
     print_info "  データサイズ: ${source_size}"
     echo ""
     
-    # Use cp for reliable local disk copying
-    print_info "🚀 使用ツール: cp"
+    # rsyncのパスを決定（Homebrew版を優先）
+    local rsync_cmd=""
+    if [[ -x "/opt/homebrew/bin/rsync" ]]; then
+        rsync_cmd="/opt/homebrew/bin/rsync"
+        print_info "🚀 使用ツール: rsync (Homebrew版)"
+    elif [[ -x "/usr/bin/rsync" ]]; then
+        rsync_cmd="/usr/bin/rsync"
+        print_info "🚀 使用ツール: rsync (システム版)"
+    else
+        print_error "rsync が見つかりません"
+        return 1
+    fi
     
+    # rsyncのバージョン表示
+    local rsync_version=$("$rsync_cmd" --version 2>/dev/null | head -n 1)
+    print_info "  ${rsync_version}"
+    
+    # 同期モードの説明
     if [[ "$sync_mode" == "sync" ]]; then
-        print_info "💡 同期モード: 転送後に余分なファイルを削除"
+        print_info "💡 同期モード: 同一ファイルはスキップ、余分なファイルは削除"
+    else
+        print_info "💡 コピーモード: 同一ファイルはスキップ、既存ファイルは保持"
     fi
     
     echo ""
     print_info "データ転送中..."
     echo ""
     
-    # Execute copy with verbose output
-    local copy_exit=0
-    local file_count=0
-    local show_interval=50  # ファイル数が少ない場合は全て表示、多い場合は間引き
+    # rsyncオプション設定
+    local rsync_opts="-av"
     
-    # ファイル数に応じて表示間隔を調整
-    if [[ $total_files -gt 500 ]]; then
-        show_interval=100  # 500ファイル以上なら100ファイルごと
-    elif [[ $total_files -gt 100 ]]; then
-        show_interval=50   # 100-500ファイルなら50ファイルごと
-    else
-        show_interval=10   # 100ファイル以下なら10ファイルごと
+    # 同期モードなら--deleteオプションを追加
+    if [[ "$sync_mode" == "sync" ]]; then
+        rsync_opts="${rsync_opts} --delete"
     fi
     
-    # cpの-vオプションでファイル名を表示しながらコピー
-    /usr/bin/sudo cp -av "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
-        file_count=$((file_count + 1))
-        
-        # 定期的にファイル名を表示（長いパスは省略）
-        if (( file_count % show_interval == 0 )); then
-            # ファイルパスから最後の部分のみ抽出
-            local filename=$(basename "$line" 2>/dev/null || echo "$line")
-            # 長すぎるファイル名は省略
-            if [[ ${#filename} -gt 60 ]]; then
-                filename="${filename:0:30}...${filename: -27}"
-            fi
-            echo "  📄 ${file_count}/${total_files} - ${filename}"
-        fi
-    done
-    copy_exit=${PIPESTATUS[0]}
+    # 進捗表示オプション
+    # --info=progress2: 全体の進捗を%で表示
+    rsync_opts="${rsync_opts} --info=progress2"
     
-    if [[ $copy_exit -eq 0 ]]; then
-        # 同期モード: 転送元に存在しないファイルを削除
-        if [[ "$sync_mode" == "sync" ]]; then
-            echo ""
-            print_info "同期モード: 余分なファイルを削除中..."
-            
-            local delete_count=0
-            # 転送先のファイルを検索
-            while IFS= read -r dest_file; do
-                local rel_path="${dest_file#$dest_path/}"
-                # 転送元に存在しないファイルを削除
-                if [[ ! -e "$source_path/$rel_path" ]]; then
-                    /usr/bin/sudo /bin/rm -rf "$dest_file" 2>/dev/null
-                    delete_count=$((delete_count + 1))
-                    # 10ファイルごとに進捗表示
-                    if (( delete_count % 10 == 0 )); then
-                        echo "  🗑️  削除中: ${delete_count} ファイル..."
-                    fi
-                fi
-            done < <(/usr/bin/find "$dest_path" -mindepth 1 2>/dev/null)
-            
-            if [[ $delete_count -gt 0 ]]; then
-                print_info "  削除完了: ${delete_count} ファイル"
-            else
-                print_info "  削除対象なし（既に同期済み）"
-            fi
-        fi
-        
+    # rsync実行
+    local rsync_exit=0
+    /usr/bin/sudo "$rsync_cmd" $rsync_opts "$source_path/" "$dest_path/" 2>&1
+    rsync_exit=$?
+    
+    if [[ $rsync_exit -eq 0 ]]; then
         echo ""
-        print_success "データのコピーが完了しました"
+        print_success "データの転送が完了しました"
         
         local copied_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
         local copied_size=$(get_container_size "$dest_path")
-        print_info "  コピー完了: ${copied_count} ファイル (${copied_size})"
+        print_info "  転送完了: ${copied_count} ファイル (${copied_size})"
+        
+        # スキップされたファイルの説明
+        if [[ "$sync_mode" == "sync" ]]; then
+            print_info "  💡 同一ファイルは自動スキップされました"
+        fi
+        
         return 0
     else
         echo ""
-        print_error "データのコピーに失敗しました (終了コード: $copy_exit)"
+        print_error "データの転送に失敗しました (終了コード: $rsync_exit)"
         return 1
     fi
 }

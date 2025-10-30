@@ -229,6 +229,74 @@ install_homebrew() {
 }
 
 #######################################################
+# rsync Check and Installation
+#######################################################
+
+check_rsync_installation() {
+    print_header "rsync の確認"
+    
+    # Homebrewのrsyncを優先的にチェック
+    local homebrew_rsync="/opt/homebrew/bin/rsync"
+    local system_rsync="/usr/bin/rsync"
+    
+    if [[ -x "$homebrew_rsync" ]]; then
+        local rsync_version=$("$homebrew_rsync" --version | head -n 1)
+        print_success "Homebrew版 rsync が存在します"
+        print_info "${rsync_version}"
+        print_info "パス: ${homebrew_rsync}"
+        return 0
+    elif [[ -x "$system_rsync" ]]; then
+        local rsync_version=$("$system_rsync" --version | head -n 1)
+        print_warning "システム標準の rsync が存在します"
+        print_info "${rsync_version}"
+        print_info "パス: ${system_rsync}"
+        print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
+        
+        # Homebrewがインストール済みなら、rsyncのインストールを推奨
+        if command -v brew >/dev/null 2>&1; then
+            echo ""
+            if prompt_confirmation "Homebrew版 rsync をインストールしますか？" "Y/n"; then
+                install_rsync
+                return $?
+            fi
+        fi
+        return 0
+    else
+        print_error "rsync が見つかりません"
+        return 1
+    fi
+    
+    echo ""
+}
+
+install_rsync() {
+    print_header "rsync のインストール"
+    
+    print_info "Homebrew で rsync をインストールします..."
+    echo ""
+    
+    "$BREW_PATH" install rsync
+    
+    if [[ $? -eq 0 ]]; then
+        echo ""
+        print_success "rsync のインストールが完了しました"
+        
+        # バージョン確認
+        if [[ -x "/opt/homebrew/bin/rsync" ]]; then
+            local rsync_version=$(/opt/homebrew/bin/rsync --version | head -n 1)
+            print_info "${rsync_version}"
+        fi
+        echo ""
+        return 0
+    else
+        echo ""
+        print_error "rsync のインストールに失敗しました"
+        echo ""
+        return 1
+    fi
+}
+
+#######################################################
 # PlayCover Check and Installation
 #######################################################
 
@@ -568,6 +636,8 @@ run_initial_setup() {
         install_playcover
     fi
     
+    # Step 5: rsync check（データ転送の高速化に必要）
+    check_rsync_installation
 
     # Only do volume setup if needed
     if [[ "$need_volume_setup" == false ]]; then
