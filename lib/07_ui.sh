@@ -376,7 +376,7 @@ show_menu() {
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
-    echo "  ${LIGHT_GREEN}0/q.${NC} 終了"
+    echo "  ${LIGHT_GREEN}0.${NC} 終了  ${LIGHT_GRAY}q.${NC} 終了"
     echo ""
     echo "${DIM_GRAY}空Enterで最新の情報に更新${NC}"
     echo ""
@@ -1144,7 +1144,7 @@ show_quick_launcher() {
             help_line="${help_line}  ⭐:前回起動 Enterで起動"
         fi
         echo "$help_line"
-        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [0/m]:管理画面  [q]:終了  ${DIM_GRAY}[r]:更新${NC}"
+        echo "  [1-${#apps_info[@]}]:アプリ起動  [p]:PlayCover  [0]:管理画面  [q]:終了  ${DIM_GRAY}[r]:更新${NC}"
         print_separator
         echo ""
         
@@ -1205,10 +1205,10 @@ show_quick_launcher() {
                     continue
                 fi
                 ;;
-            0|[mM])
+            0)
                 return 0  # Go to main menu
                 ;;
-            q|Q)
+            [qQ])
                 clear
                 # Close Terminal window using AppleScript
                 osascript -e 'tell application "Terminal" to close first window' & exit 0
