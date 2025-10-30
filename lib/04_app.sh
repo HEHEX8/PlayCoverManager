@@ -1049,6 +1049,10 @@ uninstall_workflow() {
     /bin/rm -f "$keymapping_file" 2>/dev/null
     
     local containers_dir="${HOME}/Library/Containers/${selected_bundle}"
+    # Remove internal storage flag if exists before deleting container
+    if [[ -f "${containers_dir}/${INTERNAL_STORAGE_FLAG}" ]]; then
+        /bin/rm -f "${containers_dir}/${INTERNAL_STORAGE_FLAG}" 2>/dev/null
+    fi
     /bin/rm -rf "$containers_dir" 2>/dev/null
     
     # Step 7: Unmount volume if mounted (silent)
