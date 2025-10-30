@@ -590,18 +590,49 @@ _perform_ditto_transfer() {
     local dest_path=$2
     local sync_mode=$3
     
-    print_info "💡 ditto転送モード: macOS最適化コピー（リソースフォーク・拡張属性を保持）"
+    if [[ "$sync_mode" == "sync" ]]; then
+        print_info "💡 ditto転送モード: macOS最適化同期コピー（削除されたファイルも反映）"
+    else
+        print_info "💡 ditto転送モード: macOS最適化コピー（リソースフォーク・拡張属性を保持）"
+    fi
     echo ""
     
     local start_time=$(date +%s)
     
     # ditto with progress simulation (ditto doesn't have built-in progress)
-    # -V: verbose, -rsrc: copy resource forks
+    # -V: verbose
     /usr/bin/ditto -V "$source_path/" "$dest_path/" 2>&1 | while IFS= read -r line; do
         echo "$line"
     done
     
     local ditto_exit=$?
+    
+    # Handle sync mode: remove files in dest that don't exist in source
+    if [[ $ditto_exit -eq 0 ]] && [[ "$sync_mode" == "sync" ]]; then
+        print_info "同期モード: 余分なファイルを削除中..."
+        
+        # Find files in dest that don't exist in source and delete them
+        local deleted=0
+        while IFS= read -r dest_file; do
+            local rel_path="${dest_file#$dest_path/}"
+            local source_file="$source_path/$rel_path"
+            
+            if [[ ! -e "$source_file" ]]; then
+                /usr/bin/sudo /bin/rm -f "$dest_file" 2>/dev/null && ((deleted++))
+            fi
+        done < <(/usr/bin/find "$dest_path" -type f \
+            ! -path "*/.DS_Store" \
+            ! -path "*/.Spotlight-V100/*" \
+            ! -path "*/.fseventsd/*" \
+            ! -path "*/.Trashes/*" \
+            ! -path "*/.TemporaryItems/*" \
+            2>/dev/null)
+        
+        if (( deleted > 0 )); then
+            print_info "  削除: ${deleted} ファイル"
+        fi
+    fi
+    
     local end_time=$(date +%s)
     local elapsed=$((end_time - start_time))
     
@@ -1230,8 +1261,8 @@ perform_internal_to_external_migration() {
     
     # Copy data from internal to external (using unified helper)
     # Transfer method can be set via environment variable: PLAYCOVER_TRANSFER_METHOD
-    # Options: rsync (default), cp, ditto, parallel
-    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-rsync}"
+    # Options: ditto (default, fastest), rsync, cp, parallel
+    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-ditto}"
     print_info "データを同期転送中... (転送方法: ${transfer_method})"
     if ! _perform_data_transfer "$source_path" "$temp_mount" "sync" "$transfer_method"; then
         print_info "一時マウントをクリーンアップ中..."
@@ -1463,7 +1494,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-rsync}"
+    local transfer_method="${PLAYCOVER_TRANSFER_METHOD:-ditto}"
     print_info "データを転送中... (転送方法: ${transfer_method})"
     if ! _perform_data_transfer "$source_mount" "$target_path" "copy" "$transfer_method"; then
         # Cleanup on failure
