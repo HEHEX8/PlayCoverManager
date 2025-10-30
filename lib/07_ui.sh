@@ -21,6 +21,8 @@ _handle_unmount_operation() {
     
     local device=$(get_volume_device "$volume_name")
     if unmount_volume "$device" "silent"; then
+        # Invalidate cache after successful unmount
+        invalidate_volume_cache "$volume_name"
         silent_return_to_menu "individual_volume_control"
         return 0
     else
@@ -55,10 +57,15 @@ _handle_remount_operation() {
         return 1
     fi
     
+    # Invalidate cache after unmount (before remount)
+    invalidate_volume_cache "$volume_name"
+    
     # Mount to correct location
     /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
     
     if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+        # Invalidate cache after successful remount
+        invalidate_volume_cache "$volume_name"
         silent_return_to_menu "individual_volume_control"
         return 0
     else
@@ -170,6 +177,8 @@ _perform_mount() {
     /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
     
     if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+        # Invalidate cache after successful mount
+        invalidate_volume_cache "$volume_name"
         silent_return_to_menu "individual_volume_control"
         return 0
     else
@@ -211,12 +220,16 @@ _merge_internal_to_external() {
     print_info "データをマージしています..."
     if /usr/bin/sudo /usr/bin/rsync -a --info=progress2 "$target_path/" "$temp_mount/"; then
         unmount_volume "$device" "silent"
+        # Invalidate cache after temp unmount
+        invalidate_volume_cache "$volume_name"
         /bin/rm -rf "$temp_mount"
         /usr/bin/sudo /bin/rm -rf "$target_path"
         
         # Final mount
         /usr/bin/sudo /bin/mkdir -p "$target_path" 2>/dev/null
         if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
+            # Invalidate cache after final mount
+            invalidate_volume_cache "$volume_name"
             print_success "マージとマウントが完了しました"
             wait_for_enter
             silent_return_to_menu "individual_volume_control"
