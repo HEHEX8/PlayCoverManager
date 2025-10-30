@@ -515,6 +515,22 @@ _perform_fcp_transfer() {
     fi
 }
 
+# Show migration success message
+_show_migration_success() {
+    local storage_type=$1  # "external" or "internal"
+    local target_path=$2
+    
+    echo ""
+    print_success "ストレージ切り替えが完了しました"
+    
+    if [[ "$storage_type" == "external" ]]; then
+        print_info "保存場所: ⚡ 外部ストレージ"
+    else
+        print_info "保存場所: 🍎 内蔵ストレージ"
+    fi
+    print_info "パス: ${target_path}"
+}
+
 # Handle empty volume switching (no data to transfer)
 # Returns: 0 on success, 1 on failure
 _handle_empty_internal_to_external() {
@@ -662,7 +678,7 @@ switch_storage_location() {
             
             # Skip apps with no data - check storage_mode first
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-            if [[ "$storage_mode" == "none" ]] || [[ $vol_status -eq 1 ]]; then
+            if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "unknown" ]] || [[ $vol_status -eq 1 ]]; then
                 # Skip apps with no data or non-existent volumes
                 continue
             fi

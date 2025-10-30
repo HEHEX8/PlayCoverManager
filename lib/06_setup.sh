@@ -601,8 +601,24 @@ run_initial_setup() {
     # Step 0: Ensure data directory exists and migrate old files
     ensure_data_directory
     
-    # Step 1: Architecture check
-    check_architecture
+    # Check what needs to be set up
+    local need_architecture_check=false
+    local need_volume_setup=false
+    
+    # Always check architecture
+    if [[ $(uname -m) != "arm64" ]]; then
+        need_architecture_check=true
+    fi
+    
+    # Check if volume setup is needed
+    if ! volume_exists "${PLAYCOVER_VOLUME_NAME}" || [[ ! -f "$MAPPING_FILE" ]] || [[ ! -s "$MAPPING_FILE" ]]; then
+        need_volume_setup=true
+    fi
+    
+    # Step 1: Architecture check (if needed)
+    if [[ "$need_architecture_check" == true ]]; then
+        check_architecture
+    fi
     
     # Step 2: Xcode tools check
     check_xcode_tools
@@ -640,9 +656,20 @@ run_initial_setup() {
         install_playcover
     fi
     
-    # Step 4.5: fcp (required for fast file transfers)
+    # Step 4.5: fcp check (required for fast file transfers)
     check_fcp_installation
     # Note: check_fcp_installation handles its own prompts and installation
+    
+    # Only do volume setup if needed
+    if [[ "$need_volume_setup" == false ]]; then
+        clear
+        print_success "環境は既にセットアップ済みです"
+        echo ""
+        print_info "必要な依存関係がインストールされました"
+        echo ""
+        wait_for_enter
+        return 0
+    fi
     
     # Step 5: External disk selection (with retry loop)
     while true; do

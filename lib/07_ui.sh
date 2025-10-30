@@ -490,7 +490,7 @@ show_installed_apps() {
                 storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                 
                 # Skip apps with no data in both display and selection modes
-                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]] || [[ "$storage_mode" == "unknown" ]]; then
                     continue
                 fi
                 
