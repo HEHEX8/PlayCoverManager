@@ -454,15 +454,19 @@ _perform_rsync_transfer() {
     
     local start_time=$(date +%s)
     
-    # Count total files to transfer
-    print_info "転送ファイル数をカウント中..."
-    local total_files=$(/usr/bin/find "$source_path" -type f \
+    # Count total files to transfer with spinner
+    (/usr/bin/find "$source_path" -type f \
         ! -path "*/.DS_Store" \
         ! -path "*/.Spotlight-V100/*" \
         ! -path "*/.fseventsd/*" \
         ! -path "*/.Trashes/*" \
         ! -path "*/.TemporaryItems/*" \
-        2>/dev/null | wc -l | /usr/bin/xargs)
+        2>/dev/null | wc -l > /tmp/file_count_$$ ) &
+    local count_pid=$!
+    show_spinner "転送ファイル数をカウント中" $count_pid
+    wait $count_pid
+    local total_files=$(cat /tmp/file_count_$$ | /usr/bin/xargs)
+    /bin/rm -f /tmp/file_count_$$
     
     if (( total_files == 0 )); then
         print_warning "転送するファイルがありません"
@@ -491,62 +495,17 @@ _perform_rsync_transfer() {
     (eval "/usr/bin/sudo /usr/bin/rsync $rsync_opts $exclude_opts \"$source_path/\" \"$dest_path/\"" > "$rsync_output" 2>&1) &
     rsync_pid=$!
     
-    # Monitor progress
+    # Monitor progress using generic progress bar
     local initial_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    local copied=0
     
-    while kill -0 $rsync_pid 2>/dev/null; do
-        # Count files copied so far
-        local current_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        copied=$((current_count - initial_count))
-        
-        # Ensure copied doesn't exceed total_files
-        if (( copied > total_files )); then
-            copied=$total_files
-        fi
-        
-        # Calculate percentage and speed
-        local percent=0
-        if (( total_files > 0 )); then
-            percent=$(( copied * 100 / total_files ))
-        fi
-        
-        # Calculate speed (files per second)
-        local elapsed=$(($(date +%s) - start_time))
-        local speed=0
-        if (( elapsed > 0 )); then
-            speed=$(( copied / elapsed ))
-        fi
-        
-        # Progress bar (50 chars wide)
-        local bar_width=50
-        local filled=$(( percent * bar_width / 100 ))
-        local bar=""
-        for ((i=0; i<bar_width; i++)); do
-            if (( i < filled )); then
-                bar="${bar}█"
-            else
-                bar="${bar}░"
-            fi
-        done
-        
-        # Display progress with fixed width formatting
-        printf "\r[%s] %3d%% | %${#total_files}d/%d files | %4d files/s  " \
-            "$bar" "$percent" "$copied" "$total_files" "$speed"
-        
-        sleep 0.2
-    done
+    local copied=$(monitor_file_progress "$dest_path" "$total_files" "$initial_count" "$start_time" "$rsync_pid" 0.2)
     
     # Wait for rsync to finish and get exit code
     wait $rsync_pid
     local rsync_exit=$?
     
-    # Final count
-    local final_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    copied=$((final_count - initial_count))
-    
     # Clear progress line
-    printf "\r%*s\r" 100 ""
+    clear_progress_bar
     
     # Clean up output file
     /bin/rm -f "$rsync_output"
@@ -581,15 +540,19 @@ _perform_ditto_transfer() {
     
     local start_time=$(date +%s)
     
-    # Count total files to transfer
-    print_info "転送ファイル数をカウント中..."
-    local total_files=$(/usr/bin/find "$source_path" -type f \
+    # Count total files to transfer with spinner
+    (/usr/bin/find "$source_path" -type f \
         ! -path "*/.DS_Store" \
         ! -path "*/.Spotlight-V100/*" \
         ! -path "*/.fseventsd/*" \
         ! -path "*/.Trashes/*" \
         ! -path "*/.TemporaryItems/*" \
-        2>/dev/null | wc -l | /usr/bin/xargs)
+        2>/dev/null | wc -l > /tmp/file_count_$$ ) &
+    local count_pid=$!
+    show_spinner "転送ファイル数をカウント中" $count_pid
+    wait $count_pid
+    local total_files=$(cat /tmp/file_count_$$ | /usr/bin/xargs)
+    /bin/rm -f /tmp/file_count_$$
     
     if (( total_files == 0 )); then
         print_warning "転送するファイルがありません"
@@ -618,52 +581,16 @@ _perform_ditto_transfer() {
     local copied=0
     local last_copied=0
     
-    while kill -0 $ditto_pid 2>/dev/null; do
-        # Count files copied so far
-        copied=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-        
-        # Calculate percentage and speed
-        local percent=0
-        if (( total_files > 0 )); then
-            percent=$(( copied * 100 / total_files ))
-        fi
-        
-        # Calculate speed (files per second)
-        local elapsed=$(($(date +%s) - start_time))
-        local speed=0
-        if (( elapsed > 0 )); then
-            speed=$(( copied / elapsed ))
-        fi
-        
-        # Progress bar (50 chars wide)
-        local bar_width=50
-        local filled=$(( percent * bar_width / 100 ))
-        local bar=""
-        for ((i=0; i<bar_width; i++)); do
-            if (( i < filled )); then
-                bar="${bar}█"
-            else
-                bar="${bar}░"
-            fi
-        done
-        
-        # Display progress with fixed width formatting
-        # Format: [████████░░] 45% | 1234/5000 files | 123 files/s
-        printf "\r[%s] %3d%% | %${#total_files}d/%d files | %4d files/s  " \
-            "$bar" "$percent" "$copied" "$total_files" "$speed"
-        
-        sleep 0.1
-    done
+    # Monitor progress using generic progress bar
+    local initial_count=0
+    copied=$(monitor_file_progress "$dest_path" "$total_files" "$initial_count" "$start_time" "$ditto_pid" 0.1)
     
     # Wait for ditto to finish and get exit code
     wait $ditto_pid
     local ditto_exit=$?
     
-    # Final count
-    copied=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
-    
     # Clear progress line
-    printf "\r%*s\r" 100 ""
+    clear_progress_bar
     
     # Remove progress file
     /bin/rm -f "$progress_file" 2>/dev/null

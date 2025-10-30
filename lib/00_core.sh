@@ -1190,3 +1190,109 @@ get_mount_point_cached() {
         return 1  # Not mounted
     fi
 }
+
+#######################################################
+# Generic Progress Bar Functions
+#######################################################
+
+# Show a progress bar with percentage, counts, and speed
+# Usage: show_progress_bar <current> <total> <start_time> [bar_width] [unit]
+# Example: show_progress_bar 450 1000 $start_time 50 "files"
+show_progress_bar() {
+    local current=$1
+    local total=$2
+    local start_time=$3
+    local bar_width=${4:-50}  # Default: 50 chars
+    local unit=${5:-"items"}   # Default: "items"
+    
+    # Calculate percentage
+    local percent=0
+    if (( total > 0 )); then
+        percent=$(( current * 100 / total ))
+    fi
+    
+    # Ensure percentage doesn't exceed 100%
+    if (( percent > 100 )); then
+        percent=100
+    fi
+    
+    # Calculate speed
+    local elapsed=$(($(date +%s) - start_time))
+    local speed=0
+    if (( elapsed > 0 )); then
+        speed=$(( current / elapsed ))
+    fi
+    
+    # Build progress bar
+    local filled=$(( percent * bar_width / 100 ))
+    local bar=""
+    for ((i=0; i<bar_width; i++)); do
+        if (( i < filled )); then
+            bar="${bar}█"
+        else
+            bar="${bar}░"
+        fi
+    done
+    
+    # Display with fixed width formatting
+    printf "\r[%s] %3d%% | %${#total}d/%d %s | %4d %s/s  " \
+        "$bar" "$percent" "$current" "$total" "$unit" "$speed" "$unit"
+}
+
+# Clear progress bar line
+clear_progress_bar() {
+    printf "\r%*s\r" 100 ""
+}
+
+# Monitor file count progress in a directory
+# Usage: monitor_file_progress <dest_dir> <total_files> <initial_count> <start_time> <pid_to_monitor> [interval]
+# Returns: Final file count
+monitor_file_progress() {
+    local dest_dir=$1
+    local total_files=$2
+    local initial_count=$3
+    local start_time=$4
+    local monitor_pid=$5
+    local interval=${6:-0.2}  # Default: 0.2 seconds
+    
+    local copied=0
+    
+    while kill -0 $monitor_pid 2>/dev/null; do
+        # Count files copied so far
+        local current_count=$(/usr/bin/find "$dest_dir" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+        copied=$((current_count - initial_count))
+        
+        # Ensure copied doesn't exceed total
+        if (( copied > total_files )); then
+            copied=$total_files
+        fi
+        
+        show_progress_bar "$copied" "$total_files" "$start_time" 50 "files"
+        
+        sleep $interval
+    done
+    
+    # Final count
+    local final_count=$(/usr/bin/find "$dest_dir" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    copied=$((final_count - initial_count))
+    
+    echo "$copied"
+}
+
+# Show indeterminate spinner for unknown duration tasks
+# Usage: show_spinner <message> <pid_to_monitor>
+# Example: some_command & show_spinner "処理中" $!
+show_spinner() {
+    local message=$1
+    local monitor_pid=$2
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+    
+    while kill -0 $monitor_pid 2>/dev/null; do
+        i=$(( (i+1) % 10 ))
+        printf "\r${message}... ${spin:$i:1} "
+        sleep 0.1
+    done
+    
+    printf "\r%*s\r" $((${#message} + 10)) ""
+}
