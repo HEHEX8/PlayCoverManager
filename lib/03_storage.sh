@@ -478,7 +478,6 @@ _perform_rsync_transfer() {
     if [[ "$sync_mode" == "sync" ]]; then
         print_info "💡 同期モード: 削除されたファイルも反映、同一ファイルはスキップ"
     fi
-    echo ""
     
     # Use macOS built-in rsync without --info=progress2 (not supported)
     local rsync_opts="-a"  # Archive mode: recursive, preserve permissions, times, etc.
@@ -498,14 +497,20 @@ _perform_rsync_transfer() {
     # Monitor progress using generic progress bar
     local initial_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
     
+    echo ""  # New line before progress bar
     local copied=$(monitor_file_progress "$dest_path" "$total_files" "$initial_count" "$start_time" "$rsync_pid" 0.2)
     
     # Wait for rsync to finish and get exit code
     wait $rsync_pid
     local rsync_exit=$?
     
-    # Clear progress line
+    # Get final count
+    local final_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
+    copied=$((final_count - initial_count))
+    
+    # Clear progress line and add newline
     clear_progress_bar
+    echo ""
     
     # Clean up output file
     /bin/rm -f "$rsync_output"

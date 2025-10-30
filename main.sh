@@ -27,11 +27,22 @@ main() {
     # ターミナルセッション情報を隠すため画面をクリア
     clear
     
-    # Ensure data directory exists (before any file operations)
-    ensure_data_directory
+    # Show startup sequence
+    echo ""
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.1.0${NC}"
+    echo ""
+    echo "起動中..."
+    echo ""
     
-    # PlayCover環境が準備できているか確認
+    # Step 1: Ensure data directory exists
+    printf "  ${DIM_GRAY}1/4${NC} データディレクトリ確認... "
+    ensure_data_directory
+    echo "${GREEN}✓${NC}"
+    
+    # Step 2: PlayCover環境が準備できているか確認
+    printf "  ${DIM_GRAY}2/4${NC} PlayCover環境確認... "
     if ! is_playcover_environment_ready; then
+        echo "${YELLOW}!${NC}"
         run_initial_setup
         
         # Re-check after setup
@@ -43,23 +54,34 @@ main() {
             wait_for_enter
             exit 1
         fi
+    else
+        echo "${GREEN}✓${NC}"
     fi
     
-
-    # Clean up duplicate entries in mapping file
+    # Step 3: Clean up duplicate entries in mapping file
+    printf "  ${DIM_GRAY}3/4${NC} マッピングファイル整理... "
     deduplicate_mappings
+    echo "${GREEN}✓${NC}"
     
-    # Check and mount PlayCover volume if needed (before checking launchable apps)
+    # Step 4: Check and mount PlayCover volume if needed
+    printf "  ${DIM_GRAY}4/4${NC} PlayCoverボリューム確認... "
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
-            # Show message before mounting (sudo will prompt for password)
-            echo ""
-            print_info "PlayCoverボリュームをマウントしています..."
+            echo "${YELLOW}マウント中${NC}"
             echo ""
             mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID"
+            echo ""
+        else
+            echo "${GREEN}✓${NC}"
         fi
+    else
+        echo "${GREEN}✓${NC}"
     fi
+    
+    echo ""
+    echo "${GREEN}起動完了${NC}"
+    sleep 0.5
     
     # Show quick launcher if launchable apps exist
     local -a launchable_apps=()
