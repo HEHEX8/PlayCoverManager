@@ -570,7 +570,7 @@ _cleanup_and_unmount() {
     
     if [[ "$is_temp_mount" == "true" ]]; then
         print_info "一時マウントをクリーンアップ中..."
-        unmount_with_fallback "$mount_point" "silent" || true
+        unmount_with_fallback "$mount_point" "silent" "$volume_name" || true
         /bin/sleep 1
         cleanup_temp_dir "$mount_point" true
         return 0
@@ -1000,7 +1000,7 @@ perform_internal_to_external_migration() {
     print_info "データを同期転送中... (進捗が表示されます)"
     if ! _perform_rsync_transfer "$source_path" "$temp_mount" "sync"; then
         print_info "一時マウントをクリーンアップ中..."
-        unmount_with_fallback "$temp_mount" "silent" || true
+        unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
         cleanup_temp_dir "$temp_mount" true
         return 1
@@ -1008,7 +1008,7 @@ perform_internal_to_external_migration() {
     
     # Unmount temporary mount
     print_info "一時マウントをアンマウント中..."
-    unmount_with_fallback "$temp_mount" "verbose"
+    unmount_with_fallback "$temp_mount" "verbose" "$volume_name"
     /bin/sleep 1  # Wait for unmount to complete
     cleanup_temp_dir "$temp_mount" true
     
@@ -1179,7 +1179,7 @@ perform_external_to_internal_migration() {
         local volume_device=$(get_volume_device "$volume_name")
         
         # Try unmount with automatic fallback
-        if ! unmount_with_fallback "$target_path" "verbose"; then
+        if ! unmount_with_fallback "$target_path" "verbose" "$volume_name"; then
             print_error "強制アンマウントも失敗しました"
             echo ""
             print_warning "このアプリが使用中の可能性があります"
@@ -1232,7 +1232,7 @@ perform_external_to_internal_migration() {
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
-            unmount_with_fallback "$source_mount" "silent" || true
+            unmount_with_fallback "$source_mount" "silent" "$volume_name" || true
             /bin/sleep 1
             /usr/bin/sudo /bin/rm -rf "$source_mount" 2>/dev/null || true
         fi
@@ -1248,7 +1248,7 @@ perform_external_to_internal_migration() {
     local unmount_success=true
     if [[ "$temp_mount_created" == true ]]; then
         print_info "一時マウントをクリーンアップ中..."
-        if ! unmount_with_fallback "$source_mount" "silent"; then
+        if ! unmount_with_fallback "$source_mount" "silent" "$volume_name"; then
             print_warning "一時マウントのアンマウントに失敗しました"
             unmount_success=false
         fi

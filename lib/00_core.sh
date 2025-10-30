@@ -674,18 +674,33 @@ cleanup_temp_dir() {
 unmount_with_fallback() {
     local target="$1"
     local mode="${2:-silent}"
+    local volume_name_hint="${3:-}"  # Optional: volume name for cache invalidation
+    
+    local unmount_success=false
     
     # Try normal unmount first
     if unmount_volume "$target" "$mode"; then
-        return 0
+        unmount_success=true
+    else
+        # If normal unmount failed, try force unmount
+        if [[ "$mode" == "verbose" ]]; then
+            print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
+        fi
+        
+        if unmount_volume "$target" "$mode" "force"; then
+            unmount_success=true
+        fi
     fi
     
-    # If normal unmount failed, try force unmount
-    if [[ "$mode" == "verbose" ]]; then
-        print_warning "通常のアンマウントに失敗、強制アンマウントを試みます..."
-    fi
-    
-    if unmount_volume "$target" "$mode" "force"; then
+    # Invalidate cache if unmount succeeded
+    if [[ "$unmount_success" == true ]]; then
+        # If volume name hint provided, use it
+        if [[ -n "$volume_name_hint" ]]; then
+            invalidate_volume_cache "$volume_name_hint"
+        # If target looks like a volume name (not a device path), invalidate it
+        elif [[ "$target" != /dev/* ]] && [[ "$target" != /* ]]; then
+            invalidate_volume_cache "$target"
+        fi
         return 0
     else
         return 1

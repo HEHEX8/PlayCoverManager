@@ -342,7 +342,7 @@ mount_app_volume() {
         if [[ -n "$bundle_id" ]]; then
             quit_app_if_running "$bundle_id"
         fi
-        unmount_with_fallback "$device" "silent"
+        unmount_with_fallback "$device" "silent" "$volume_name"
     fi
     
     # Create mount point if not exists
@@ -415,7 +415,7 @@ delete_app_volume() {
     
     # Unmount first if mounted
     if [[ -n "$mount_point" ]]; then
-        unmount_with_fallback "$device" "silent"
+        unmount_with_fallback "$device" "silent" "$volume_name"
     fi
     
     # Delete volume
