@@ -480,9 +480,20 @@ _perform_fcp_transfer() {
     local copy_exit=0
     if [[ "$copy_cmd" == "fcp" ]]; then
         # fcp: parallel copy with all CPU cores
-        # Note: fcp copies contents, not the directory itself
-        # Use shell expansion to copy all files/dirs from source to dest
-        /usr/bin/sudo /bin/bash -c "fcp \"$source_path\"/* \"$dest_path/\"" 2>&1 || copy_exit=$?
+        # Usage: fcp source... destination_directory
+        # To copy directory contents, use glob pattern
+        # Note: fcp has no -r flag, it automatically handles directories
+        
+        # First, ensure destination directory exists
+        /usr/bin/sudo /bin/mkdir -p "$dest_path"
+        
+        # Copy all contents from source to destination
+        # Use find to get all files/dirs and pass to fcp
+        # This avoids glob expansion issues with hidden files
+        cd "$source_path" && \
+        /usr/bin/sudo /usr/bin/find . -mindepth 1 -maxdepth 1 -print0 | \
+        /usr/bin/xargs -0 -I {} /usr/bin/sudo fcp {} "$dest_path/" 2>&1
+        copy_exit=$?
     else
         # cp: standard recursive copy
         /usr/bin/sudo cp -a "$source_path/" "$dest_path/" 2>&1 || copy_exit=$?

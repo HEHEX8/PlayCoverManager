@@ -1104,22 +1104,49 @@ show_quick_launcher() {
             esac
             
             # Check sudo necessity
-            local sudo_mark="  "  # 2-space placeholder
+            local sudo_mark=""
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
                 sudo_mark="🔐"
             fi
             
-            # Recent mark with proper spacing
-            local recent_display="   "  # 3-space placeholder
+            # Recent mark
+            local recent_display=""
             if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                recent_display="⭐ "
+                recent_display="⭐"
                 recent_count=1
             fi
             
-            # Format: [sudo][storage][recent] number. name
-            # Fixed width: sudo(2) storage(2) recent(3) = 7 chars for icons, then 2-digit number
-            printf "%s%s%s%2d. %s\n" \
-                "$sudo_mark" "$storage_icon" "$recent_display" "$index" "$display_name"
+            # Format: [sudo][storage][recent] with proper spacing
+            # Build icon string with fixed width
+            local icon_string=""
+            if [[ -n "$sudo_mark" ]]; then
+                icon_string="${sudo_mark}"
+            fi
+            if [[ -n "$storage_icon" ]]; then
+                icon_string="${icon_string}${storage_icon}"
+            fi
+            if [[ -n "$recent_display" ]]; then
+                icon_string="${icon_string}${recent_display}"
+            fi
+            
+            # Pad icon string to ensure consistent alignment
+            # Each emoji is ~2 chars wide, need at least 6 spaces for no icons
+            local padding=""
+            local icon_count=0
+            [[ -n "$sudo_mark" ]] && ((icon_count++))
+            [[ -n "$storage_icon" ]] && ((icon_count++))
+            [[ -n "$recent_display" ]] && ((icon_count++))
+            
+            # Calculate padding: 3 icons max, each takes ~2 spaces
+            case $icon_count in
+                0) padding="      " ;;  # 6 spaces
+                1) padding="    " ;;    # 4 spaces
+                2) padding="  " ;;      # 2 spaces
+                3) padding="" ;;        # no padding
+            esac
+            
+            printf "%s%s%2d. %s\n" \
+                "$icon_string" "$padding" "$index" "$display_name"
             ((index++))
         done
         
