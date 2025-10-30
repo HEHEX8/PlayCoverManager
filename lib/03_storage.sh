@@ -494,8 +494,6 @@ _perform_ditto_transfer() {
     # Monitor progress
     local copied=0
     local last_copied=0
-    local spinner_chars=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-    local spinner_idx=0
     
     while kill -0 $ditto_pid 2>/dev/null; do
         # Count files copied so far
@@ -526,12 +524,10 @@ _perform_ditto_transfer() {
             fi
         done
         
-        # Display progress
-        local spinner="${spinner_chars[$spinner_idx]}"
-        printf "\r${spinner} [${bar}] ${percent}%% | ${copied}/${total_files} ファイル | ${speed} files/s  "
-        
-        # Update spinner
-        spinner_idx=$(( (spinner_idx + 1) % ${#spinner_chars[@]} ))
+        # Display progress with fixed width formatting
+        # Format: [████████░░] 45% | 1234/5000 files | 123 files/s
+        printf "\r[%s] %3d%% | %${#total_files}d/%d files | %4d files/s  " \
+            "$bar" "$percent" "$copied" "$total_files" "$speed"
         
         sleep 0.1
     done
