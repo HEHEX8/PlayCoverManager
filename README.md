@@ -59,6 +59,26 @@ PlayCover Manager は、PlayCover で実行する iOS アプリのデータを�
 - PlayCover 3.0 以降
 - 外部ストレージ（APFS 対応）
 
+### 必須コンポーネント（自動インストール）
+
+初回セットアップ時に以下が自動的にインストールされます：
+
+1. **Xcode Command Line Tools** - macOS開発ツール
+2. **Homebrew** - パッケージマネージャー
+3. **Homebrew版 rsync** - 高速データ転送ツール（**必須**）
+4. **PlayCover** - iOSアプリ実行環境
+
+#### ⚠️ rsyncについて重要な注意
+
+macOS Sequoia以降、Appleは`openrsync`（機能制限版）をシステム標準としています。
+このツールは**Homebrew版rsync（GNU rsync）が必須**です：
+
+- **openrsync**: 進捗表示が不十分、一部機能が未対応
+- **Homebrew版rsync**: 完全な機能セット、%進捗表示、転送速度表示
+
+セットアップ時にopenrsyncが検出されると、Homebrew版rsyncのインストールが必須として要求されます。
+インストールを断るとセットアップが中断されます。
+
 ### インストール方法1: DMGインストーラー（推奨）
 
 1. **最新DMGをダウンロード**

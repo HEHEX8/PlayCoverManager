@@ -144,31 +144,43 @@ fi
 sudo "$rsync_cmd" $rsync_opts "$source/" "$dest/"
 ```
 
-### Homebrew版rsyncの自動インストール
+### Homebrew版rsyncの自動インストール（必須）
 
 セットアップウィザードで自動的にチェック・インストールされます：
 
-1. **チェック機能** (`lib/06_setup.sh` - 行235-280付近)
+1. **チェック機能** (`lib/06_setup.sh` - 行235-310付近)
    - Homebrew版rsyncの存在確認
    - システム版rsyncの存在確認とタイプ判定（GNU or openrsync）
-   - openrsync検出時に制限事項を警告
+   - openrsync検出時に制限事項をエラー表示
    - バージョン情報の表示
 
-2. **インストール機能** (行282-297付近)
+2. **インストール機能** (行312-327付近)
    - `brew install rsync`で最新版をインストール
    - インストール成功時にバージョン表示
 
-3. **セットアップフロー統合** (行639付近)
+3. **セットアップフロー統合** (行689-698付近)
    - Step 5として自動的に実行
-   - openrsync検出時は強くインストールを推奨
-   - ユーザーに確認を求めて自動インストール
+   - openrsync検出時はインストールを**必須**として要求
+   - インストールを断るとセットアップ中断
+   - GNU rsync検出時は推奨レベル（動作はする）
 
-### macOS Sequoia以降の注意事項
+### macOS Sequoia以降の重要な変更
 
 macOS Sequoia（2025年）以降、AppleはGNU rsyncからopenrsyncに変更しました：
 - **理由**: GPLv3ライセンスの回避
 - **影響**: 一部の高度な機能が使用不可
-- **推奨**: Homebrew版rsync（GNU rsync）のインストールを強く推奨
+- **対応**: Homebrew版rsync（GNU rsync）のインストールが**必須**
+
+#### openrsync環境での動作
+
+- openrsync検出時、セットアップウィザードで以下のメッセージが表示されます：
+  ```
+  ❌ openrsync は機能が不十分です
+  ✅ Homebrew版 rsync が必要です
+  Homebrew版 rsync をインストールしますか？（必須） (Y/n):
+  ```
+- インストールを断ると、セットアップが中断されます
+- このツールはHomebrew版rsyncなしでは動作しません
 
 ## 利点
 

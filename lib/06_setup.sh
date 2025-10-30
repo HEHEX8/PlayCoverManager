@@ -250,40 +250,67 @@ check_rsync_installation() {
         
         # rsyncのタイプを判定（GNU rsync or openrsync）
         if [[ "$rsync_version" == *"openrsync"* ]]; then
-            print_warning "⚠️  システム標準の openrsync が検出されました"
+            print_error "⚠️  システム標準の openrsync が検出されました"
             print_info "${rsync_version}"
             print_info "パス: ${system_rsync}"
             echo ""
-            print_warning "🚨 openrsync の制限事項:"
-            print_warning "   • 進捗表示が詳細ではない（%表示なし）"
-            print_warning "   • 転送速度・残り時間が表示されない"
-            print_warning "   • 一部のオプションがサポートされていない"
+            print_error "❌ openrsync は機能が不十分です:"
+            print_error "   • 進捗表示が詳細ではない（%表示なし）"
+            print_error "   • 転送速度・残り時間が表示されない"
+            print_error "   • 一部のオプションがサポートされていない"
             echo ""
-            print_info "✨ Homebrew版 rsync の利点:"
+            print_info "✅ Homebrew版 rsync が必要です:"
             print_info "   • 全体の進捗を%で表示"
             print_info "   • 転送速度と残り時間をリアルタイム表示"
             print_info "   • より高速なデータ転送"
             print_info "   • 完全な機能セット"
+            echo ""
+            
+            # Homebrew版rsyncのインストールは必須
+            if command -v brew >/dev/null 2>&1; then
+                if prompt_confirmation "Homebrew版 rsync をインストールしますか？（必須）" "Y/n"; then
+                    install_rsync
+                    if [[ $? -ne 0 ]]; then
+                        print_error "rsync のインストールに失敗しました"
+                        print_error "セットアップを中断します"
+                        return 1
+                    fi
+                    return 0
+                else
+                    echo ""
+                    print_error "❌ Homebrew版 rsync のインストールが必要です"
+                    print_error "このツールは rsync なしでは動作しません"
+                    print_info "💡 後で以下のコマンドでインストールしてください:"
+                    print_info "   brew install rsync"
+                    echo ""
+                    print_error "セットアップを中断します"
+                    return 1
+                fi
+            else
+                print_error "Homebrew が見つかりません"
+                print_error "Homebrew をインストールしてから再度実行してください"
+                return 1
+            fi
         else
             print_warning "システム標準の rsync が存在します"
             print_info "${rsync_version}"
             print_info "パス: ${system_rsync}"
             print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
-        fi
-        
-        # Homebrewがインストール済みなら、rsyncのインストールを強く推奨
-        if command -v brew >/dev/null 2>&1; then
-            echo ""
-            if prompt_confirmation "Homebrew版 rsync をインストールしますか？（強く推奨）" "Y/n"; then
-                install_rsync
-                return $?
-            else
+            
+            # GNU rsyncの場合は推奨レベル（動作はする）
+            if command -v brew >/dev/null 2>&1; then
                 echo ""
-                print_warning "⚠️  システム版rsyncを使用します（機能制限あり）"
-                print_info "💡 後で 'brew install rsync' でインストール可能です"
+                if prompt_confirmation "Homebrew版 rsync をインストールしますか？（推奨）" "Y/n"; then
+                    install_rsync
+                    return $?
+                else
+                    echo ""
+                    print_warning "⚠️  システム版rsyncを使用します"
+                    print_info "💡 後で 'brew install rsync' でインストール可能です"
+                fi
             fi
+            return 0
         fi
-        return 0
     else
         print_error "rsync が見つかりません"
         return 1
@@ -659,8 +686,15 @@ run_initial_setup() {
         install_playcover
     fi
     
-    # Step 5: rsync check（データ転送の高速化に必要）
+    # Step 5: rsync check（データ転送に必須）
+    echo ""
     check_rsync_installation
+    if [[ $? -ne 0 ]]; then
+        print_error "rsync のセットアップに失敗しました"
+        print_error "セットアップを中断します"
+        wait_for_enter
+        exit 1
+    fi
 
     # Only do volume setup if needed
     if [[ "$need_volume_setup" == false ]]; then
