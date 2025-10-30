@@ -312,7 +312,7 @@ show_quick_status() {
         fi
         
         if [[ $internal_count -gt 0 ]]; then
-            status_parts+=("${ORANGE}🏠 内部マウント: ${internal_count}件${NC}")
+            status_parts+=("${ORANGE}🍎 内部マウント: ${internal_count}件${NC}")
         fi
         
         if [[ $unmounted_count -gt 0 ]]; then
@@ -488,7 +488,7 @@ show_installed_apps() {
                 local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                 case "$storage_mode" in
                     "internal_intentional")
-                        storage_icon="🏠 内部"
+                        storage_icon="🍎 内部"
                         ;;
                     "internal_contaminated")
                         storage_icon="⚠️  内蔵データ検出"
@@ -834,7 +834,7 @@ individual_volume_control() {
             echo ""
         elif [[ "$extra_info" == "internal_intentional" ]] || [[ "$extra_info" == "internal_intentional_empty" ]]; then
             # Intentional internal storage mode (with or without data): show as locked
-            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏠 内蔵ストレージモード${NC}"
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🍎 内蔵ストレージモード${NC}"
             echo "      ${GRAY}${status_line}${NC}"
             echo ""
         elif [[ "$extra_info" == "internal_contaminated" ]]; then
@@ -1092,7 +1092,7 @@ show_quick_launcher() {
                     storage_icon="⚡"
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
-                    storage_icon="🏠"
+                    storage_icon="🍎"
                     ;;
                 "internal_contaminated")
                     storage_icon="⚠️"

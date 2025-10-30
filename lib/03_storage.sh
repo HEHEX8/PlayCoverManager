@@ -648,12 +648,12 @@ switch_storage_location() {
                 local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                 case "$storage_mode" in
                     "internal_intentional")
-                        location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
+                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
                         free_space=$(get_storage_free_space "$HOME")
                         usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                         ;;
                     "internal_intentional_empty")
-                        location_text="${BOLD}${GREEN}🏠 内蔵ストレージモード${NC}"
+                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
                         free_space=$(get_storage_free_space "$HOME")
                         usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                         ;;
@@ -766,7 +766,7 @@ switch_storage_location() {
         case "$current_storage" in
             "internal")
                 local internal_free=$(get_storage_free_space "$HOME")
-                echo "  ${BOLD}🏠 ${CYAN}内蔵ストレージ${NC}"
+                echo "  ${BOLD}🍎 ${CYAN}内蔵ストレージ${NC}"
                 echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
                 ;;
             "external")
@@ -804,7 +804,7 @@ switch_storage_location() {
                     storage_free_bytes=999999999999
                 fi
                 
-                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}⚡外部${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${GREEN}🍎内蔵${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${BLUE}⚡外部${NC} ${LIGHT_GRAY}へ移動${NC}"
                 echo "  ${BOLD}⚡${CYAN}外部ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "external")
@@ -814,8 +814,8 @@ switch_storage_location() {
                 storage_location="内蔵ドライブ"
                 storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 
-                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}⚡外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🏠内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
-                echo "  ${BOLD}🏠${CYAN}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
+                echo "${BOLD}${UNDERLINE}${CYAN}実行する操作:${NC} ${BOLD}${BLUE}⚡外部${NC} ${BOLD}${YELLOW}→${NC} ${BOLD}${GREEN}🍎内蔵${NC} ${LIGHT_GRAY}へ移動${NC}"
+                echo "  ${BOLD}🍎${CYAN}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "none")
                 print_error "ストレージ切り替えを実行できません"
