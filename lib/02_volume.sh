@@ -309,6 +309,8 @@ unmount_app_volume() {
     
     if unmount_volume "$device" "silent"; then
         print_success "アンマウント成功"
+        # Invalidate cache after successful unmount
+        invalidate_volume_cache "$volume_name"
         return 0
     else
         print_error "アンマウント失敗"
@@ -351,6 +353,8 @@ mount_app_volume() {
     # Mount with nobrowse option
     if mount_volume "$device" "$mount_path" "nobrowse" "silent"; then
         print_success "マウント成功: $mount_path"
+        # Invalidate cache after successful mount
+        invalidate_volume_cache "$volume_name"
         return 0
     else
         print_error "マウント失敗"
@@ -375,6 +379,8 @@ create_app_volume() {
     # Create APFS volume with specified size
     if /usr/bin/sudo /usr/sbin/diskutil apfs addVolume "$disk_identifier" APFS "$volume_name" -size "${size_gb}g" >/dev/null 2>&1; then
         print_success "ボリュームの作成に成功しました"
+        # Invalidate cache after successful creation (new volume appeared)
+        invalidate_volume_cache "$volume_name"
         return 0
     else
         print_error "ボリュームの作成に失敗しました"
@@ -415,6 +421,8 @@ delete_app_volume() {
     # Delete volume
     if /usr/bin/sudo /usr/sbin/diskutil apfs deleteVolume "$device" >/dev/null 2>&1; then
         print_success "ボリュームの削除に成功しました"
+        # Invalidate cache after successful deletion
+        invalidate_volume_cache "$volume_name"
         return 0
     else
         print_error "ボリュームの削除に失敗しました"
@@ -699,6 +707,8 @@ batch_mount_all() {
         if mount_volume "/dev/$device" "$target_path" "nobrowse" "silent"; then
             echo " ✅"
             ((mounted_count++))
+            # Invalidate cache after successful mount
+            invalidate_volume_cache "$volume_name"
         else
             echo " ❌ (マウント失敗)"
             ((failed_count++))
@@ -751,6 +761,8 @@ batch_unmount_all() {
         if unmount_with_fallback "$volume_name" "silent"; then
             echo " ✅"
             ((unmounted_count++))
+            # Invalidate cache after successful unmount
+            invalidate_volume_cache "$volume_name"
         else
             echo " ❌ (アンマウント失敗)"
             ((failed_count++))

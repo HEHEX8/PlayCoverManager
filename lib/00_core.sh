@@ -172,6 +172,11 @@ NEED_PLAYCOVER=false
 SELECTED_EXTERNAL_DISK=""
 SELECTED_CONTAINER=""
 
+# Volume state cache for performance optimization
+# Format: VOLUME_STATE_CACHE[volume_name]="exists|device|mount_point|timestamp"
+declare -A VOLUME_STATE_CACHE
+CACHE_ENABLED=true  # Global cache enable/disable flag
+
 #######################################################
 # Basic Print Functions
 #######################################################
@@ -1129,6 +1134,158 @@ validate_and_get_mount_point() {
     fi
     
     local mount_point=$(/usr/bin/grep -E "Mount Point:" <<< "$diskutil_output" | /usr/bin/sed 's/^[[:space:]]*Mount Point:[[:space:]]*//')
+    
+    if [[ -n "$mount_point" ]]; then
+        echo "$mount_point"
+        return 0  # Mounted
+    else
+        return 2  # Exists but not mounted
+    fi
+}
+
+# ================================================================
+# Volume State Cache Management
+# ================================================================
+# Performance optimization: Cache volume state to reduce redundant diskutil calls
+# Only invalidate cache for volumes that are actually modified
+
+# Get cached volume info or fetch and cache if not present
+# Args: $1 = volume_name
+# Returns: Same as get_volume_info() - 0 if mounted, 1 if not exists, 2 if exists but not mounted
+# Output: "device|mount_point"
+# Usage:
+#   local info=$(get_volume_info_cached "$volume_name")
+#   local status=$?
+get_volume_info_cached() {
+    local volume_name="$1"
+    
+    # If cache is disabled, always fetch fresh data
+    if [[ "$CACHE_ENABLED" != true ]]; then
+        get_volume_info "$volume_name"
+        return $?
+    fi
+    
+    # Check if cache exists for this volume
+    if [[ -n "${VOLUME_STATE_CACHE[$volume_name]}" ]]; then
+        local cached="${VOLUME_STATE_CACHE[$volume_name]}"
+        local exists="${cached%%|*}"
+        local rest="${cached#*|}"
+        local device="${rest%%|*}"
+        local rest2="${rest#*|}"
+        local mount_point="${rest2%%|*}"
+        
+        # Output cached data
+        echo "${device}|${mount_point}"
+        
+        # Return status based on cached data
+        if [[ "$exists" == "0" ]]; then
+            return 0  # Mounted
+        elif [[ "$exists" == "1" ]]; then
+            return 1  # Not exists
+        else
+            return 2  # Exists but not mounted
+        fi
+    fi
+    
+    # Cache miss - fetch fresh data
+    local vol_info=$(get_volume_info "$volume_name")
+    local vol_status=$?
+    
+    local device="${vol_info%%|*}"
+    local mount_point="${vol_info#*|}"
+    local timestamp=$(date +%s)
+    
+    # Store in cache: "status|device|mount_point|timestamp"
+    VOLUME_STATE_CACHE[$volume_name]="${vol_status}|${device}|${mount_point}|${timestamp}"
+    
+    # Output data
+    echo "${device}|${mount_point}"
+    return $vol_status
+}
+
+# Invalidate cache for specific volume(s)
+# Args: $@ = volume_name(s) to invalidate (can be multiple)
+# Usage:
+#   invalidate_volume_cache "$volume_name"
+#   invalidate_volume_cache "$vol1" "$vol2" "$vol3"
+invalidate_volume_cache() {
+    if [[ "$CACHE_ENABLED" != true ]]; then
+        return 0
+    fi
+    
+    for volume_name in "$@"; do
+        unset "VOLUME_STATE_CACHE[$volume_name]"
+    done
+}
+
+# Invalidate all volume caches
+# Usage: invalidate_all_volume_caches
+invalidate_all_volume_caches() {
+    VOLUME_STATE_CACHE=()
+}
+
+# Temporarily disable cache for a code block
+# Usage:
+#   with_cache_disabled() {
+#       # Your code here will not use cache
+#   }
+with_cache_disabled() {
+    local original_state="$CACHE_ENABLED"
+    CACHE_ENABLED=false
+    "$@"
+    local result=$?
+    CACHE_ENABLED="$original_state"
+    return $result
+}
+
+# Get cache statistics (for debugging/monitoring)
+# Output: Number of cached volumes and list of cached volume names
+get_cache_stats() {
+    local count=0
+    local volumes=()
+    
+    for key in "${(@k)VOLUME_STATE_CACHE}"; do
+        ((count++))
+        volumes+=("$key")
+    done
+    
+    echo "Cached volumes: $count"
+    if [[ $count -gt 0 ]]; then
+        echo "Volume names: ${(j:, :)volumes}"
+    fi
+}
+
+# Wrapper functions for backward compatibility with caching support
+# These can be used as drop-in replacements for the original functions
+
+# Cached version of validate_and_get_device
+validate_and_get_device_cached() {
+    local volume_name="$1"
+    
+    local vol_info=$(get_volume_info_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        return 1  # Not exists
+    fi
+    
+    local device="${vol_info%%|*}"
+    echo "$device"
+    return 0
+}
+
+# Cached version of validate_and_get_mount_point
+validate_and_get_mount_point_cached() {
+    local volume_name="$1"
+    
+    local vol_info=$(get_volume_info_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        return 1  # Not exists
+    fi
+    
+    local mount_point="${vol_info#*|}"
     
     if [[ -n "$mount_point" ]]; then
         echo "$mount_point"

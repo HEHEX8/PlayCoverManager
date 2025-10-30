@@ -263,10 +263,11 @@ show_quick_status() {
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         
-        # Check actual mount status using get_mount_point (same logic as volume info)
-        local actual_mount=$(get_mount_point "$volume_name")
+        # Check actual mount status using cached data for performance
+        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+        local vol_status=$?
         
-        if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$target_path" ]]; then
+        if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$target_path" ]]; then
             # Volume is mounted at correct location = external storage
             ((external_count++))
         else
@@ -452,11 +453,12 @@ show_installed_apps() {
             local container_path="${HOME}/Library/Containers/${bundle_id}"
             local container_size=$(get_container_size "$container_path")
             
-            # Check actual mount status using get_mount_point (same as volume info display)
-            local actual_mount=$(get_mount_point "$volume_name")
+            # Check actual mount status using cached data for performance
+            local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+            local vol_status=$?
             local storage_icon=""
             
-            if [[ -n "$actual_mount" ]] && [[ "$actual_mount" == "$container_path" ]]; then
+            if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
                 # Volume is mounted at correct location = external storage
                 storage_icon="🔌 外部"
             elif [[ -n "$actual_mount" ]]; then
@@ -538,10 +540,13 @@ app_management_menu() {
     # Ensure PlayCover volume is mounted before showing menu
     local playcover_mounted=false
     
-    if volume_exists "$PLAYCOVER_VOLUME_NAME" 2>/dev/null; then
-        local pc_current_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
-        
-        if [[ -z "$pc_current_mount" ]]; then
+    local pc_current_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
+    local pc_vol_status=$?
+    
+    if [[ $pc_vol_status -ne 1 ]]; then
+        # Volume exists (either mounted or unmounted)
+        if [[ $pc_vol_status -eq 2 ]]; then
+            # Volume exists but not mounted (status 2)
             # Volume exists but not mounted - try to mount it
             authenticate_sudo
             
@@ -726,23 +731,22 @@ individual_volume_control() {
             fi
         fi
         
-        # Check if volume exists (using cached diskutil output)
-        if ! volume_exists "$volume_name" "$diskutil_cache"; then
+        # Check volume mount status using cached data
+        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+        local vol_status=$?
+        
+        if [[ $vol_status -eq 1 ]]; then
             status_line="❌ ボリュームが見つかりません"
-        else
-            # Check actual mount point of the volume (could be anywhere)
-            local actual_mount=$(get_mount_point "$volume_name")
-            
-            if [[ -n "$actual_mount" ]]; then
-                # Volume is mounted somewhere
-                if [[ "$actual_mount" == "$target_path" ]]; then
-                    status_line="🟢 マウント済: ${actual_mount}"
-                else
-                    status_line="⚠️  マウント位置異常: ${actual_mount}"
-                fi
+        elif [[ $vol_status -eq 0 ]]; then
+            # Volume is mounted
+            if [[ "$actual_mount" == "$target_path" ]]; then
+                status_line="🟢 マウント済: ${actual_mount}"
             else
-                # Volume is not mounted - check storage mode
-                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+                status_line="⚠️  マウント位置異常: ${actual_mount}"
+            fi
+        else
+            # Volume exists but not mounted (vol_status == 2)
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                 
                 case "$storage_mode" in
                     "none")
@@ -767,7 +771,6 @@ individual_volume_control() {
                         status_line="⚪️ 未マウント"
                         ;;
                 esac
-            fi
         fi
         
         # Display with lock status or number
@@ -929,8 +932,12 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover クイックランチャー"
         
-        # Check if PlayCover volume exists (should be created during setup)
-        if ! volume_exists "$PLAYCOVER_VOLUME_NAME"; then
+        # Check PlayCover volume mount status using cached data
+        local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
+        local pc_vol_status=$?
+        
+        if [[ $pc_vol_status -eq 1 ]]; then
+            # Volume doesn't exist
             echo ""
             print_error "PlayCoverボリュームが見つかりません"
             echo ""
@@ -941,9 +948,8 @@ show_quick_launcher() {
             return 0  # Go to main menu
         fi
         
-        # Check if PlayCover volume is mounted
-        local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
-        if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+        # Check if PlayCover volume is mounted at correct location
+        if [[ $pc_vol_status -ne 0 ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
             echo ""
             print_warning "PlayCoverボリュームがマウントされていません"
             print_info "PlayCoverボリュームをマウントしています..."
