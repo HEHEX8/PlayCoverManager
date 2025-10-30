@@ -666,27 +666,6 @@ unmount_with_fallback() {
     fi
 }
 
-# Validate volume and get its device
-# Args: volume_name
-# Returns: 0 on success, 1 on failure
-# Output: Device path
-validate_and_get_device() {
-    local volume_name="$1"
-    
-    if ! volume_exists "$volume_name"; then
-        return 1
-    fi
-    
-    local device=$(get_volume_device "$volume_name")
-    
-    if [[ -z "$device" ]]; then
-        return 1
-    fi
-    
-    echo "$device"
-    return 0
-}
-
 # Quit app before volume operations
 quit_app_if_running() {
     local bundle_id="$1"
