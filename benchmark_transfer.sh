@@ -40,7 +40,17 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
-# Create dest base
+# Clean and create dest base
+if [[ -d "$DEST_BASE" ]]; then
+    echo "既存のベンチマークディレクトリを削除中..."
+    chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
+    chmod -R u+w "$DEST_BASE" 2>/dev/null || true
+    rm -rf "$DEST_BASE" 2>/dev/null || {
+        echo "⚠️  通常削除失敗、sudoで削除を試みます..."
+        sudo rm -rf "$DEST_BASE"
+    }
+fi
+
 mkdir -p "$DEST_BASE"
 
 # Count files
@@ -60,10 +70,16 @@ for method in "${methods[@]}"; do
     
     print_header "テスト: $method"
     
-    # Clean previous test
+    # Clean previous test with proper permissions
     if [[ -d "$dest_dir" ]]; then
         echo "前回のテストデータを削除中..."
-        rm -rf "$dest_dir"
+        # Remove immutable flags and change permissions first
+        chflags -R nouchg,nouappnd "$dest_dir" 2>/dev/null || true
+        chmod -R u+w "$dest_dir" 2>/dev/null || true
+        rm -rf "$dest_dir" 2>/dev/null || {
+            echo "⚠️  通常削除失敗、sudoで削除を試みます..."
+            sudo rm -rf "$dest_dir"
+        }
     fi
     
     mkdir -p "$dest_dir"
@@ -178,6 +194,12 @@ echo ""
 read "cleanup?テストデータを削除しますか？ (y/n): "
 if [[ "$cleanup" == "y" ]]; then
     echo "クリーンアップ中..."
-    rm -rf "$DEST_BASE"
+    # Remove flags and permissions first
+    chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
+    chmod -R u+w "$DEST_BASE" 2>/dev/null || true
+    rm -rf "$DEST_BASE" 2>/dev/null || {
+        echo "⚠️  通常削除失敗、sudoで削除を試みます..."
+        sudo rm -rf "$DEST_BASE"
+    }
     echo "✅ 完了"
 fi
