@@ -349,8 +349,8 @@ show_menu() {
     local eject_label="ディスク全体を取り外し"
     
     # Get current PlayCover volume device dynamically for menu display
-    if volume_exists "$PLAYCOVER_VOLUME_NAME" 2>/dev/null; then
-        local volume_device=$(get_volume_device "$PLAYCOVER_VOLUME_NAME" 2>/dev/null)
+    if volume_exists_cached "$PLAYCOVER_VOLUME_NAME"; then
+        local volume_device=$(validate_and_get_device_cached "$PLAYCOVER_VOLUME_NAME")
         if [[ -n "$volume_device" ]]; then
             local playcover_device="/dev/${volume_device}"
             local drive_name=$(get_drive_name "$playcover_device")
@@ -502,7 +502,7 @@ show_installed_apps() {
         else
             if [[ "$display_only" == "true" ]]; then
                 # Check what exactly is missing for detailed error message
-                local volume_exists_check=$(volume_exists "$volume_name" 2>/dev/null && echo "yes" || echo "no")
+                local volume_exists_check=$(volume_exists_cached "$volume_name" && echo "yes" || echo "no")
                 local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
                 
                 local missing_reason=""
@@ -881,7 +881,7 @@ individual_volume_control() {
     IFS='|' read -r volume_name bundle_id display_name <<< "$selected_mapping"
     
     local target_path="${HOME}/Library/Containers/${bundle_id}"
-    local current_mount=$(get_mount_point "$volume_name")
+    local current_mount=$(get_mount_point_cached "$volume_name")
     
     # Quick switch without confirmation - delegate to helper functions
     if [[ -n "$current_mount" ]]; then

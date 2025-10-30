@@ -172,7 +172,7 @@ check_volume_exists_or_error() {
     local title="$2"
     local callback="${3:-}"
     
-    if ! volume_exists "$volume_name"; then
+    if ! volume_exists_cached "$volume_name"; then
         show_error_and_return "$title" "ボリューム '${volume_name}' が見つかりません" "$callback"
         return 1
     fi

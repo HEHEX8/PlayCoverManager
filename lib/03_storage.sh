@@ -618,7 +618,7 @@ switch_storage_location() {
             local target_path="${HOME}/Library/Containers/${bundle_id}"
             
             # Check actual mount status (same logic as volume info display)
-            local actual_mount=$(get_mount_point "$volume_name")
+            local actual_mount=$(get_mount_point_cached "$volume_name")
             local container_size=$(get_container_size "$target_path")
             local free_space=""
             local location_text=""
@@ -713,7 +713,7 @@ switch_storage_location() {
             echo ""
             print_error "外部ボリュームが誤った位置にマウントされています"
             echo ""
-            local current_mount=$(get_mount_point "$volume_name")
+            local current_mount=$(get_mount_point_cached "$volume_name")
             echo "${BOLD}現在のマウント位置:${NC}"
             echo "  ${DIM_GRAY}${current_mount}${NC}"
             echo ""
@@ -780,7 +780,7 @@ switch_storage_location() {
                 storage_location="外部ドライブ"
                 
                 # Get mount point of the target app volume (not PlayCover volume) to check capacity
-                local volume_mount=$(get_mount_point "$volume_name")
+                local volume_mount=$(get_mount_point_cached "$volume_name")
                 if [[ -n "$volume_mount" ]]; then
                     # Target volume is mounted, get its free space
                     storage_free_bytes=$(get_storage_free_space_bytes "$volume_mount")

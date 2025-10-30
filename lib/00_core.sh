@@ -1315,3 +1315,40 @@ validate_and_get_mount_point_cached() {
         return 2  # Exists but not mounted
     fi
 }
+
+# Cached version of volume_exists (for backward compatibility)
+# Returns: 0 if exists, 1 if not exists
+volume_exists_cached() {
+    local volume_name="$1"
+    
+    local vol_info=$(get_volume_info_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        return 1  # Not exists
+    else
+        return 0  # Exists (either mounted or unmounted)
+    fi
+}
+
+# Cached version of get_mount_point (for backward compatibility)
+# Returns mount point if mounted, empty if not mounted
+get_mount_point_cached() {
+    local volume_name="$1"
+    
+    local vol_info=$(get_volume_info_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        return 1  # Volume doesn't exist
+    fi
+    
+    local mount_point="${vol_info#*|}"
+    echo "$mount_point"
+    
+    if [[ -n "$mount_point" ]]; then
+        return 0  # Mounted
+    else
+        return 1  # Not mounted
+    fi
+}
