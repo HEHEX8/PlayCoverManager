@@ -53,9 +53,15 @@ fi
 
 mkdir -p "$DEST_BASE"
 
-# Count files
+# Count files (excluding special directories)
 print_header "ソースディレクトリ分析"
-FILE_COUNT=$(find "$SOURCE_DIR" -type f 2>/dev/null | wc -l | xargs)
+FILE_COUNT=$(find "$SOURCE_DIR" -type f \
+    ! -path "*/.DS_Store" \
+    ! -path "*/.Spotlight-V100/*" \
+    ! -path "*/.fseventsd/*" \
+    ! -path "*/.Trashes/*" \
+    ! -path "*/.TemporaryItems/*" \
+    2>/dev/null | wc -l | xargs)
 SOURCE_SIZE=$(du -sh "$SOURCE_DIR" 2>/dev/null | awk '{print $1}')
 print_result "ファイル数" "$FILE_COUNT"
 print_result "データサイズ" "$SOURCE_SIZE"
@@ -73,7 +79,6 @@ for method in "${methods[@]}"; do
     # Clean previous test with proper permissions
     if [[ -d "$dest_dir" ]]; then
         echo "前回のテストデータを削除中..."
-        # Remove immutable flags and change permissions first
         chflags -R nouchg,nouappnd "$dest_dir" 2>/dev/null || true
         chmod -R u+w "$dest_dir" 2>/dev/null || true
         rm -rf "$dest_dir" 2>/dev/null || {
@@ -90,55 +95,74 @@ for method in "${methods[@]}"; do
     
     case "$method" in
         "rsync")
-            # rsync without --progress to avoid hang
             /usr/bin/rsync -aH \
                 --exclude='.DS_Store' \
                 --exclude='.Spotlight-V100' \
+                --exclude='.fseventsd' \
+                --exclude='.Trashes' \
+                --exclude='.TemporaryItems' \
                 "$SOURCE_DIR/" "$dest_dir/" 2>&1 | \
-                grep -v "^sending incremental file list" | \
-                grep -v "^sent .* bytes" | \
-                grep -v "^total size is" || true
+                grep -E "warning|error" || true
             ;;
         "cp")
-            # Sequential cp with progress counter
-            local total_files=$(find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null | wc -l | xargs)
-            local count=0
-            find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null | while IFS= read -r file; do
+            # Create file list
+            temp_list="/tmp/benchmark_cp_$$.txt"
+            find "$SOURCE_DIR" -type f \
+                ! -path "*/.DS_Store" \
+                ! -path "*/.Spotlight-V100/*" \
+                ! -path "*/.fseventsd/*" \
+                ! -path "*/.Trashes/*" \
+                ! -path "*/.TemporaryItems/*" \
+                2>/dev/null > "$temp_list"
+            
+            total=$(wc -l < "$temp_list" | xargs)
+            count=0
+            
+            while IFS= read -r file; do
                 rel_path="${file#$SOURCE_DIR/}"
                 dest_file="$dest_dir/$rel_path"
                 dest_subdir=$(dirname "$dest_file")
                 mkdir -p "$dest_subdir" 2>/dev/null
-                cp -p "$file" "$dest_file" 2>/dev/null && {
+                
+                if cp -p "$file" "$dest_file" 2>/dev/null; then
                     ((count++))
                     if (( count % 500 == 0 )); then
-                        printf "\r処理中: %d/%d ファイル" "$count" "$total_files"
+                        printf "\r処理中: %d/%d ファイル (%.1f%%)" "$count" "$total" "$(( count * 100.0 / total ))"
                     fi
-                }
-            done
+                fi
+            done < "$temp_list"
+            
+            rm -f "$temp_list"
             echo ""
             ;;
         "ditto")
-            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | head -20 || true
+            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | \
+                grep -E "warning|error" | head -10 || true
             ;;
         "parallel")
-            # Parallel cp with xargs -P
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
             echo "並列ワーカー数: $num_workers"
             
-            # Use temporary file for file list
-            temp_file="/tmp/benchmark_files_$$.txt"
-            find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null > "$temp_file"
+            # Create file list
+            temp_list="/tmp/benchmark_parallel_$$.txt"
+            find "$SOURCE_DIR" -type f \
+                ! -path "*/.DS_Store" \
+                ! -path "*/.Spotlight-V100/*" \
+                ! -path "*/.fseventsd/*" \
+                ! -path "*/.Trashes/*" \
+                ! -path "*/.TemporaryItems/*" \
+                2>/dev/null > "$temp_list"
             
-            cat "$temp_file" | xargs -P "$num_workers" -I {} sh -c "
+            cat "$temp_list" | xargs -P "$num_workers" -I {} sh -c "
                 file=\"{}\"
                 rel_path=\"\${file#$SOURCE_DIR/}\"
                 dest_file=\"$dest_dir/\$rel_path\"
                 dest_subdir=\$(dirname \"\$dest_file\")
                 mkdir -p \"\$dest_subdir\" 2>/dev/null
                 cp -p \"\$file\" \"\$dest_file\" 2>/dev/null
-            " || true
+            " 2>&1 | head -10 || true
             
-            rm -f "$temp_file"
+            rm -f "$temp_list"
             ;;
     esac
     
@@ -194,7 +218,6 @@ echo ""
 read "cleanup?テストデータを削除しますか？ (y/n): "
 if [[ "$cleanup" == "y" ]]; then
     echo "クリーンアップ中..."
-    # Remove flags and permissions first
     chflags -R nouchg,nouappnd "$DEST_BASE" 2>/dev/null || true
     chmod -R u+w "$DEST_BASE" 2>/dev/null || true
     rm -rf "$DEST_BASE" 2>/dev/null || {
