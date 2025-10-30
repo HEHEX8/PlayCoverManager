@@ -464,17 +464,38 @@ _perform_cp_transfer() {
         print_info "🚀 使用ツール: rsync (Homebrew版)"
     elif [[ -x "/usr/bin/rsync" ]]; then
         rsync_cmd="/usr/bin/rsync"
-        # rsyncのタイプを判定（GNU rsync or openrsync）
+        # rsyncのタイプとバージョンを判定
         local version_output=$("$rsync_cmd" --version 2>/dev/null | head -n 1)
+        
         if [[ "$version_output" == *"openrsync"* ]]; then
+            # openrsyncの場合
             rsync_type="openrsync"
             print_warning "🚀 使用ツール: openrsync (システム版)"
             print_warning "⚠️  openrsyncは機能が制限されています"
             print_warning "💡 より高速な転送のため、Homebrew版rsyncの使用を推奨します"
             print_info "   インストール方法: brew install rsync"
+        elif [[ "$version_output" =~ rsync[[:space:]]+version[[:space:]]+([0-9]+\.[0-9]+) ]]; then
+            # GNU rsyncの場合、バージョンをチェック
+            local version_number="${BASH_REMATCH[1]}"
+            local major_version=$(echo "$version_number" | cut -d. -f1)
+            local minor_version=$(echo "$version_number" | cut -d. -f2)
+            
+            # バージョン3.1未満の場合は古いタイプ扱い
+            if [[ $major_version -lt 3 ]] || [[ $major_version -eq 3 && $minor_version -lt 1 ]]; then
+                rsync_type="old_gnu"
+                print_warning "🚀 使用ツール: rsync (システム版 - GNU ${version_number})"
+                print_warning "⚠️  古いバージョンのため機能が制限されています"
+                print_warning "💡 より高速な転送のため、Homebrew版rsyncの使用を推奨します"
+                print_info "   インストール方法: brew install rsync"
+            else
+                rsync_type="gnu"
+                print_info "🚀 使用ツール: rsync (システム版 - GNU ${version_number})"
+            fi
         else
-            rsync_type="gnu"
-            print_info "🚀 使用ツール: rsync (システム版 - GNU)"
+            # バージョン解析失敗の場合は古いタイプ扱い
+            rsync_type="old_gnu"
+            print_warning "🚀 使用ツール: rsync (システム版 - バージョン不明)"
+            print_warning "⚠️  バージョンを確認できませんでした"
         fi
     else
         print_error "rsync が見つかりません"
@@ -505,11 +526,11 @@ _perform_cp_transfer() {
     fi
     
     # 進捗表示オプション（rsyncのタイプに応じて選択）
-    if [[ "$rsync_type" == "openrsync" ]]; then
-        # openrsyncの場合: --progressのみ使用（古いスタイル）
+    if [[ "$rsync_type" == "openrsync" ]] || [[ "$rsync_type" == "old_gnu" ]]; then
+        # openrsync または古いGNU rsyncの場合: --progressのみ使用（古いスタイル）
         rsync_opts="${rsync_opts} --progress"
     else
-        # GNU rsync / Homebrew版の場合: --info=progress2使用（%表示）
+        # GNU rsync 3.1以降 / Homebrew版の場合: --info=progress2使用（%表示）
         rsync_opts="${rsync_opts} --info=progress2"
     fi
     
