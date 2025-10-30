@@ -617,14 +617,20 @@ switch_storage_location() {
             
             local target_path="${HOME}/Library/Containers/${bundle_id}"
             
-            # Check actual mount status (same logic as volume info display)
-            local actual_mount=$(get_mount_point_cached "$volume_name")
+            # Check actual mount status using cached data
+            local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+            local vol_status=$?
+            
             local container_size=$(get_container_size "$target_path")
             local free_space=""
             local location_text=""
             local usage_text=""
             
-            if [[ -n "$actual_mount" ]]; then
+            if [[ $vol_status -eq 1 ]]; then
+                # Volume doesn't exist
+                location_text="${GRAY}⚠️ ボリュームが見つかりません${NC}"
+                usage_text="${GRAY}N/A${NC}"
+            elif [[ $vol_status -eq 0 ]] && [[ -n "$actual_mount" ]]; then
                 # Volume is mounted somewhere
                 if [[ "$actual_mount" == "$target_path" ]]; then
                     # Correctly mounted = external storage mode
@@ -638,7 +644,7 @@ switch_storage_location() {
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${actual_mount}${NC}"
                 fi
             else
-                # Volume not mounted - check internal storage
+                # Volume not mounted (status 2) or mount point empty - check internal storage
                 local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                 case "$storage_mode" in
                     "internal_intentional")
@@ -721,7 +727,7 @@ switch_storage_location() {
             echo ""
             print_error "外部ボリュームが誤った位置にマウントされています"
             echo ""
-            local current_mount=$(get_mount_point_cached "$volume_name")
+            local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
             echo "${BOLD}現在のマウント位置:${NC}"
             echo "  ${DIM_GRAY}${current_mount}${NC}"
             echo ""
