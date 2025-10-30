@@ -60,12 +60,25 @@
 
 ## rsyncの進捗表示機能
 
-rsyncの`--info=progress2`オプションにより、以下の情報がリアルタイムで表示されます：
+### GNU rsync / Homebrew版（推奨）
+
+`--info=progress2`オプションにより、以下の情報がリアルタイムで表示されます：
 
 - **転送済みバイト数**: 現在までに転送されたデータ量
 - **進捗率（%）**: 全体の何%が完了したか
 - **転送速度**: 現在の転送速度（MB/s）
 - **残り時間**: 推定完了時刻までの時間
+
+### openrsync（macOS Sequoia以降のシステム版）
+
+⚠️ **制限事項**: openrsyncは`--info=progress2`をサポートしていません。
+
+代わりに`--progress`オプション（古いスタイル）を使用します：
+- ファイルごとの進捗表示
+- %表示なし、転送速度・残り時間の表示なし
+- より詳細度が低い
+
+**推奨**: Homebrew版rsyncをインストールすることで、より快適な進捗表示が利用可能です。
 
 ### 同一ファイルの自動スキップ
 
@@ -94,18 +107,37 @@ rsyncは転送前にファイルを比較し、以下の場合にスキップし
 ```bash
 # Homebrew版rsyncを優先使用
 local rsync_cmd=""
+local rsync_type=""
+
 if [[ -x "/opt/homebrew/bin/rsync" ]]; then
     rsync_cmd="/opt/homebrew/bin/rsync"
+    rsync_type="homebrew"
 elif [[ -x "/usr/bin/rsync" ]]; then
     rsync_cmd="/usr/bin/rsync"
+    # rsyncのタイプを判定（GNU rsync or openrsync）
+    local version_output=$("$rsync_cmd" --version | head -n 1)
+    if [[ "$version_output" == *"openrsync"* ]]; then
+        rsync_type="openrsync"
+    else
+        rsync_type="gnu"
+    fi
 fi
 
 # rsyncオプション設定
-rsync_opts="-av --info=progress2"
+rsync_opts="-av"
 
 # 同期モードなら--deleteも追加
 if [[ "$sync_mode" == "sync" ]]; then
     rsync_opts="${rsync_opts} --delete"
+fi
+
+# 進捗表示オプション（rsyncのタイプに応じて選択）
+if [[ "$rsync_type" == "openrsync" ]]; then
+    # openrsyncの場合: --progressのみ使用（古いスタイル）
+    rsync_opts="${rsync_opts} --progress"
+else
+    # GNU rsync / Homebrew版の場合: --info=progress2使用（%表示）
+    rsync_opts="${rsync_opts} --info=progress2"
 fi
 
 # 実行
@@ -116,18 +148,27 @@ sudo "$rsync_cmd" $rsync_opts "$source/" "$dest/"
 
 セットアップウィザードで自動的にチェック・インストールされます：
 
-1. **チェック機能** (`lib/06_setup.sh` - 行235-270)
+1. **チェック機能** (`lib/06_setup.sh` - 行235-280付近)
    - Homebrew版rsyncの存在確認
-   - システム版rsyncの存在確認
+   - システム版rsyncの存在確認とタイプ判定（GNU or openrsync）
+   - openrsync検出時に制限事項を警告
    - バージョン情報の表示
 
-2. **インストール機能** (行272-297)
+2. **インストール機能** (行282-297付近)
    - `brew install rsync`で最新版をインストール
    - インストール成功時にバージョン表示
 
 3. **セットアップフロー統合** (行639付近)
    - Step 5として自動的に実行
+   - openrsync検出時は強くインストールを推奨
    - ユーザーに確認を求めて自動インストール
+
+### macOS Sequoia以降の注意事項
+
+macOS Sequoia（2025年）以降、AppleはGNU rsyncからopenrsyncに変更しました：
+- **理由**: GPLv3ライセンスの回避
+- **影響**: 一部の高度な機能が使用不可
+- **推奨**: Homebrew版rsync（GNU rsync）のインストールを強く推奨
 
 ## 利点
 

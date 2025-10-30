@@ -456,12 +456,26 @@ _perform_cp_transfer() {
     
     # rsyncのパスを決定（Homebrew版を優先）
     local rsync_cmd=""
+    local rsync_type=""
+    
     if [[ -x "/opt/homebrew/bin/rsync" ]]; then
         rsync_cmd="/opt/homebrew/bin/rsync"
+        rsync_type="homebrew"
         print_info "🚀 使用ツール: rsync (Homebrew版)"
     elif [[ -x "/usr/bin/rsync" ]]; then
         rsync_cmd="/usr/bin/rsync"
-        print_info "🚀 使用ツール: rsync (システム版)"
+        # rsyncのタイプを判定（GNU rsync or openrsync）
+        local version_output=$("$rsync_cmd" --version 2>/dev/null | head -n 1)
+        if [[ "$version_output" == *"openrsync"* ]]; then
+            rsync_type="openrsync"
+            print_warning "🚀 使用ツール: openrsync (システム版)"
+            print_warning "⚠️  openrsyncは機能が制限されています"
+            print_warning "💡 より高速な転送のため、Homebrew版rsyncの使用を推奨します"
+            print_info "   インストール方法: brew install rsync"
+        else
+            rsync_type="gnu"
+            print_info "🚀 使用ツール: rsync (システム版 - GNU)"
+        fi
     else
         print_error "rsync が見つかりません"
         return 1
@@ -490,9 +504,14 @@ _perform_cp_transfer() {
         rsync_opts="${rsync_opts} --delete"
     fi
     
-    # 進捗表示オプション
-    # --info=progress2: 全体の進捗を%で表示
-    rsync_opts="${rsync_opts} --info=progress2"
+    # 進捗表示オプション（rsyncのタイプに応じて選択）
+    if [[ "$rsync_type" == "openrsync" ]]; then
+        # openrsyncの場合: --progressのみ使用（古いスタイル）
+        rsync_opts="${rsync_opts} --progress"
+    else
+        # GNU rsync / Homebrew版の場合: --info=progress2使用（%表示）
+        rsync_opts="${rsync_opts} --info=progress2"
+    fi
     
     # rsync実行
     local rsync_exit=0

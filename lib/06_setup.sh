@@ -247,17 +247,40 @@ check_rsync_installation() {
         return 0
     elif [[ -x "$system_rsync" ]]; then
         local rsync_version=$("$system_rsync" --version | head -n 1)
-        print_warning "システム標準の rsync が存在します"
-        print_info "${rsync_version}"
-        print_info "パス: ${system_rsync}"
-        print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
         
-        # Homebrewがインストール済みなら、rsyncのインストールを推奨
+        # rsyncのタイプを判定（GNU rsync or openrsync）
+        if [[ "$rsync_version" == *"openrsync"* ]]; then
+            print_warning "⚠️  システム標準の openrsync が検出されました"
+            print_info "${rsync_version}"
+            print_info "パス: ${system_rsync}"
+            echo ""
+            print_warning "🚨 openrsync の制限事項:"
+            print_warning "   • 進捗表示が詳細ではない（%表示なし）"
+            print_warning "   • 転送速度・残り時間が表示されない"
+            print_warning "   • 一部のオプションがサポートされていない"
+            echo ""
+            print_info "✨ Homebrew版 rsync の利点:"
+            print_info "   • 全体の進捗を%で表示"
+            print_info "   • 転送速度と残り時間をリアルタイム表示"
+            print_info "   • より高速なデータ転送"
+            print_info "   • 完全な機能セット"
+        else
+            print_warning "システム標準の rsync が存在します"
+            print_info "${rsync_version}"
+            print_info "パス: ${system_rsync}"
+            print_info "💡 Homebrew版をインストールすることで最新機能が利用可能です"
+        fi
+        
+        # Homebrewがインストール済みなら、rsyncのインストールを強く推奨
         if command -v brew >/dev/null 2>&1; then
             echo ""
-            if prompt_confirmation "Homebrew版 rsync をインストールしますか？" "Y/n"; then
+            if prompt_confirmation "Homebrew版 rsync をインストールしますか？（強く推奨）" "Y/n"; then
                 install_rsync
                 return $?
+            else
+                echo ""
+                print_warning "⚠️  システム版rsyncを使用します（機能制限あり）"
+                print_info "💡 後で 'brew install rsync' でインストール可能です"
             fi
         fi
         return 0
