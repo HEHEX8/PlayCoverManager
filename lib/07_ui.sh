@@ -477,6 +477,8 @@ show_installed_apps() {
             local vol_status=$?
             local storage_icon=""
             
+            # Check storage mode first to filter out apps with no data
+            local storage_mode=""
             if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
                 # Volume is mounted at correct location = external storage
                 storage_icon="⚡ 外部"
@@ -485,17 +487,19 @@ show_installed_apps() {
                 storage_icon="⚠️  位置異常"
             else
                 # Volume not mounted - check if internal storage has data
-                local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+                
+                # Skip apps with no data in both display and selection modes
+                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "internal_intentional_empty" ]]; then
+                    continue
+                fi
+                
                 case "$storage_mode" in
                     "internal_intentional")
                         storage_icon="🍎 内部"
                         ;;
                     "internal_contaminated")
                         storage_icon="⚠️  内蔵データ検出"
-                        ;;
-                    "internal_intentional_empty"|"none")
-                        storage_icon="⚠️  データ無し"
-                        container_size="0B"
                         ;;
                     *)
                         storage_icon="？ 不明"

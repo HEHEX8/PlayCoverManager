@@ -613,24 +613,28 @@ switch_storage_location() {
                 continue
             fi
             
-            mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
-            
             local target_path="${HOME}/Library/Containers/${bundle_id}"
             
             # Check actual mount status using cached data
             local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
             local vol_status=$?
             
+            # Skip apps with no data - check storage_mode first
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+            if [[ "$storage_mode" == "none" ]] || [[ $vol_status -eq 1 ]]; then
+                # Skip apps with no data or non-existent volumes
+                continue
+            fi
+            
+            # Add to selectable array only if it has data
+            mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+            
             local container_size=$(get_container_size "$target_path")
             local free_space=""
             local location_text=""
             local usage_text=""
             
-            if [[ $vol_status -eq 1 ]]; then
-                # Volume doesn't exist
-                location_text="${GRAY}⚠️ ボリュームが見つかりません${NC}"
-                usage_text="${GRAY}N/A${NC}"
-            elif [[ $vol_status -eq 0 ]] && [[ -n "$actual_mount" ]]; then
+            if [[ $vol_status -eq 0 ]] && [[ -n "$actual_mount" ]]; then
                 # Volume is mounted somewhere
                 if [[ "$actual_mount" == "$target_path" ]]; then
                     # Correctly mounted = external storage mode
@@ -645,7 +649,6 @@ switch_storage_location() {
                 fi
             else
                 # Volume not mounted (status 2) or mount point empty - check internal storage
-                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
                 case "$storage_mode" in
                     "internal_intentional")
                         location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
@@ -661,14 +664,6 @@ switch_storage_location() {
                         location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
                         free_space=$(get_storage_free_space "$HOME")
                         usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "none")
-                        location_text="${GRAY}⚠️ データ無し${NC}"
-                        usage_text="${GRAY}N/A${NC}"
-                        ;;
-                    *)
-                        location_text="${GRAY}⚠️ データ無し${NC}"
-                        usage_text="${GRAY}N/A${NC}"
                         ;;
                 esac
             fi
@@ -1242,7 +1237,7 @@ perform_external_to_internal_migration() {
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
     # Copy data from external to internal (using unified helper)
-    if ! _rsync_migration_data "$source_mount" "$target_path" "false"; then
+    if ! _perform_rsync_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
             print_info "一時マウントをクリーンアップ中..."
