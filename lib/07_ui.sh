@@ -356,10 +356,10 @@ show_menu() {
     
     echo "${CYAN}メインメニュー${NC}"
     echo ""
-    echo "  ${LIGHT_GREEN}1.${NC} 🚀 クイックランチャー"
-    echo "  ${LIGHT_GREEN}2.${NC} アプリ管理"
-    echo "  ${LIGHT_GREEN}3.${NC} ボリューム操作"
-    echo "  ${LIGHT_GREEN}4.${NC} ストレージ切り替え（内蔵⇄外部）"
+    echo "  ${LIGHT_GREEN}1.${NC} アプリ管理"
+    echo "  ${LIGHT_GREEN}2.${NC} ボリューム操作"
+    echo "  ${LIGHT_GREEN}3.${NC} ストレージ切替"
+    echo "  ${LIGHT_GREEN}4.${NC} クイックランチャー"
     echo ""
     
     # Dynamic eject menu label (v4.7.0)
@@ -371,14 +371,14 @@ show_menu() {
         if [[ -n "$volume_device" ]]; then
             local playcover_device="/dev/${volume_device}"
             local drive_name=$(get_drive_name "$playcover_device")
-            eject_label="「${drive_name}」の取り外し"
+            eject_label="${drive_name} の取り外し"
         fi
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
     echo "  ${LIGHT_GREEN}0.${NC} 終了"
     echo ""
-    echo "${DIM_GRAY}※ Enterキーのみ: 状態を再取得${NC}"
+    echo "${DIM_GRAY}空Enterで最新の情報に更新${NC}"
     echo ""
     echo -n "${CYAN}選択 (0-5):${NC} "
 }
@@ -1129,9 +1129,10 @@ show_quick_launcher() {
         echo "  [1-${#apps_info[@]}]  : アプリを起動"
         echo ""
         echo "  [p]    : PlayCoverを起動（設定変更用）"
-        echo "  [r]    : 状態を再取得（キャッシュ更新）"
         echo "  [m]    : 管理メニュー"
         echo "  [0]    : 終了"
+        echo ""
+        echo "${DIM_GRAY}[r]キーで最新の情報に更新${NC}"
         print_separator
         echo ""
         

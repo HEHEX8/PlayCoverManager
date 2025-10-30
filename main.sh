@@ -82,16 +82,16 @@ main() {
                 refresh_all_volume_caches
                 ;;
             1)
-                show_quick_launcher
-                ;;
-            2)
                 app_management_menu
                 ;;
-            3)
+            2)
                 individual_volume_control
                 ;;
-            4)
+            3)
                 switch_storage_location
+                ;;
+            4)
+                show_quick_launcher
                 ;;
             5)
                 eject_disk
