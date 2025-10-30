@@ -121,8 +121,8 @@ get_external_drive_free_space() {
     # Always use PlayCover volume mount point to get external drive free space
     # This is more reliable than checking individual app volumes
     
-    # Get PlayCover volume mount point in one call (more efficient)
-    local playcover_mount=$(validate_and_get_mount_point "$PLAYCOVER_VOLUME_NAME")
+    # Get PlayCover volume mount point using CACHED data (performance optimization)
+    local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
     local vol_status=$?
     
     if [[ $vol_status -ne 0 ]] || [[ -z "$playcover_mount" ]]; then
