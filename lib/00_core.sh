@@ -176,6 +176,7 @@ SELECTED_CONTAINER=""
 # Format: VOLUME_STATE_CACHE[volume_name]="exists|device|mount_point|timestamp"
 declare -A VOLUME_STATE_CACHE
 CACHE_ENABLED=true  # Global cache enable/disable flag
+CACHE_PRELOADED=false  # Track if cache has been preloaded at least once
 
 #######################################################
 # Basic Print Functions
@@ -1240,16 +1241,24 @@ invalidate_volume_cache() {
 }
 
 # Invalidate all volume caches
+# This also resets the preload flag, allowing next preload call to execute
 # Usage: invalidate_all_volume_caches
 invalidate_all_volume_caches() {
     VOLUME_STATE_CACHE=()
+    CACHE_PRELOADED=false  # Reset preload flag to allow next preload
 }
 
 # Preload all volume information into cache
 # Call this before displaying main menu to populate cache with all volumes
+# Only preloads on first call - subsequent calls are skipped for performance
 # Usage: preload_all_volume_cache
 preload_all_volume_cache() {
     if [[ "$CACHE_ENABLED" != true ]]; then
+        return 0
+    fi
+    
+    # Skip if already preloaded (only preload once per session)
+    if [[ "$CACHE_PRELOADED" == true ]]; then
         return 0
     fi
     
@@ -1270,6 +1279,9 @@ preload_all_volume_cache() {
     if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
         get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
     fi
+    
+    # Mark as preloaded
+    CACHE_PRELOADED=true
 }
 
 # Temporarily disable cache for a code block
