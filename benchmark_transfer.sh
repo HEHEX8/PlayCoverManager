@@ -74,39 +74,55 @@ for method in "${methods[@]}"; do
     
     case "$method" in
         "rsync")
-            /usr/bin/rsync -avH --progress \
+            # rsync without --progress to avoid hang
+            /usr/bin/rsync -aH \
                 --exclude='.DS_Store' \
                 --exclude='.Spotlight-V100' \
-                "$SOURCE_DIR/" "$dest_dir/" > /dev/null 2>&1
+                "$SOURCE_DIR/" "$dest_dir/" 2>&1 | \
+                grep -v "^sending incremental file list" | \
+                grep -v "^sent .* bytes" | \
+                grep -v "^total size is" || true
             ;;
         "cp")
-            # Sequential cp
+            # Sequential cp with progress counter
+            local total_files=$(find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null | wc -l | xargs)
+            local count=0
             find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null | while IFS= read -r file; do
                 rel_path="${file#$SOURCE_DIR/}"
                 dest_file="$dest_dir/$rel_path"
                 dest_subdir=$(dirname "$dest_file")
                 mkdir -p "$dest_subdir" 2>/dev/null
-                cp -p "$file" "$dest_file" 2>/dev/null
+                cp -p "$file" "$dest_file" 2>/dev/null && {
+                    ((count++))
+                    if (( count % 500 == 0 )); then
+                        printf "\r処理中: %d/%d ファイル" "$count" "$total_files"
+                    fi
+                }
             done
+            echo ""
             ;;
         "ditto")
-            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" > /dev/null 2>&1
+            /usr/bin/ditto "$SOURCE_DIR/" "$dest_dir/" 2>&1 | head -20 || true
             ;;
         "parallel")
             # Parallel cp with xargs -P
             num_workers=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
-            export SOURCE_DIR
-            export dest_dir
+            echo "並列ワーカー数: $num_workers"
             
-            find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null | \
-                xargs -P "$num_workers" -I {} sh -c '
-                    file="{}"
-                    rel_path="${file#$SOURCE_DIR/}"
-                    dest_file="$dest_dir/$rel_path"
-                    dest_subdir=$(dirname "$dest_file")
-                    mkdir -p "$dest_subdir" 2>/dev/null
-                    cp -p "$file" "$dest_file" 2>/dev/null
-                '
+            # Use temporary file for file list
+            temp_file="/tmp/benchmark_files_$$.txt"
+            find "$SOURCE_DIR" -type f ! -name '.DS_Store' 2>/dev/null > "$temp_file"
+            
+            cat "$temp_file" | xargs -P "$num_workers" -I {} sh -c "
+                file=\"{}\"
+                rel_path=\"\${file#$SOURCE_DIR/}\"
+                dest_file=\"$dest_dir/\$rel_path\"
+                dest_subdir=\$(dirname \"\$dest_file\")
+                mkdir -p \"\$dest_subdir\" 2>/dev/null
+                cp -p \"\$file\" \"\$dest_file\" 2>/dev/null
+            " || true
+            
+            rm -f "$temp_file"
             ;;
     esac
     
