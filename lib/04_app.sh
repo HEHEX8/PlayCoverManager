@@ -932,8 +932,7 @@ uninstall_workflow() {
     local total_apps=$?
     
     if [[ $total_apps -eq 0 ]]; then
-        print_warning "インストールされているアプリがありません"
-        wait_for_enter
+        show_error_and_return "アプリ管理" "インストールされているアプリがありません"
         return
     fi
     
@@ -1128,8 +1127,7 @@ uninstall_all_apps() {
     done < <(load_mappings_array)
     
     if [[ ${#mappings_array} -eq 0 ]]; then
-        print_warning "インストールされているアプリがありません"
-        wait_for_enter
+        show_error_and_return "全アプリ削除" "インストールされているアプリがありません"
         return
     fi
     
@@ -1511,11 +1509,7 @@ launch_app() {
             print_info "${app_name}のボリュームを再マウント中..."
             
             if [[ "$needs_sudo" == true ]]; then
-                print_info "管理者権限が必要です"
-                sudo -v || {
-                    print_error "管理者権限の取得に失敗しました"
-                    return 1
-                }
+                authenticate_sudo || return 1
             fi
             
             if ! unmount_with_fallback "$current_mount" "silent"; then
@@ -1533,11 +1527,7 @@ launch_app() {
             print_info "${app_name}のボリュームをマウント中..."
             
             if [[ "$needs_sudo" == true ]]; then
-                print_info "管理者権限が必要です"
-                sudo -v || {
-                    print_error "管理者権限の取得に失敗しました"
-                    return 1
-                }
+                authenticate_sudo || return 1
             fi
             
             if ! mount_app_volume "$volume_name" "$container_path" "$bundle_id"; then

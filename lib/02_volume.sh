@@ -25,7 +25,7 @@ _init_batch_operation() {
     fi
     
     # Request sudo upfront
-    /usr/bin/sudo -v
+    authenticate_sudo
     
     echo ""
     print_info "登録されたボリュームをスキャン中..."

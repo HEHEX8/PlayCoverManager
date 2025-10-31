@@ -831,11 +831,9 @@ show_quick_launcher() {
         done < <(get_launchable_apps)
         
         if [[ ${#apps_info} -eq 0 ]]; then
-            print_warning "起動可能なアプリがありません"
-            echo ""
-            print_info "管理メニューからIPAをインストールしてください"
-            echo ""
-            prompt_continue
+            show_error_info_and_return "クイックランチャー" \
+                "起動可能なアプリがありません" \
+                "管理メニューからIPAをインストールしてください"
             return 0  # Go to main menu
         fi
         
