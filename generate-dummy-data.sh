@@ -21,7 +21,7 @@ readonly RECENT_FILE="${DATA_DIR}/recent-app"
 readonly BACKUP_SUFFIX=".backup.$(date +%Y%m%d_%H%M%S)"
 
 # Sample app names (various genres and origins)
-readonly -a SAMPLE_APPS=(
+SAMPLE_APPS=(
     "崩壊：スターレイル"
     "原神"
     "ゼンレスゾーンゼロ"
@@ -45,7 +45,7 @@ readonly -a SAMPLE_APPS=(
 )
 
 # Sample bundle IDs
-readonly -a SAMPLE_BUNDLE_IDS=(
+SAMPLE_BUNDLE_IDS=(
     "com.miHoYo.StarRail"
     "com.miHoYo.GenshinImpact"
     "com.miHoYo.ZZZ"
