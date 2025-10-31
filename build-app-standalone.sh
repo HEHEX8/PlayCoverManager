@@ -205,23 +205,18 @@ trap cleanup_lock EXIT INT TERM QUIT
 # プロセス名を設定
 # ============================================================================
 
-# プロセス名を "PlayCover Manager" に設定
-# これにより Activity Monitor で正しい名前が表示される
-exec -a "PlayCover Manager" /bin/zsh <<'MAIN_SCRIPT_EOF'
-
 # ============================================================================
-# メインスクリプトの実行
+# Resourcesディレクトリのパスを事前に取得
 # ============================================================================
 
-# Resourcesディレクトリを取得
-BUNDLE_CONTENTS="${0:A:h:h}"
+# ランチャースクリプト自身の絶対パスを取得
+LAUNCHER_PATH="${0:A}"
+BUNDLE_CONTENTS="${LAUNCHER_PATH:h:h}"
 RESOURCES_DIR="${BUNDLE_CONTENTS}/Resources"
 MAIN_SCRIPT="${RESOURCES_DIR}/main.sh"
 
-# ログ設定
-LOG_FILE="${TMPDIR:-/tmp}/playcover-manager-standalone.log"
-exec 2>> "$LOG_FILE"
-
+echo "Launcher Path: ${LAUNCHER_PATH}" >> "$LOG_FILE"
+echo "Bundle Contents: ${BUNDLE_CONTENTS}" >> "$LOG_FILE"
 echo "Resources Directory: ${RESOURCES_DIR}" >> "$LOG_FILE"
 echo "Main Script: ${MAIN_SCRIPT}" >> "$LOG_FILE"
 
@@ -232,11 +227,14 @@ if [[ ! -f "$MAIN_SCRIPT" ]]; then
     exit 1
 fi
 
-# メインスクリプトを実行
-cd "$RESOURCES_DIR"
-source "$MAIN_SCRIPT"
+# ============================================================================
+# プロセス名を設定してメインスクリプトを実行
+# ============================================================================
 
-MAIN_SCRIPT_EOF
+# プロセス名を "PlayCover Manager" に設定
+# これにより Activity Monitor で正しい名前が表示される
+cd "$RESOURCES_DIR"
+exec -a "PlayCover Manager" /bin/zsh "$MAIN_SCRIPT"
 
 LAUNCHER_EOF
 
