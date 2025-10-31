@@ -62,7 +62,17 @@ chmod +x "/Applications/PlayCover Manager.app/Contents/Resources/main-script.sh"
 
 #### 5. ログの確認
 
-Terminalから直接実行してエラーを確認：
+**ランチャーログを確認:**
+
+```bash
+# ランチャーのログファイルを確認（v5.2.0+）
+cat /tmp/playcover-manager-launcher.log
+
+# リアルタイムでログを監視
+tail -f /tmp/playcover-manager-launcher.log
+```
+
+**Terminalから直接実行してエラーを確認：**
 
 ```bash
 # 直接実行してエラーメッセージを確認
@@ -75,6 +85,13 @@ cd /path/to/PlayCoverManager
 ```bash
 # main.shを直接実行
 ./main.sh
+```
+
+**ランチャースクリプトを直接実行:**
+
+```bash
+# アプリバンドル内のランチャーを直接実行
+bash "/Applications/PlayCover Manager.app/Contents/MacOS/PlayCoverManager"
 ```
 
 #### 6. macOSセキュリティ設定

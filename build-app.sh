@@ -51,24 +51,47 @@ cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
 # Launches in Terminal with single instance checking
 #######################################################
 
+# エラーログ設定
+LOG_FILE="${TMPDIR:-/tmp}/playcover-manager-launcher.log"
+exec 2>> "$LOG_FILE"
+
+# デバッグ情報をログに記録
+echo "=== PlayCover Manager Launcher ===" >> "$LOG_FILE"
+echo "Date: $(date)" >> "$LOG_FILE"
+echo "PWD: $(pwd)" >> "$LOG_FILE"
+echo "Launcher: $0" >> "$LOG_FILE"
+
 # Resourcesディレクトリを取得
 RESOURCES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
 MAIN_SCRIPT="${RESOURCES_DIR}/main-script.sh"
 
+echo "Resources: $RESOURCES_DIR" >> "$LOG_FILE"
+echo "Main Script: $MAIN_SCRIPT" >> "$LOG_FILE"
+
 # メインスクリプトの存在確認
 if [ ! -f "$MAIN_SCRIPT" ]; then
-    osascript -e 'display dialog "PlayCover Managerスクリプトが見つかりません！" buttons {"OK"} default button 1 with icon stop'
+    echo "ERROR: Main script not found!" >> "$LOG_FILE"
+    osascript -e 'display dialog "PlayCover Managerスクリプトが見つかりません！\n\nログ: '"$LOG_FILE"'" buttons {"OK"} default button 1 with icon stop'
     exit 1
 fi
 
+echo "Main script found, launching..." >> "$LOG_FILE"
+
 # Launch in Terminal with custom title
 # Single instance checking is handled by main-script.sh itself
-osascript <<APPLESCRIPT
+if ! osascript <<APPLESCRIPT 2>> "$LOG_FILE"
 tell application "Terminal"
     activate
     do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; /bin/zsh '$MAIN_SCRIPT'"
 end tell
 APPLESCRIPT
+then
+    echo "ERROR: AppleScript failed!" >> "$LOG_FILE"
+    osascript -e 'display dialog "Terminalの起動に失敗しました\n\nログ: '"$LOG_FILE"'" buttons {"OK"} default button 1 with icon stop'
+    exit 1
+fi
+
+echo "Launch successful" >> "$LOG_FILE"
 
 LAUNCHER_EOF
 
