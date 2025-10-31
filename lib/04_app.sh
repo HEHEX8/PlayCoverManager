@@ -1007,6 +1007,13 @@ uninstall_workflow() {
         return
     fi
     
+    # Check if volume is contaminated (blocks uninstall)
+    if block_if_contaminated "$selected_volume" "$selected_bundle" "$selected_app" "アンインストール"; then
+        : # Not contaminated, proceed
+    else
+        return  # Contaminated, blocked
+    fi
+    
     if ! prompt_confirmation "本当にアンインストールしますか？" "yes/NO"; then
         print_info "$MSG_CANCELED"
         wait_for_enter
@@ -1466,16 +1473,36 @@ needs_sudo_for_launch() {
 }
 
 # Launch app with appropriate storage mounting
-# Args: app_path, app_name, bundle_id, storage_mode
+# Args: app_path, app_name, bundle_id, storage_mode, volume_name (optional), display_name (optional)
 # Returns: 0 on success, 1 on failure
 launch_app() {
     local app_path=$1
     local app_name=$2
     local bundle_id=$3
     local storage_mode=$4
+    local volume_name=$5
+    local display_name=$6
     
     local container_path=$(get_container_path "$bundle_id")
-    local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    
+    # Get volume_name if not provided
+    if [[ -z "$volume_name" ]]; then
+        volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+    fi
+    
+    # Use app_name as display_name if not provided
+    if [[ -z "$display_name" ]]; then
+        display_name="$app_name"
+    fi
+    
+    # Check if volume is contaminated and auto-mount if needed
+    if ! auto_mount_if_contaminated "$volume_name" "$bundle_id" "$display_name" "アプリ起動"; then
+        # Auto-mount failed or cancelled
+        return 1
+    fi
+    
+    # Refresh storage mode after potential mount
+    storage_mode=$(get_storage_mode "$container_path" "$volume_name")
     
     # Determine if sudo is needed
     local needs_sudo=false

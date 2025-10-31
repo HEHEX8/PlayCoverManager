@@ -819,6 +819,13 @@ switch_storage_location() {
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         
+        # Check if volume is contaminated (blocks storage switch)
+        if block_if_contaminated "$volume_name" "$bundle_id" "$display_name" "ストレージ切替"; then
+            : # Not contaminated, proceed
+        else
+            continue  # Contaminated, blocked
+        fi
+        
         # Check volume mount status first
         local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
         local vol_status=$?

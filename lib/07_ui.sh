@@ -990,7 +990,7 @@ show_quick_launcher() {
                         local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
                         local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                         
-                        if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                        if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode" "$volume_name" "$selected_name"; then
                             # Success - return to quick launcher
                             echo ""
                             sleep 1
@@ -1048,7 +1048,7 @@ show_quick_launcher() {
                     local volume_name=$(get_volume_name_from_bundle_id "$selected_bundle_id")
                     local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
                     
-                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode"; then
+                    if launch_app "$selected_path" "$selected_name" "$selected_bundle_id" "$storage_mode" "$volume_name" "$selected_name"; then
                         # Success - return to quick launcher
                         echo ""
                         sleep 1

@@ -1541,3 +1541,113 @@ format_volume_display_entry() {
         return 0  # Selectable
     fi
 }
+
+# Check if volume is in contaminated state
+# Args: volume_name, bundle_id
+# Returns: 0 if contaminated, 1 if not contaminated
+is_volume_contaminated() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    
+    local target_path="${HOME}/Library/Containers/${bundle_id}"
+    local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+    
+    if [[ "$storage_mode" == "internal_contaminated" ]]; then
+        return 0  # Contaminated
+    else
+        return 1  # Not contaminated
+    fi
+}
+
+# Auto-mount volume if contaminated (for operations that can proceed after mount)
+# Args: volume_name, bundle_id, display_name, operation_name
+# Returns: 0 if mounted successfully or not contaminated, 1 if failed
+auto_mount_if_contaminated() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local operation_name="$4"
+    
+    if ! is_volume_contaminated "$volume_name" "$bundle_id"; then
+        return 0  # Not contaminated, proceed
+    fi
+    
+    # Contaminated - attempt auto-mount
+    echo ""
+    print_warning "${display_name}: 内蔵データが検出されました"
+    echo ""
+    print_info "${operation_name}を実行するため、外部ボリュームを自動マウントします"
+    echo ""
+    
+    local target_path="${HOME}/Library/Containers/${bundle_id}"
+    
+    # Show options
+    echo "${CYAN}処理方法を選択:${NC}"
+    echo "  ${LIGHT_GREEN}1.${NC} 削除して外部ボリュームをマウント"
+    echo "  ${LIGHT_GREEN}2.${NC} 保持して外部ボリュームと統合"
+    echo "  ${LIGHT_GREEN}3.${NC} キャンセル"
+    echo ""
+    echo -n "選択 (1-3): "
+    read contamination_choice
+    echo ""
+    
+    case "$contamination_choice" in
+        1)
+            print_info "内蔵データを削除中..."
+            if /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null; then
+                print_success "削除完了"
+            else
+                print_error "削除失敗"
+                return 1
+            fi
+            ;;
+        2)
+            print_info "データを統合します（マウント後に外部に移動）"
+            ;;
+        3|*)
+            print_info "キャンセルしました"
+            return 1
+            ;;
+    esac
+    
+    # Mount the volume
+    echo ""
+    print_info "外部ボリュームをマウント中..."
+    
+    if mount_app_volume "$volume_name" "$target_path" "$bundle_id"; then
+        print_success "マウント完了"
+        return 0
+    else
+        print_error "マウント失敗"
+        return 1
+    fi
+}
+
+# Block operation if volume is contaminated
+# Args: volume_name, bundle_id, display_name, operation_name
+# Returns: 0 if not contaminated (can proceed), 1 if contaminated (blocked)
+block_if_contaminated() {
+    local volume_name="$1"
+    local bundle_id="$2"
+    local display_name="$3"
+    local operation_name="$4"
+    
+    if ! is_volume_contaminated "$volume_name" "$bundle_id"; then
+        return 0  # Not contaminated, can proceed
+    fi
+    
+    # Contaminated - block operation
+    echo ""
+    print_error "${display_name}: 内蔵データが検出されました"
+    echo ""
+    print_warning "${operation_name}を実行できません"
+    echo ""
+    print_info "対処方法:"
+    echo "  1. ボリューム操作画面で外部ボリュームをマウント"
+    echo "  2. 内蔵データの処理方法を選択（削除 or 統合）"
+    echo "  3. マウント完了後、再度${operation_name}を実行"
+    echo ""
+    wait_for_enter
+    
+    return 1  # Blocked
+}
