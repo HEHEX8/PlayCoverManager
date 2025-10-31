@@ -473,6 +473,7 @@ _perform_rsync_transfer() {
         return 0
     fi
     
+    echo ""  # Clear line after spinner
     print_info "転送ファイル数: ${total_files}"
     
     if [[ "$sync_mode" == "sync" ]]; then

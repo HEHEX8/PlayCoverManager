@@ -1326,5 +1326,6 @@ show_spinner() {
         sleep 0.1
     done
     
-    printf "\r%*s\r" $((${#message} + 10)) ""
+    # Clear the entire spinner line with extra spaces
+    printf "\r%*s\r" 100 ""
 }
