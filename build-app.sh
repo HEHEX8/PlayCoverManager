@@ -133,12 +133,32 @@ fi
 
 echo "No existing instance, launching new window..." >> "$LOG_FILE"
 
+# Disable Terminal.app session restoration to prevent duplicate windows
+# This sets the preference for Terminal.app specifically
+echo "Disabling Terminal session restoration..." >> "$LOG_FILE"
+defaults write com.apple.Terminal NSQuitAlwaysKeepsWindows -bool false 2>> "$LOG_FILE"
+
 # Launch in a NEW Terminal window using AppleScript
-# Note: do script creates a new window/tab based on Terminal preferences
 if ! osascript <<APPLESCRIPT 2>> "$LOG_FILE"
 tell application "Terminal"
+    -- Check if Terminal is already running
+    set wasRunning to (count of windows) > 0
+    
     -- Create a new window with our script
     set newWindow to do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
+    
+    -- If Terminal was not running and restored old sessions, close them
+    if not wasRunning then
+        delay 0.5
+        -- Close any windows that don't have "PlayCover" in the title
+        repeat with w in (get windows)
+            try
+                if (name of w) does not contain "PlayCover" then
+                    close w
+                end if
+            end try
+        end repeat
+    end if
     
     -- Bring Terminal to front and focus the new window
     activate
