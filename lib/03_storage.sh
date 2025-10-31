@@ -694,7 +694,7 @@ switch_storage_location() {
         local -a apps_info=()
         while IFS= read -r line; do
             [[ -n "$line" ]] && apps_info+=("$line")
-        done < <(get_launchable_apps)
+        done < <(get_launchable_apps_cached)
         
         if [[ ${#apps_info} -eq 0 ]]; then
             show_error_and_return "ストレージ切替（内蔵⇄外部）" "$MSG_NO_REGISTERED_VOLUMES"

@@ -557,8 +557,8 @@ get_volume_device_or_fail() {
         return 1
     fi
     
-    # Check if volume exists using existing volume_exists function
-    if ! volume_exists "$volume_name"; then
+    # Check if volume exists using cached version
+    if ! volume_exists_cached "$volume_name"; then
         print_error "ボリューム '${volume_name}' が見つかりません"
         return 1
     fi
@@ -873,8 +873,8 @@ is_playcover_environment_ready() {
         return 1
     fi
     
-    # Check if PlayCover volume exists (use volume_exists function)
-    if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+    # Check if PlayCover volume exists (use cached version)
+    if ! volume_exists_cached "${PLAYCOVER_VOLUME_NAME}"; then
         return 1
     fi
     

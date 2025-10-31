@@ -599,7 +599,7 @@ install_ipa_to_playcover() {
     
     while [[ $elapsed -lt $max_wait ]]; do
         # Check if PlayCover is still running BEFORE sleep (v4.8.1 - immediate crash detection)
-        if ! pgrep -x "PlayCover" > /dev/null; then
+        if ! is_playcover_running; then
             echo ""
             echo ""
             print_error "PlayCover が終了しました"
@@ -772,7 +772,7 @@ install_ipa_to_playcover() {
             
             if [[ "$found" == true ]]; then
                 # v4.8.1: Final verification - ensure PlayCover is still running
-                if ! pgrep -x "PlayCover" > /dev/null; then
+                if ! is_playcover_running; then
                     echo ""
                     echo ""
                     print_warning "完了判定直後に PlayCover が終了しました"
