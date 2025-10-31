@@ -1102,8 +1102,9 @@ show_quick_launcher() {
             fi
             
             # Format: [recent] index. name (with colors)
-            # Store formatted line for column display
-            app_display_lines+=("${recent_display}${index_color}${index}.${NC} ${title_color}${display_name}${NC}")
+            # Build formatted line with properly expanded color codes
+            local formatted_line="${recent_display}${index_color}${index}.${NC} ${title_color}${display_name}${NC}"
+            app_display_lines+=("$formatted_line")
             ((index++))
         done
         
@@ -1119,22 +1120,26 @@ show_quick_launcher() {
             local idx2=$((row + rows))
             local idx3=$((row + rows * 2))
             
+            # Build output line with ANSI positioning
+            local output_line=""
+            
             # Column 1 (position 2)
             if [[ $idx1 -le $total_apps ]]; then
-                printf "  %s" "${app_display_lines[$idx1]}"
+                output_line="  ${app_display_lines[$idx1]}"
             fi
             
             # Column 2 (position 43)
             if [[ $idx2 -le $total_apps ]]; then
-                printf "\033[43G%s" "${app_display_lines[$idx2]}"
+                output_line="${output_line}\033[43G${app_display_lines[$idx2]}"
             fi
             
             # Column 3 (position 84)
             if [[ $idx3 -le $total_apps ]]; then
-                printf "\033[84G%s" "${app_display_lines[$idx3]}"
+                output_line="${output_line}\033[84G${app_display_lines[$idx3]}"
             fi
             
-            printf "\n"
+            # Output with color interpretation
+            echo -e "$output_line"
         done
         
         echo ""
