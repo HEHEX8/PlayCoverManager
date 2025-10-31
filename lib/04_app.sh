@@ -1385,19 +1385,6 @@ get_launchable_apps() {
         return 1
     fi
     
-    # Load mappings for display_name lookup (single file read)
-    local -a mappings_array=()
-    while IFS= read -r line; do
-        [[ -n "$line" ]] && mappings_array+=("$line")
-    done < <(load_mappings_array)
-    
-    # Build bundle_id → display_name lookup table
-    declare -A bundle_to_display
-    for mapping in "${mappings_array[@]}"; do
-        IFS='|' read -r _ map_bundle_id map_display_name <<< "$mapping"
-        bundle_to_display["$map_bundle_id"]="$map_display_name"
-    done
-    
     local app_count=0
     
     while IFS= read -r app_path; do
@@ -1408,8 +1395,19 @@ get_launchable_apps() {
             continue
         fi
         
-        # Get display name from mapping (O(1) lookup)
-        local display_name="${bundle_to_display[$bundle_id]}"
+        # Get display name from mapping file (direct lookup)
+        # This is simpler and more reliable than building a lookup table
+        local display_name=""
+        if [[ -f "$MAPPING_FILE" ]]; then
+            while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
+                if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+                    display_name="$stored_display_name"
+                    break
+                fi
+            done < "$MAPPING_FILE"
+        fi
+        
+        # Fallback to app_name if no display name found
         if [[ -z "$display_name" ]]; then
             display_name="$app_name"
         fi
