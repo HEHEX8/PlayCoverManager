@@ -687,8 +687,8 @@ switch_storage_location() {
         clear
         print_header "ストレージ切替（内蔵⇄外部）"
         
-        # Refresh all volume caches for accurate real-time status
-        refresh_all_volume_caches
+        # Use cached data (already preloaded by main menu)
+        # Cache will be refreshed on empty Enter (manual refresh)
         
         # Use get_launchable_apps() for consistency
         local -a apps_info=()

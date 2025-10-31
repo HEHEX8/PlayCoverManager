@@ -638,9 +638,8 @@ individual_volume_control() {
     clear
     print_header "ボリューム情報"
     
-    # Refresh all volume caches for accurate real-time status
-    # This ensures volume state is always up-to-date
-    refresh_all_volume_caches
+    # Use cached data (already preloaded by main menu)
+    # Cache will be refreshed on empty Enter (manual refresh)
     
     # Load mappings using common function
     local -a mappings_array=()
