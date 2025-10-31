@@ -383,7 +383,7 @@ _check_migration_capacity() {
         local shortage_human=$(bytes_to_human "$shortage_bytes")
         echo "不足分: ${shortage_human}"
         echo ""
-        print_warning "このまま続行すると、転送が中途半端に終了する可能性があります"
+        print_warning "このまま続行すると、転送が不完全になる恐れがあります"
         echo ""
         if ! prompt_confirmation "それでも続行しますか？" "y/N"; then
             print_info "$MSG_CANCELED"
@@ -473,7 +473,6 @@ _perform_rsync_transfer() {
         return 0
     fi
     
-    echo ""  # Clear line after spinner
     print_info "転送ファイル数: ${total_files}"
     
     if [[ "$sync_mode" == "sync" ]]; then
@@ -1379,8 +1378,7 @@ perform_external_to_internal_migration() {
     # Create new internal directory
     /usr/bin/sudo /bin/mkdir -p "$target_path"
     
-    # Copy data from external to internal using ditto (macOS native, fastest)
-    print_info "データを転送中..."
+    # Copy data from external to internal
     if ! _perform_data_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
