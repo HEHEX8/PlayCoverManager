@@ -126,13 +126,8 @@ main() {
         printf "\033[40G✅\n"
     fi
     
-    # Step 3: ボリューム情報キャッシュ（以降のチェックを高速化）
-    printf "  ${DIM_GRAY}3/6${NC} ボリューム情報取得"
-    preload_all_volume_cache
-    printf "\033[40G✅\n"
-    
-    # Step 4: PlayCover ボリューム確認
-    printf "  ${DIM_GRAY}4/6${NC} PlayCover ボリューム確認"
+    # Step 3: PlayCover ボリューム確認（キャッシュは構築しない）
+    printf "  ${DIM_GRAY}3/5${NC} PlayCover ボリューム確認"
     if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
         printf "\033[40G⚠️\n"
         run_initial_setup
@@ -147,14 +142,12 @@ main() {
             exit 1
         fi
         
-        # Refresh cache after volume creation
-        preload_all_volume_cache
     else
         printf "\033[40G✅\n"
     fi
     
-    # Step 5: マッピングファイル確認・整理
-    printf "  ${DIM_GRAY}5/6${NC} マッピングファイル確認"
+    # Step 4: マッピングファイル確認・整理
+    printf "  ${DIM_GRAY}4/5${NC} マッピングファイル確認"
     if [[ ! -f "$MAPPING_FILE" ]] || [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
         printf "\033[40G⚠️\n"
         run_initial_setup
@@ -175,8 +168,8 @@ main() {
     # マッピングファイルの重複を整理
     deduplicate_mappings
     
-    # Step 6: マウント確認（キャッシュは管理画面初回表示時に更新）
-    printf "  ${DIM_GRAY}6/6${NC} PlayCover マウント確認"
+    # Step 5: マウント確認（キャッシュは管理画面初回表示時に構築）
+    printf "  ${DIM_GRAY}5/5${NC} PlayCover マウント確認"
     
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")

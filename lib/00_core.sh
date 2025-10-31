@@ -167,7 +167,6 @@ SELECTED_CONTAINER=""
 # Format: VOLUME_STATE_CACHE[volume_name]="exists|device|mount_point|timestamp"
 declare -A VOLUME_STATE_CACHE
 CACHE_ENABLED=true  # Global cache enable/disable flag
-CACHE_PRELOADED=false  # Track if cache has been preloaded at least once
 
 # External drive name cache (set once at startup, never changes)
 EXTERNAL_DRIVE_NAME=""
@@ -1094,50 +1093,60 @@ preload_all_volume_cache() {
         return 0
     fi
     
-    # Skip if already preloaded (only preload once per session)
-    if [[ "$CACHE_PRELOADED" == true ]]; then
-        return 0
-    fi
-    
     # Read all volume names from mapping file
     if [[ ! -f "$MAPPING_FILE" ]]; then
         return 0
     fi
     
-    # Count total volumes
-    local total_volumes=0
+    # Preload volumes (silent mode)
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
-        ((total_volumes++))
+        # Only load if not already cached
+        if [[ -z "${VOLUME_STATE_CACHE[$volume_name]}" ]]; then
+            get_volume_info_cached "$volume_name" >/dev/null
+        fi
     done < "$MAPPING_FILE"
     
-    # Add PlayCover volume to count
-    if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
-        ((total_volumes++))
+    # Also preload PlayCover main volume if not cached
+    if [[ -n "$PLAYCOVER_VOLUME_NAME" ]] && [[ -z "${VOLUME_STATE_CACHE[$PLAYCOVER_VOLUME_NAME]}" ]]; then
+        get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
     fi
-    
-    # Only show progress if there are volumes to load
-    if (( total_volumes == 0 )); then
-        CACHE_PRELOADED=true
+}
+
+# Preload selective volumes into cache (for quick launcher optimization)
+# Args: volume_names... (one or more volume names)
+# Usage: preload_selective_volumes "$vol1" "$vol2" "$vol3"
+preload_selective_volumes() {
+    if [[ "$CACHE_ENABLED" != true ]]; then
         return 0
     fi
     
-    local start_time=$(date +%s)
-    local loaded=0
+    local volume_name
+    for volume_name in "$@"; do
+        [[ -z "$volume_name" ]] && continue
+        
+        # Only load if not already cached
+        if [[ -z "${VOLUME_STATE_CACHE[$volume_name]}" ]]; then
+            get_volume_info_cached "$volume_name" >/dev/null
+        fi
+    done
+}
+
+# Refresh specific volume cache (invalidate and reload)
+# Args: volume_name
+# Usage: refresh_volume_cache "$volume_name"
+refresh_volume_cache() {
+    local volume_name="$1"
     
-    # Preload volumes (silent mode, no progress display when called from startup)
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
-        get_volume_info_cached "$volume_name" >/dev/null
-    done < "$MAPPING_FILE"
-    
-    # Also preload PlayCover main volume
-    if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
-        get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
+    if [[ "$CACHE_ENABLED" != true ]] || [[ -z "$volume_name" ]]; then
+        return 0
     fi
     
-    # Mark as preloaded
-    CACHE_PRELOADED=true
+    # Invalidate cache
+    invalidate_volume_cache "$volume_name"
+    
+    # Reload fresh data
+    get_volume_info_cached "$volume_name" >/dev/null
 }
 
 # Temporarily disable cache for a code block

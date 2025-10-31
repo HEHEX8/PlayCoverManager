@@ -786,9 +786,9 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover クイックランチャー"
         
-        # Refresh all volume caches for accurate real-time status
-        # This ensures quick launcher always shows current volume state
-        refresh_all_volume_caches
+        # Selective preload: Only load volumes needed for launchable apps
+        # First, ensure PlayCover volume is cached
+        preload_selective_volumes "$PLAYCOVER_VOLUME_NAME"
         
         # Check PlayCover volume mount status using cached data
         local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
@@ -839,6 +839,21 @@ show_quick_launcher() {
                 "起動可能なアプリがありません" \
                 "管理メニューからIPAをインストールしてください"
             return 0  # Go to main menu
+        fi
+        
+        # Selective preload: Load volumes for launchable apps only
+        local -a volume_names_to_preload=()
+        for app_info in "${apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+            if [[ -n "$volume_name" ]]; then
+                volume_names_to_preload+=("$volume_name")
+            fi
+        done
+        
+        # Preload only the needed volumes
+        if [[ ${#volume_names_to_preload[@]} -gt 0 ]]; then
+            preload_selective_volumes "${volume_names_to_preload[@]}"
         fi
         
         # Get most recent app (only 1 app stored)
