@@ -84,7 +84,8 @@ generate_dummy_data() {
         mkdir -p "${app_path}/Contents/MacOS"
         
         # Create container directory with .internal_storage marker
-        local container_path="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/PlayChain/${bundle_id}"
+        # get_container_path() returns: ${HOME}/Library/Containers/${bundle_id}
+        local container_path="${HOME}/Library/Containers/${bundle_id}"
         mkdir -p "$container_path"
         touch "${container_path}/.internal_storage"
         
@@ -96,7 +97,8 @@ generate_dummy_data() {
         } > "${app_path}/Contents/MacOS/${app_name}"
         chmod +x "${app_path}/Contents/MacOS/${app_name}"
         
-        # Create Info.plist with proper bundle identifier
+        # Create Info.plist at ROOT of .app bundle (NOT in Contents/)
+        # This is where get_bundle_id_from_app() looks for it
         {
             echo '<?xml version="1.0" encoding="UTF-8"?>'
             echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
@@ -116,7 +118,7 @@ generate_dummy_data() {
             echo '    <string>1.0</string>'
             echo '</dict>'
             echo '</plist>'
-        } > "${app_path}/Contents/Info.plist"
+        } > "${app_path}/Info.plist"
         
         # Progress indicator
         printf "."
