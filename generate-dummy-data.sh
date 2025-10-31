@@ -67,8 +67,11 @@ generate_dummy_data() {
         local app_name="DummyApp${i}"
         local bundle_id="com.dummy.app${i}"
         
-        # All apps use internal storage mode for simplicity
-        local volume_name="internal"
+        # Use existing volume name from user's environment
+        # Cycle through known volumes to avoid conflicts
+        local volume_names=("原神" "ゼンレスゾーンゼロ" "崩壊：スターレイル")
+        local vol_index=$(( (i - 1) % 3 ))
+        local volume_name="${volume_names[$vol_index]}"
         
         # Recent flag (first app only)
         local recent_flag=""
