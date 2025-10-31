@@ -601,6 +601,9 @@ batch_mount_all() {
             continue
         fi
         
+        # Check current mount status
+        local actual_mount=$(validate_and_get_mount_point "$volume_name")
+        
         # Unmount if mounted elsewhere
         if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then
             echo -n "  📍 ${display_name}: マウント位置調整中..."
