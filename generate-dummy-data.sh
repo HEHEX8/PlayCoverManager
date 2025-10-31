@@ -4,7 +4,8 @@
 # クイックランチャー表示検証用のダミーデータ生成
 #######################################################
 
-set -e
+# Removed set -e to see actual errors
+set -x  # Enable debug mode to trace execution
 
 # Colors
 readonly GREEN='\033[38;2;120;220;120m'
