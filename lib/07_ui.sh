@@ -475,8 +475,17 @@ show_installed_apps() {
             "none")
                 storage_icon="💤 未マウント"
                 ;;
-            *)
+            "not_created")
+                storage_icon="📦 未初期化"
+                ;;
+            "permission_error")
+                storage_icon="🚫 アクセス不可"
+                ;;
+            "unknown")
                 storage_icon="？ 不明"
+                ;;
+            *)
+                storage_icon="❌ エラー"
                 ;;
         esac
         

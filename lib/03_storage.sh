@@ -161,9 +161,17 @@ get_storage_type() {
     local container_path=$1
     # Debug parameter removed in stable release
     
-    # If path doesn't exist, return unknown
+    # If path doesn't exist, distinguish between truly not existing vs permission issue
     if [[ ! -e "$container_path" ]]; then
-        echo "unknown"
+        # Check if parent directory exists
+        local parent_dir="${container_path%/*}"
+        if [[ -d "$parent_dir" ]] && [[ -r "$parent_dir" ]]; then
+            # Parent exists and readable, so this container was never created
+            echo "not_created"
+        else
+            # Parent doesn't exist or not readable - permission or system issue
+            echo "permission_error"
+        fi
         return
     fi
     
@@ -360,7 +368,16 @@ get_storage_mode() {
                 echo "none"
             fi
             ;;
+        "not_created")
+            # Container was never created (app never launched)
+            echo "not_created"
+            ;;
+        "permission_error")
+            # Permission or system error
+            echo "permission_error"
+            ;;
         *)
+            # Truly unknown state - should never happen
             echo "unknown"
             ;;
     esac
