@@ -29,7 +29,7 @@ main() {
     
     # Show startup sequence
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.1.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.2.0${NC}"
     echo ""
     echo "起動中..."
     echo ""

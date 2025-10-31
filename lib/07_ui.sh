@@ -3,7 +3,7 @@
 # PlayCover Volume Manager - UI Module
 # File: lib/07_ui.sh
 # Description: Main menu, quick status, individual volume control, batch operations
-# Version: 5.1.0
+# Version: 5.2.0
 #
 
 #######################################################
@@ -349,7 +349,7 @@ show_menu() {
     preload_all_volume_cache
     
     echo ""
-    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.1.0${NC}"
+    echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.2.0${NC}"
     echo ""
     
     show_quick_status

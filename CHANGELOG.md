@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2025-01-31
+
+### Added
+- **システムメンテナンスメニュー**: ストレージ容量問題を解決する新機能
+  - メインメニューに`[6] システムメンテナンス`を追加
+  - **APFSスナップショットの確認・削除**: Time Machineのローカルスナップショットを削除して容量を回復
+  - **システムキャッシュのクリア**: ユーザーキャッシュ、一時ファイル、ダウンロード済みアップデートを削除
+  - **ストレージ使用状況の確認**: システムボリュームと外部ボリュームの容量を表示
+  - 新しい関数: `check_apfs_snapshots()`, `cleanup_apfs_snapshots()`, `system_maintenance_menu()`, `clear_system_caches()`, `show_storage_usage()`
+
+### Fixed
+- **プログレスバー表示の修正**: rsync転送中にリアルタイムでプログレスバーが表示されるように修正
+  - `monitor_file_progress()`関数の出力を`stderr`にリダイレクト
+  - プログレスバーが戻り値で上書きされる問題を解決
+  - `[████████░░] 80% | 4758/5948 files | 52 files/s`形式で表示
+
+- **メッセージクリーンアップ**: 実際の処理を伴わない不要なメッセージを削除
+  - `lib/03_storage.sh`の3箇所で「クリーンアップ中...」メッセージを削除
+  - ユーザーに視覚的フィードバックが明確になるように改善
+
+### Changed
+- **容量表示の説明を改善**: 内部→外部ストレージ移行完了時のメッセージを改善
+  - APFSスナップショットによる容量圧迫の説明を追加
+  - システムメンテナンスメニューへの誘導を追加
+  - 2つの原因（APFS仕様、Time Machineスナップショット）を明記
+
+- **バージョン表記を更新**: 5.1.0 → 5.2.0
+  - `lib/07_ui.sh`, `main.sh`, `build-app.sh`でバージョンを統一
+
+### Technical
+- **内部ストレージへの意図しないデータ蓄積の検証**: スクリプトが意図せず内部ストレージにデータを書き込んでいないことを確認
+  - `_perform_data_transfer()`の呼び出しは全て明示的で制御されている
+  - 一時ファイルは全て`/tmp/`ディレクトリを使用
+  - `mount_app_volume()`はマウントポイントを作成するだけでデータは書き込まない
+
+- **コード品質向上**: 未使用関数の検出、重複処理の分析、関数の共通化を実施
+  - 全ての関数が実際に使用されていることを確認
+  - 重複パターンを分析（116箇所のエラーハンドリング、153箇所の`return 1`）
+  - 必要なバリデーションとエラーハンドリングを維持
+
+### Stats
+- Files changed: 5
+- Insertions: 313
+- Deletions: 15
+
 ### Changed
 - **Performance Optimization Phase 4**: Smart volume state caching
   - Implemented intelligent caching system for volume state queries
