@@ -174,6 +174,10 @@ EXTERNAL_DRIVE_NAME=""
 # Cache update flag for lazy loading (only update when entering main menu)
 DRIVE_NAME_CACHE_UPDATED=false
 
+# Launchable apps cache (populated at startup, invalidated on app install/uninstall)
+declare -a LAUNCHABLE_APPS_CACHE
+LAUNCHABLE_APPS_CACHE_VALID=false
+
 #######################################################
 # Basic Print Functions
 #######################################################
@@ -1109,6 +1113,37 @@ refresh_volume_cache() {
     
     # Reload fresh data
     get_volume_info_cached "$volume_name" >/dev/null
+}
+
+# ================================================================
+# Launchable Apps Cache Management
+# ================================================================
+
+# Get launchable apps (with caching)
+# Returns: Array of "app_name|bundle_id|app_path" via stdout
+get_launchable_apps_cached() {
+    # If cache is valid, return cached data
+    if [[ "$LAUNCHABLE_APPS_CACHE_VALID" == true ]] && [[ ${#LAUNCHABLE_APPS_CACHE[@]} -gt 0 ]]; then
+        printf '%s\n' "${LAUNCHABLE_APPS_CACHE[@]}"
+        return 0
+    fi
+    
+    # Cache miss or invalid - fetch fresh data
+    LAUNCHABLE_APPS_CACHE=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && LAUNCHABLE_APPS_CACHE+=("$line")
+    done < <(get_launchable_apps)
+    
+    LAUNCHABLE_APPS_CACHE_VALID=true
+    
+    # Output cached data
+    printf '%s\n' "${LAUNCHABLE_APPS_CACHE[@]}"
+    return 0
+}
+
+# Invalidate launchable apps cache (call after app install/uninstall)
+invalidate_launchable_apps_cache() {
+    LAUNCHABLE_APPS_CACHE_VALID=false
 }
 
 # Temporarily disable cache for a code block

@@ -637,6 +637,7 @@ install_ipa_to_playcover() {
                 print_success "インストール成功"
                 INSTALL_SUCCESS+=("$APP_NAME")
                 update_mapping "$APP_VOLUME_NAME" "$APP_BUNDLE_ID" "$APP_NAME"
+                invalidate_launchable_apps_cache  # Invalidate cache after install
                 echo ""
                 
                 # Restart PlayCover for next installation if in batch mode
@@ -1406,15 +1407,16 @@ get_launchable_apps() {
                 continue
             fi
             
-            # External storage - check if contaminated
-            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-            
-            # Exclude contaminated apps (cannot launch without resolving)
-            if [[ "$storage_mode" == "internal_contaminated" ]]; then
-                continue
+            # Fast contamination check: Only check if internal data exists
+            # Skip expensive get_storage_mode() call here
+            # Contamination will be handled at launch time by auto_mount_if_contaminated()
+            if [[ -d "$container_path" ]] && [[ ! -L "$container_path" ]]; then
+                # Has internal data - might be contaminated, but allow launch attempt
+                # Launch workflow will handle contamination with auto-mount
+                :
             fi
             
-            # Include all other external storage states
+            # Include all external storage apps (contamination handled at launch)
             echo "${app_name}|${bundle_id}|${app_path}"
             ((app_count++))
             continue
@@ -1627,5 +1629,8 @@ open_playcover_settings() {
         print_error "PlayCoverの起動に失敗しました"
         return 1
     fi
+}
+
+
 }
 

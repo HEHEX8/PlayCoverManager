@@ -160,6 +160,9 @@ remove_mapping() {
     
     release_mapping_lock
     
+    # Invalidate launchable apps cache (mapping removed)
+    invalidate_launchable_apps_cache
+    
     return 0
 }
 
@@ -174,6 +177,9 @@ update_mapping() {
     # Remove old mapping if exists, then add new one
     remove_mapping "$bundle_id"
     add_mapping "$volume_name" "$bundle_id" "$display_name"
+    
+    # Invalidate launchable apps cache (mapping changed)
+    invalidate_launchable_apps_cache
 }
 
 #######################################################

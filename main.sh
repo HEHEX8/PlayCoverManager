@@ -126,14 +126,14 @@ main() {
         printf "\033[40G✅\n"
     fi
     
-    # Step 3: PlayCover ボリューム確認（キャッシュは構築しない）
+    # Step 3: PlayCover ボリューム確認（キャッシュ版使用）
     printf "  ${DIM_GRAY}3/5${NC} PlayCover ボリューム確認"
-    if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+    if ! volume_exists_cached "${PLAYCOVER_VOLUME_NAME}"; then
         printf "\033[40G⚠️\n"
         run_initial_setup
         
         # Re-check after setup
-        if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+        if ! volume_exists_cached "${PLAYCOVER_VOLUME_NAME}"; then
             echo ""
             print_error "PlayCoverボリュームが作成されていません"
             print_info "セットアップを完了してください"
@@ -168,11 +168,11 @@ main() {
     # マッピングファイルの重複を整理
     deduplicate_mappings
     
-    # Step 5: マウント確認（キャッシュは管理画面初回表示時に構築）
+    # Step 5: マウント確認（キャッシュ版使用で高速化）
     printf "  ${DIM_GRAY}5/5${NC} PlayCover マウント確認"
     
-    if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
-        local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
+    if volume_exists_cached "$PLAYCOVER_VOLUME_NAME"; then
+        local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
             printf "\033[40G🔄\n"
             echo ""
@@ -189,17 +189,11 @@ main() {
     echo "${GREEN}起動完了${NC}"
     echo ""
     
-    # Show quick launcher if launchable apps exist
-    printf "アプリケーションをスキャン中... "
+    # Preload launchable apps cache (no need to show scanning message)
     local -a launchable_apps=()
-    local scan_start=$(date +%s)
     while IFS= read -r line; do
         [[ -n "$line" ]] && launchable_apps+=("$line")
-    done < <(get_launchable_apps)
-    local scan_end=$(date +%s)
-    local scan_time=$((scan_end - scan_start))
-    
-    printf "\r%*s\r" 50 ""  # Clear scan message
+    done < <(get_launchable_apps_cached)
     
     if [[ ${#launchable_apps} -gt 0 ]]; then
         # Quick launcher mode: show app list first

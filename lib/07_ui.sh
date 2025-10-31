@@ -842,11 +842,11 @@ show_quick_launcher() {
             sleep 1
         fi
         
-        # Get launchable apps
+        # Get launchable apps (use cached version for speed)
         local -a apps_info=()
         while IFS= read -r line; do
             [[ -n "$line" ]] && apps_info+=("$line")
-        done < <(get_launchable_apps)
+        done < <(get_launchable_apps_cached)
         
         if [[ ${#apps_info} -eq 0 ]]; then
             show_error_info_and_return "クイックランチャー" \
