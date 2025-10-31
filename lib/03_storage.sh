@@ -419,8 +419,15 @@ _mount_for_capacity_check() {
     local temp_mount="/tmp/playcover_check_$$"
     /usr/bin/sudo /bin/mkdir -p "$temp_mount"
     
+    # Ensure device has /dev/ prefix
+    local device_path="$volume_device"
+    if [[ ! "$device_path" =~ ^/dev/ ]]; then
+        device_path="/dev/$device_path"
+    fi
+    
     print_info "外部ボリュームをマウント中..."
-    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse,rdonly "$volume_device" "$temp_mount" 2>/dev/null; then
+    # Use unified mount function with read-only option
+    if mount_volume "$device_path" "$temp_mount" "nobrowse,rdonly" "silent"; then
         print_success "マウント成功"
         echo "$temp_mount"
         return 0
@@ -428,7 +435,7 @@ _mount_for_capacity_check() {
         print_error "外部ボリュームのマウントに失敗しました"
         echo ""
         print_info "デバッグ情報:"
-        echo "  デバイス: $volume_device"
+        echo "  デバイス: $device_path"
         echo "  マウントポイント: $temp_mount"
         cleanup_temp_dir "$temp_mount" true
         return 1
@@ -546,13 +553,20 @@ _handle_empty_internal_to_external() {
     print_info "内蔵ストレージをクリーンアップして外部ボリュームをマウントします"
     echo ""
     
-    # Check if external volume is mounted at wrong location
-    local current_mount=$(get_mount_point "$volume_name")
-    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
+    # Check if external volume is mounted at wrong location (using cached data)
+    local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 0 ]] && [[ -n "$current_mount" ]] && [[ "$current_mount" != "$target_path" ]]; then
         print_info "外部ボリュームが誤った位置にマウントされています: ${current_mount}"
         print_info "正しい位置に再マウントするため、一度アンマウントします"
-        unmount_app_volume "$volume_name" "$bundle_id" || true
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "アンマウントに失敗しました"
+            return 1
+        fi
         /bin/sleep 1
+        # Invalidate cache after unmount
+        invalidate_volume_cache "$volume_name"
     fi
     
     # Remove internal flag and directory

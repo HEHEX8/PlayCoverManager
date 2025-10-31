@@ -151,16 +151,22 @@ check_playcover_volume_mount_install() {
     
     PLAYCOVER_VOLUME_DEVICE="/dev/${volume_device}"
     
-    local current_mount=$(get_volume_mount_point "$PLAYCOVER_VOLUME_DEVICE")
+    # Check current mount status using cached data
+    local current_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
+    local vol_status=$?
     
-    if [[ -n "$current_mount" ]] && [[ "$current_mount" != "Not applicable (no file system)" ]]; then
+    if [[ $vol_status -eq 0 ]] && [[ -n "$current_mount" ]] && [[ "$current_mount" != "$PLAYCOVER_CONTAINER" ]]; then
+        # Mounted at wrong location - unmount first
         if ! unmount_volume "$PLAYCOVER_VOLUME_DEVICE" "silent" "force"; then
             print_error "ボリュームのアンマウントに失敗しました"
             exit_with_cleanup 1 "ボリュームアンマウントエラー"
         fi
+        /bin/sleep 1
+        invalidate_volume_cache "$PLAYCOVER_VOLUME_NAME"
     fi
     
-    if /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER"; then
+    # Use unified mount function
+    if mount_volume "$PLAYCOVER_VOLUME_DEVICE" "$PLAYCOVER_CONTAINER" "nobrowse" "verbose"; then
         /usr/bin/sudo /usr/sbin/chown -R $(id -u):$(id -g) "$PLAYCOVER_CONTAINER" 2>/dev/null || true
         
         # Create necessary directory structure if it doesn't exist
