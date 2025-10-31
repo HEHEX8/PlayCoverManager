@@ -29,6 +29,10 @@ _init_batch_operation() {
     
     echo ""
     print_info "登録されたボリュームをスキャン中..."
+    
+    # Preload all volume information into cache for fast batch operations
+    preload_all_volume_cache
+    
     echo ""
     
     return 0

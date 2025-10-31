@@ -638,6 +638,10 @@ individual_volume_control() {
     clear
     print_header "ボリューム情報"
     
+    # Refresh all volume caches for accurate real-time status
+    # This ensures volume state is always up-to-date
+    refresh_all_volume_caches
+    
     # Load mappings using common function
     local -a mappings_array=()
     while IFS= read -r line; do
@@ -782,9 +786,9 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover クイックランチャー"
         
-        # Preload all volume information into cache for fast display
-        # This ensures quick launcher is as fast as management screens
-        preload_all_volume_cache
+        # Refresh all volume caches for accurate real-time status
+        # This ensures quick launcher always shows current volume state
+        refresh_all_volume_caches
         
         # Check PlayCover volume mount status using cached data
         local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")

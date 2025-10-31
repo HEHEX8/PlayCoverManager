@@ -907,6 +907,9 @@ uninstall_workflow() {
         clear
         print_header "アプリのアンインストール"
         
+        # Refresh all volume caches for accurate real-time status
+        refresh_all_volume_caches
+        
         # Check mapping file
         if [[ ! -f "$MAPPING_FILE" ]]; then
             print_error "マッピングファイルが見つかりません"
