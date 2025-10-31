@@ -421,15 +421,14 @@ show_installed_apps() {
     fi
     
     for app_info in "${apps_info[@]}"; do
-        IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+        # Parse 5-field format: app_name|bundle_id|app_path|display_name|storage_mode
+        IFS='|' read -r app_name bundle_id app_path display_name storage_mode_cached <<< "$app_info"
         
-        # Get display name and volume name from mapping file
-        local display_name="$app_name"
+        # Get volume name from mapping file
         local volume_name=""
         if [[ -f "$MAPPING_FILE" ]]; then
             while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
                 if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
-                    display_name="$stored_display_name"
                     volume_name="$vol_name"
                     break
                 fi
@@ -449,8 +448,8 @@ show_installed_apps() {
         local container_path=$(get_container_path "$bundle_id")
         local container_size=$(get_container_size "$container_path")
         
-        # Get storage mode using same logic as quick launcher
-        local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+        # Use cached storage_mode from get_launchable_apps()
+        local storage_mode="$storage_mode_cached"
         local storage_icon=""
         
         # Determine storage icon based on storage mode
