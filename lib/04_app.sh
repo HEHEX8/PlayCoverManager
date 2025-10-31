@@ -1424,41 +1424,12 @@ get_launchable_apps() {
                 continue
             fi
             
-            # Fast storage mode determination
-            local storage_mode="external"
+            # Use unified get_storage_mode() for accurate state detection
+            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
             
-            # Check symlink status first
-            if [[ -L "$container_path" ]]; then
-                # Symlink exists - external storage is in use
-                local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
-                if [[ $? -eq 0 ]] && [[ -n "$current_mount" ]]; then
-                    storage_mode="external"
-                else
-                    storage_mode="external_wrong_location"
-                fi
-            elif [[ -d "$container_path" ]]; then
-                # Directory exists (not symlink) - check if it's contamination
-                # Real contamination = external volume exists AND internal data exists
-                # But we need to check if external volume has data too
-                
-                # Quick contamination check: if internal directory has real files
-                local has_real_files=false
-                if [[ -d "${container_path}/Data/Documents" ]]; then
-                    # Check if Documents has any files
-                    if [[ -n "$(ls -A "${container_path}/Data/Documents" 2>/dev/null)" ]]; then
-                        has_real_files=true
-                    fi
-                fi
-                
-                if [[ "$has_real_files" == true ]]; then
-                    # Has internal data with files - contaminated
-                    # Exclude contaminated apps (cannot launch without resolving)
-                    continue
-                else
-                    # No real internal data - probably just unmounted external
-                    # Default to "external" (will show as unmounted)
-                    storage_mode="external"
-                fi
+            # Exclude contaminated apps (cannot launch without resolving)
+            if [[ "$storage_mode" == "internal_contaminated" ]]; then
+                continue
             fi
             
             # Include all external storage apps (format: app_name|bundle_id|app_path|display_name|storage_mode)
