@@ -1053,10 +1053,23 @@ perform_internal_to_external_migration() {
     
     print_info "内蔵から外部ストレージへデータを移行中..."
     
-    # Get volume device early (validates existence and gets device in one call)
-    local volume_device=$(validate_and_get_device "$volume_name")
-    if [[ $? -ne 0 ]] || [[ -z "$volume_device" ]]; then
-        show_error_and_return "${display_name} のストレージ切替" "ボリューム '${volume_name}' が見つかりません"
+    # Verify current storage mode (using unified logic)
+    local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+    if [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_intentional_empty" ]]; then
+        print_error "現在のストレージモードが内蔵ではありません: $storage_mode"
+        print_info "ストレージ切り替えメニューに戻ります"
+        return 1
+    fi
+    
+    # Validate volume exists (using unified logic)
+    if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替" "perform_internal_to_external_migration"; then
+        return 1
+    fi
+    
+    # Get volume device (after validation)
+    local volume_device=$(get_volume_device "$volume_name")
+    if [[ -z "$volume_device" ]]; then
+        print_error "ボリュームデバイスの取得に失敗しました"
         return 1
     fi
     
@@ -1136,22 +1149,30 @@ perform_internal_to_external_migration() {
         return 1
     fi
     
-    # Unmount if already mounted
-    local current_mount=$(get_mount_point "$volume_name")
-    if [[ -n "$current_mount" ]]; then
+    # Unmount if already mounted (using unified logic)
+    local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 0 ]] && [[ -n "$current_mount" ]]; then
         print_info "既存のマウントをアンマウント中..."
-        unmount_app_volume "$volume_name" "$bundle_id" || true
+        if ! unmount_app_volume "$volume_name" "$bundle_id"; then
+            print_error "アンマウントに失敗しました"
+            return 1
+        fi
         /bin/sleep 1
+        # Invalidate cache after unmount
+        invalidate_volume_cache "$volume_name"
     fi
     
     # Create temporary mount point
     local temp_mount="/tmp/playcover_temp_$$"
     /usr/bin/sudo /bin/mkdir -p "$temp_mount"
     
-    # Mount volume temporarily (with nobrowse to hide from Finder)
-    local volume_device=$(get_volume_device "$volume_name")
+    # Mount volume temporarily (using unified mount function)
+    # Note: mount_volume expects /dev/ prefix
+    local device_path="/dev/${volume_device}"
     print_info "ボリュームを一時マウント中..."
-    if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+    if ! mount_volume "$device_path" "$temp_mount" "nobrowse" "verbose"; then
         print_error "$MSG_MOUNT_FAILED"
         cleanup_temp_dir "$temp_mount" true
         return 1
@@ -1246,12 +1267,25 @@ perform_external_to_internal_migration() {
     
     print_info "外部から内蔵ストレージへデータを移行中..."
     
-    # Get volume info early (validates existence and gets device + mount in one call)
-    local vol_info=$(get_volume_info "$volume_name")
+    # Verify current storage mode (using unified logic)
+    local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+    if [[ "$storage_mode" != "external" ]] && [[ "$storage_mode" != "external_wrong_location" ]]; then
+        print_error "現在のストレージモードが外部ではありません: $storage_mode"
+        print_info "ストレージ切り替えメニューに戻ります"
+        return 1
+    fi
+    
+    # Validate volume exists (using unified logic)
+    if ! check_volume_exists_or_error "$volume_name" "${display_name} のストレージ切替" "perform_external_to_internal_migration"; then
+        return 1
+    fi
+    
+    # Get volume info (device and mount point)
+    local vol_info=$(get_volume_info_cached "$volume_name")
     local vol_status=$?
     
     if [[ $vol_status -eq 1 ]]; then
-        show_error_and_return "${display_name} のストレージ切替" "ボリューム '${volume_name}' が見つかりません"
+        print_error "ボリューム情報の取得に失敗しました"
         return 1
     fi
     
@@ -1318,8 +1352,8 @@ perform_external_to_internal_migration() {
         return 1
     fi
     
-    # Determine current mount point
-    local current_mount=$(get_mount_point "$volume_name")
+    # Determine current mount point (reuse from earlier in function)
+    # current_mount was already retrieved from get_volume_info_cached above
     local temp_mount_created=false
     local source_mount=""
     
@@ -1328,16 +1362,18 @@ perform_external_to_internal_migration() {
         print_info "ボリュームを一時マウント中..."
         local temp_mount="/tmp/playcover_temp_$$"
         /usr/bin/sudo /bin/mkdir -p "$temp_mount"
-        local volume_device=$(get_volume_device "$volume_name")
         
+        # Use volume_device from earlier in function (already has device node)
+        local device_path="$volume_device"
         # Ensure device has /dev/ prefix
-        if [[ ! "$volume_device" =~ ^/dev/ ]]; then
-            volume_device="/dev/$volume_device"
+        if [[ ! "$device_path" =~ ^/dev/ ]]; then
+            device_path="/dev/$device_path"
         fi
         
-        if ! /usr/bin/sudo /sbin/mount -t apfs -o nobrowse "$volume_device" "$temp_mount"; then
+        # Use unified mount function
+        if ! mount_volume "$device_path" "$temp_mount" "nobrowse" "verbose"; then
             print_error "$MSG_MOUNT_FAILED"
-            /usr/bin/sudo /bin/rm -rf "$temp_mount"
+            cleanup_temp_dir "$temp_mount" true
             return 1
         fi
         source_mount="$temp_mount"
