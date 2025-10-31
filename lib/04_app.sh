@@ -1451,8 +1451,9 @@ get_launchable_apps() {
                 fi
                 
                 if [[ "$has_real_files" == true ]]; then
-                    # Has internal data with files - likely contaminated
-                    storage_mode="internal_contaminated"
+                    # Has internal data with files - contaminated
+                    # Exclude contaminated apps (cannot launch without resolving)
+                    continue
                 else
                     # No real internal data - probably just unmounted external
                     # Default to "external" (will show as unmounted)
