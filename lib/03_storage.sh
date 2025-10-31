@@ -1151,7 +1151,7 @@ perform_internal_to_external_migration() {
     local available_kb=$(get_available_space "$check_mount")
     local available_bytes=$((available_kb * 1024))
     
-    # Unmount after check
+    # Cleanup: unmount temporary check mount (error ignored, cleanup continues)
     if [[ "$check_mount" == /tmp/playcover_check_* ]]; then
         unmount_volume "$check_mount" "silent"
         /bin/sleep 1
@@ -1231,7 +1231,8 @@ perform_internal_to_external_migration() {
         _show_migration_success "external" "$target_path"
         
         # Verify mount success and no leftover internal data
-        if /sbin/mount | grep -q " on ${target_path} "; then
+        local verify_mount=$(validate_and_get_mount_point_cached "$volume_name")
+        if [[ $? -eq 0 ]] && [[ "$verify_mount" == "$target_path" ]]; then
             print_success "マウント検証: OK"
         else
             print_warning "マウント検証: 警告 - マウント状態を確認できません"
@@ -1340,7 +1341,7 @@ perform_external_to_internal_migration() {
     local source_size_kb=$(get_directory_size "$check_mount_point")
     local source_size_bytes=$((source_size_kb * 1024))
     
-    # Unmount temporary check mount if created
+    # Cleanup: unmount temporary check mount if created (error ignored, cleanup continues)
     if [[ "$need_unmount" == true ]]; then
         unmount_volume "$check_mount_point" "silent"
         cleanup_temp_dir "$check_mount_point" true

@@ -487,7 +487,7 @@ eject_disk() {
                         echo "     ${GREEN}✅ アンマウント成功${NC}"
                         ((success_count++))
                     else
-                        if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+                        if is_app_running "$bundle_id"; then
                             echo "     ${RED}❌ アンマウント失敗: アプリが実行中です${NC}"
                         else
                             echo "     ${RED}❌ アンマウント失敗${NC}"

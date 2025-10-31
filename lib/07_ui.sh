@@ -28,7 +28,7 @@ _handle_unmount_operation() {
     else
         # Determine error reason
         local error_msg="アンマウント失敗: ファイルが使用中の可能性があります"
-        if /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1; then
+        if is_app_running "$bundle_id"; then
             error_msg="アンマウント失敗: アプリが実行中です"
         fi
         
@@ -219,6 +219,7 @@ _merge_internal_to_external() {
     # Copy data
     print_info "データをマージしています..."
     if /usr/bin/sudo /usr/bin/rsync -a --info=progress2 "$target_path/" "$temp_mount/"; then
+        # Cleanup: unmount temp mount (error ignored, cleanup continues)
         unmount_volume "$device" "silent"
         # Invalidate cache after temp unmount
         invalidate_volume_cache "$volume_name"
@@ -241,6 +242,7 @@ _merge_internal_to_external() {
             return 1
         fi
     else
+        # Cleanup on failure: unmount temp mount (error ignored)
         unmount_volume "$device" "silent"
         /bin/rm -rf "$temp_mount"
         show_error_and_return "${display_name} の操作" \

@@ -1076,9 +1076,10 @@ uninstall_workflow() {
     /bin/rm -rf "$containers_dir" 2>/dev/null
     
     # Step 7: Unmount volume if mounted (silent)
-    local volume_mount_point="${PLAYCOVER_CONTAINER}/${selected_volume}"
-    if /sbin/mount | grep -q "$volume_mount_point"; then
-        unmount_volume "$volume_mount_point" "silent"
+    local current_mount=$(validate_and_get_mount_point_cached "$selected_volume")
+    if [[ $? -eq 0 ]] && [[ -n "$current_mount" ]]; then
+        unmount_volume "$selected_volume" "silent"
+        invalidate_volume_cache "$selected_volume"
     fi
     
     # Step 8: Delete APFS volume
@@ -1265,9 +1266,10 @@ uninstall_all_apps() {
         [[ -d "$containers_dir" ]] && /bin/rm -rf "$containers_dir" 2>/dev/null
         
         # Step 6: Unmount and delete APFS volume
-        local volume_mount_point="${PLAYCOVER_CONTAINER}/${volume_name}"
-        if /sbin/mount | grep -q "$volume_mount_point"; then
-            unmount_volume "$volume_mount_point" "silent"
+        local vol_mount=$(validate_and_get_mount_point_cached "$volume_name")
+        if [[ $? -eq 0 ]] && [[ -n "$vol_mount" ]]; then
+            unmount_volume "$volume_name" "silent"
+            invalidate_volume_cache "$volume_name"
         fi
         
         # Find and delete volume (use cached diskutil output)
