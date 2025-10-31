@@ -16,7 +16,8 @@ readonly SCRIPT_DIR="${0:A:h}"
 readonly DATA_DIR="${HOME}/Library/Application Support/PlayCover Manager"
 readonly MAPPING_FILE="${DATA_DIR}/mapping-file.txt"
 readonly RECENT_FILE="${DATA_DIR}/recent-app"
-readonly PLAYCOVER_APPS_DIR="${HOME}/Library/Containers/io.playcover.PlayCover/Applications"
+readonly PLAYCOVER_BUNDLE_ID="io.playcover.PlayCover"
+readonly PLAYCOVER_APPS_DIR="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
 readonly BACKUP_SUFFIX=".backup.$(date +%Y%m%d_%H%M%S)"
 
 print_info() {
@@ -66,11 +67,8 @@ generate_dummy_data() {
         local app_name="DummyApp${i}"
         local bundle_id="com.dummy.app${i}"
         
-        # Volume determination (apps 8-14 are internal, others are external)
-        local volume_name="PlayCover"
-        if [[ $i -ge 8 && $i -le 14 ]]; then
-            volume_name="internal"
-        fi
+        # All apps use internal storage mode for simplicity
+        local volume_name="internal"
         
         # Recent flag (first app only)
         local recent_flag=""
@@ -84,6 +82,11 @@ generate_dummy_data() {
         # Create .app bundle structure
         local app_path="${PLAYCOVER_APPS_DIR}/${app_name}.app"
         mkdir -p "${app_path}/Contents/MacOS"
+        
+        # Create container directory with .internal_storage marker
+        local container_path="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/PlayChain/${bundle_id}"
+        mkdir -p "$container_path"
+        touch "${container_path}/.internal_storage"
         
         # Create dummy executable
         {
