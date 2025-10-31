@@ -1038,11 +1038,12 @@ show_quick_launcher() {
         # Get most recent app (only 1 app stored)
         local most_recent_bundle_id=$(get_recent_app 2>/dev/null)
         
-        # Display app list (in mapping file order, no sorting)
+        # Display app list in 3-column layout (in mapping file order, no sorting)
         local index=1
         local -a app_names=()
         local -a bundle_ids=()
         local -a app_paths=()
+        local -a app_display_lines=()  # Store formatted display lines for column layout
         local recent_count=0
         
         for app_info in "${apps_info[@]}"; do
@@ -1100,15 +1101,43 @@ show_quick_launcher() {
                 recent_count=1
             fi
             
-            # Format: [storage][sudo][recent] in fixed positions
+            # Format: [storage][sudo][recent] index. name
             # Order: データ位置、要管理者権限、前回起動
             local slot1="${storage_icon:-  }"  # Storage icon or 2 spaces
             local slot2="${sudo_mark:-  }"     # Sudo icon or 2 spaces  
             local slot3="${recent_display:-  }" # Recent icon or 2 spaces
             
-            printf "%s%s%s %2d. %s\n" \
-                "$slot1" "$slot2" "$slot3" "$index" "$display_name"
+            # Store formatted line for column display
+            app_display_lines+=("${slot1}${slot2}${slot3} $index. $display_name")
             ((index++))
+        done
+        
+        # Display apps in 3-column layout with ANSI positioning
+        # Column positions: 2, 42, 82 (40 chars per column)
+        local total_apps=${#app_display_lines[@]}
+        local rows=$(( (total_apps + 2) / 3 ))  # Ceiling division
+        
+        for ((row=0; row<rows; row++)); do
+            local idx1=$((row))
+            local idx2=$((row + rows))
+            local idx3=$((row + rows * 2))
+            
+            # Column 1 (position 2)
+            if [[ $idx1 -lt $total_apps ]]; then
+                printf "  %s" "${app_display_lines[$idx1]}"
+            fi
+            
+            # Column 2 (position 42)
+            if [[ $idx2 -lt $total_apps ]]; then
+                printf "\033[42G%s" "${app_display_lines[$idx2]}"
+            fi
+            
+            # Column 3 (position 82)
+            if [[ $idx3 -lt $total_apps ]]; then
+                printf "\033[82G%s" "${app_display_lines[$idx3]}"
+            fi
+            
+            printf "\n"
         done
         
         echo ""
