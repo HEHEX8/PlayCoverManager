@@ -96,17 +96,8 @@ readonly PLAYCOVER_APP_NAME="PlayCover.app"
 readonly PLAYCOVER_APP_PATH="/Applications/${PLAYCOVER_APP_NAME}"
 readonly PLAYCOVER_APPS_DIR="${PLAYCOVER_CONTAINER}/Applications"
 
-# Get script directory (works even when sourced)
-if [[ -n "${BASH_SOURCE[0]}" ]]; then
-    # Bash
-    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-elif [[ -n "${(%):-%x}" ]]; then
-    # Zsh
-    readonly SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")/.." && pwd)"
-else
-    # Fallback
-    readonly SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-fi
+# Get script directory (zsh only)
+readonly SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")/.." && pwd)"
 
 # Data directory for PlayCover Manager (centralized storage)
 readonly DATA_DIR="${HOME}/.playcover_manager"

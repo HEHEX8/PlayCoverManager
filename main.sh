@@ -208,7 +208,7 @@ main() {
     
     printf "\r%*s\r" 50 ""  # Clear scan message
     
-    if [[ ${#launchable_apps[@]} -gt 0 ]]; then
+    if [[ ${#launchable_apps} -gt 0 ]]; then
         # Quick launcher mode: show app list first
         show_quick_launcher
         # If returned (user pressed 'm' or launch failed), continue to main menu below

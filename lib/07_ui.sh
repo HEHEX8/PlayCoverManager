@@ -812,7 +812,7 @@ individual_volume_control() {
     print_separator
     echo ""
     echo "${BOLD}${UNDERLINE}操作を選択してください:${NC}"
-    if [[ ${#selectable_array[@]} -gt 0 ]]; then
+    if [[ ${#selectable_array} -gt 0 ]]; then
         echo "  ${BOLD}${CYAN}1-$((display_index-1)).${NC} 個別マウント/アンマウント"
     fi
     echo "  ${BOLD}${GREEN}m.${NC} 全ボリュームをマウント"
@@ -953,7 +953,7 @@ show_quick_launcher() {
             [[ -n "$line" ]] && apps_info+=("$line")
         done < <(get_launchable_apps)
         
-        if [[ ${#apps_info[@]} -eq 0 ]]; then
+        if [[ ${#apps_info} -eq 0 ]]; then
             print_warning "起動可能なアプリがありません"
             echo ""
             print_info "管理メニューからIPAをインストールしてください"
@@ -1041,7 +1041,7 @@ show_quick_launcher() {
         # Optimized for 120x30 terminal (120 chars width)
         # Column positions: 2, 43, 84 (41 chars per column for balanced spacing)
         # NOTE: zsh arrays are 1-indexed!
-        local total_apps=${#app_display_lines[@]}
+        local total_apps=${#app_display_lines}
         local rows=$(( (total_apps + 2) / 3 ))  # Ceiling division
         
         for ((row=1; row<=rows; row++)); do
@@ -1079,7 +1079,7 @@ show_quick_launcher() {
             printf "  ${BOLD}⭐${NC}:前回 ${DIM}Enterで起動${NC}"
         fi
         printf "\n"
-        echo "  ${BOLD}${WHITE}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}${WHITE}p.${NC}PlayCover  ${BOLD}${WHITE}0.${NC}管理画面  ${BOLD}${WHITE}q.${NC}終了  ${DIM}r.更新${NC}"
+        echo "  ${BOLD}${WHITE}1-${#apps_info}.${NC}アプリ起動  ${BOLD}${WHITE}p.${NC}PlayCover  ${BOLD}${WHITE}0.${NC}管理画面  ${BOLD}${WHITE}q.${NC}終了  ${DIM}r.更新${NC}"
         print_separator
         echo ""
         
@@ -1098,7 +1098,7 @@ show_quick_launcher() {
                 if [[ $recent_count -gt 0 ]] && [[ -n "$most_recent_bundle_id" ]]; then
                     # Find the recent app in the arrays (no longer at index 1)
                     local recent_index=0
-                    for ((i=1; i<=${#bundle_ids[@]}; i++)); do
+                    for ((i=1; i<=${#bundle_ids}; i++)); do
                         if [[ "${bundle_ids[$i]}" == "$most_recent_bundle_id" ]]; then
                             recent_index=$i
                             break
@@ -1161,7 +1161,7 @@ show_quick_launcher() {
                 continue  # Redisplay quick launcher
                 ;;
             [1-9]|[1-9][0-9])
-                if [[ $choice -ge 1 ]] && [[ $choice -le ${#apps_info[@]} ]]; then
+                if [[ $choice -ge 1 ]] && [[ $choice -le ${#apps_info} ]]; then
                     # zsh arrays are 1-based, so choice directly maps to index
                     local selected_index=$choice
                     local selected_name="${app_names[$selected_index]}"
