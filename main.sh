@@ -110,6 +110,7 @@ main() {
     # Step 2: Preload volume cache (speeds up all subsequent checks)
     printf "  ${DIM_GRAY}2/5${NC} ボリューム情報キャッシュ... "
     preload_all_volume_cache
+    cache_external_drive_name
     echo "${GREEN}✓${NC}"
     
     # Step 3: PlayCover環境が準備できているか確認

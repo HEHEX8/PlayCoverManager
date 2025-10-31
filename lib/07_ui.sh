@@ -362,17 +362,12 @@ show_menu() {
     echo "  ${LIGHT_GREEN}4.${NC} クイックランチャー"
     echo ""
     
-    # Dynamic eject menu label (v4.7.0)
-    local eject_label="ディスク全体を取り外し"
-    
-    # Get current PlayCover volume device dynamically for menu display
-    if volume_exists_cached "$PLAYCOVER_VOLUME_NAME"; then
-        local volume_device=$(validate_and_get_device_cached "$PLAYCOVER_VOLUME_NAME")
-        if [[ -n "$volume_device" ]]; then
-            local playcover_device="/dev/${volume_device}"
-            local drive_name=$(get_drive_name "$playcover_device")
-            eject_label="${drive_name} の取り外し"
-        fi
+    # Dynamic eject menu label (v4.7.0) - uses cached drive name
+    local eject_label
+    if [[ -n "$EXTERNAL_DRIVE_NAME" ]]; then
+        eject_label="${EXTERNAL_DRIVE_NAME} の取り外し"
+    else
+        eject_label="ディスク全体を取り外し"
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"

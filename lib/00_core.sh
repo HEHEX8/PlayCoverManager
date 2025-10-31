@@ -178,6 +178,9 @@ declare -A VOLUME_STATE_CACHE
 CACHE_ENABLED=true  # Global cache enable/disable flag
 CACHE_PRELOADED=false  # Track if cache has been preloaded at least once
 
+# External drive name cache (set once at startup, never changes)
+EXTERNAL_DRIVE_NAME=""
+
 #######################################################
 # Basic Print Functions
 #######################################################
@@ -500,6 +503,26 @@ get_disk_name() {
         return 0
     else
         return 1
+    fi
+}
+
+# Cache external drive name at startup
+# Called once during initialization, result stored in EXTERNAL_DRIVE_NAME
+cache_external_drive_name() {
+    if volume_exists_cached "$PLAYCOVER_VOLUME_NAME"; then
+        local volume_device=$(validate_and_get_device_cached "$PLAYCOVER_VOLUME_NAME")
+        if [[ -n "$volume_device" ]]; then
+            local playcover_device="/dev/${volume_device}"
+            # Extract disk identifier (e.g., disk3 from disk3s1)
+            local disk_id=$(echo "$playcover_device" | /usr/bin/sed 's|/dev/||;s|s[0-9]*$||')
+            # Get and cache the drive name
+            EXTERNAL_DRIVE_NAME=$(get_disk_name "$disk_id")
+        fi
+    fi
+    
+    # Set default if not found
+    if [[ -z "$EXTERNAL_DRIVE_NAME" ]]; then
+        EXTERNAL_DRIVE_NAME="外部ディスク"
     fi
 }
 
