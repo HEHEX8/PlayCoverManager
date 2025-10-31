@@ -480,6 +480,44 @@ export PLAYCOVER_TRANSFER_METHOD=parallel
 
 ---
 
+## 🧪 開発・テスト
+
+### ダミーデータ生成
+
+クイックランチャーの表示検証用に、ダミーアプリデータを生成できます：
+
+```bash
+# デフォルト（20アプリ）を生成
+./generate-dummy-data.sh
+
+# カスタム数を指定（例：50アプリ）
+./generate-dummy-data.sh 50
+```
+
+**生成されるデータ:**
+- マッピングファイル（`mapping-file.txt`）
+- 最近起動したアプリ（`recent-app`）
+- オプション：ダミーアプリ構造（`.app`バンドル）
+
+**自動バックアップ:**
+既存のデータは自動的にバックアップされます（`.backup.YYYYMMDD_HHMMSS`）
+
+**元に戻す:**
+```bash
+# バックアップから復元
+mv ~/Library/Application\ Support/PlayCover\ Manager/mapping-file.txt.backup.* \
+   ~/Library/Application\ Support/PlayCover\ Manager/mapping-file.txt
+```
+
+**生成されるアプリの内訳:**
+- 1-7番目: 外部ストレージ（要sudo: 奇数番号）
+- 8-14番目: 内部ストレージ（汚染状態含む）
+- 15番目以降: 外部ストレージ（通常権限含む）
+
+これにより、3カラムレイアウト、色分け、装飾などの表示を簡単に検証できます。
+
+---
+
 ## 🐛 バグ報告
 
 バグを発見した場合は、[Issues](https://github.com/HEHEX8/PlayCoverManager/issues) で以下の情報と共に報告してください：
