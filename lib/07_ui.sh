@@ -861,7 +861,7 @@ show_quick_launcher() {
             # Build list of volumes to preload
             local -a volume_names_to_preload=()
             for app_info in "${apps_info[@]}"; do
-                IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+                IFS='|' read -r app_name bundle_id app_path display_name storage_mode <<< "$app_info"
                 local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
                 if [[ -n "$volume_name" ]]; then
                     volume_names_to_preload+=("$volume_name")

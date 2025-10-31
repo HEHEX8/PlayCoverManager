@@ -709,10 +709,9 @@ switch_storage_location() {
         local index=1
         
         for app_info in "${apps_info[@]}"; do
-            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            IFS='|' read -r app_name bundle_id app_path display_name storage_mode <<< "$app_info"
             
-            # Get display name and volume name from mapping file
-            local display_name="$app_name"
+            # Get volume name from mapping file (display_name already parsed from 5-field format)
             local volume_name=""
             if [[ -f "$MAPPING_FILE" ]]; then
                 while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
@@ -1026,7 +1025,7 @@ switch_storage_location() {
         print_warning "この操作には時間がかかる場合があります"
         echo ""
         
-        if ! prompt_confirmation "${BOLD}${YELLOW}続行しますか？${NC}" "Y"; then
+        if ! prompt_confirmation "${BOLD}${YELLOW}続行しますか？${NC}" "Y/n"; then
             print_info "$MSG_CANCELED"
             wait_for_enter "Enterキーで続行..."
             continue

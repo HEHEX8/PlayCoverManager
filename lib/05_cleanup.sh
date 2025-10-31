@@ -483,7 +483,7 @@ cleanup_apfs_snapshots() {
             printf "  削除中: ${DIM_GRAY}${snap_name}${NC}... "
             
             if sudo tmutil deletelocalsnapshots "$snap_name" >/dev/null 2>&1; then
-                echo "${GREEN}✓${NC}"
+                echo "${GREEN}✅${NC}"
                 ((deleted_count++))
             else
                 echo "${RED}✗${NC}"
@@ -600,7 +600,7 @@ clear_system_caches() {
         printf "  ユーザーキャッシュ... "
         local cache_size=$(du -sh "$HOME/Library/Caches" 2>/dev/null | awk '{print $1}')
         sudo rm -rf "$HOME/Library/Caches/"* 2>/dev/null || true
-        echo "${GREEN}✓${NC} ${GRAY}(${cache_size})${NC}"
+        echo "${GREEN}✅${NC} ${GRAY}(${cache_size})${NC}"
         ((cleaned_count++))
     fi
     
@@ -608,7 +608,7 @@ clear_system_caches() {
     if [[ -d "/tmp" ]]; then
         printf "  一時ファイル... "
         sudo rm -rf /tmp/* 2>/dev/null || true
-        echo "${GREEN}✓${NC}"
+        echo "${GREEN}✅${NC}"
         ((cleaned_count++))
     fi
     
@@ -617,7 +617,7 @@ clear_system_caches() {
         printf "  ダウンロード済みアップデート... "
         local update_size=$(du -sh "$HOME/Library/Updates" 2>/dev/null | awk '{print $1}')
         sudo rm -rf "$HOME/Library/Updates/"* 2>/dev/null || true
-        echo "${GREEN}✓${NC} ${GRAY}(${update_size})${NC}"
+        echo "${GREEN}✅${NC} ${GRAY}(${update_size})${NC}"
         ((cleaned_count++))
     fi
     
