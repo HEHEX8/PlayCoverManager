@@ -110,11 +110,16 @@ generate_mapping_file() {
     > "$MAPPING_FILE"
     
     # Generate entries
-    local total_samples=${#SAMPLE_APPS[@]}
+    # zsh: ${#array} で要素数取得（@は不要）
+    local total_samples=${#SAMPLE_APPS}
+    print_success "DEBUG: total_samples=$total_samples"  # デバッグ用
+    
     for ((i=1; i<=count; i++)); do
         local app_index=$(( ((i - 1) % total_samples) + 1 ))
         local app_name="${SAMPLE_APPS[$app_index]}"
         local bundle_id="${SAMPLE_BUNDLE_IDS[$app_index]}"
+        
+        print_info "DEBUG: i=$i, app_index=$app_index, app_name=$app_name"  # デバッグ用
         
         # Add number suffix if more than available samples
         if [[ $i -gt $total_samples ]]; then
@@ -167,7 +172,9 @@ create_dummy_app_structure() {
     local playcover_apps_dir="${HOME}/Library/Containers/io.playcover.PlayCover/Applications"
     mkdir -p "$playcover_apps_dir"
     
-    local total_samples=${#SAMPLE_APPS[@]}
+    # zsh: ${#array} で要素数取得（@は不要）
+    local total_samples=${#SAMPLE_APPS}
+    
     for ((i=1; i<=count; i++)); do
         local app_index=$(( ((i - 1) % total_samples) + 1 ))
         local app_name="${SAMPLE_APPS[$app_index]}"
