@@ -142,8 +142,10 @@ echo "Launch Time: $(date)" >> "$LOG_FILE"
 echo "Bundle Path: ${0:A:h:h}" >> "$LOG_FILE"
 
 # ============================================================================
-# シングルインスタンスチェック
+# シングルインスタンスチェック（読み取りのみ）
 # ============================================================================
+# NOTE: Launcher checks if instance is running, but does NOT create lock
+# main.sh creates and manages the lock file with trap
 
 LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-running.lock"
 
@@ -174,13 +176,16 @@ if [[ -f "$LOCK_FILE" ]]; then
     else
         echo "Another instance is already running" >> "$LOG_FILE"
         
-        # Activate existing instance
+        # Activate existing Terminal window
         osascript <<'ACTIVATE_EOF' 2>> "$LOG_FILE"
-tell application "System Events"
-    set pcmProcesses to every process whose name contains "PlayCover Manager"
-    if (count of pcmProcesses) > 0 then
-        set frontmost of item 1 of pcmProcesses to true
-    end if
+tell application "Terminal"
+    activate
+    repeat with w in windows
+        if (name of w) contains "PlayCover" then
+            set index of w to 1
+            exit repeat
+        end if
+    end repeat
 end tell
 ACTIVATE_EOF
         
@@ -191,21 +196,8 @@ ACTIVATE_EOF
     fi
 fi
 
-# ロックファイルを作成
-echo $$ > "$LOCK_FILE"
-echo "Created lock file with PID: $$" >> "$LOG_FILE"
-
-# 終了時のクリーンアップ
-cleanup_lock() {
-    echo "Cleaning up lock file" >> "$LOG_FILE"
-    rm -f "$LOCK_FILE"
-}
-
-trap cleanup_lock EXIT INT TERM QUIT
-
-# ============================================================================
-# プロセス名を設定
-# ============================================================================
+# NOTE: Do NOT create lock file here - main.sh will create it
+# Launcher exits after opening Terminal, so trap wouldn't work anyway
 
 # ============================================================================
 # Resourcesディレクトリのパスを事前に取得
