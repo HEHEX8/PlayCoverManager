@@ -203,8 +203,13 @@ main() {
                 ;;
             [qQ])
                 clear
+                echo ""
+                print_info "終了します..."
+                /bin/sleep 0.5
                 # Close Terminal window using AppleScript
-                osascript -e 'tell application "Terminal" to close first window' & exit 0
+                osascript -e 'tell application "Terminal" to close first window' 2>/dev/null &
+                /bin/sleep 0.3
+                exit 0
                 ;;
             X|x|RESET|reset)
                 echo ""
