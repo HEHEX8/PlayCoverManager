@@ -81,7 +81,6 @@ main() {
     
     echo ""
     echo "${GREEN}起動完了${NC}"
-    sleep 0.5
     
     # Show quick launcher if launchable apps exist
     local -a launchable_apps=()

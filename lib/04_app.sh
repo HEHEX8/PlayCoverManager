@@ -1474,8 +1474,16 @@ launch_app() {
         needs_sudo=true
     fi
     
+    # Handle intentional internal storage mode FIRST
+    # CRITICAL: Internal mode should NEVER mount external volume
+    if [[ "$storage_mode" == "internal_intentional"* ]]; then
+        if [[ ! -e "$container_path" ]]; then
+            print_error "内蔵コンテナパスが見つかりません"
+            return 1
+        fi
+        # Skip to launch (don't try to mount external volume)
     # Handle external storage mode
-    if [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
+    elif [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
         # Get volume mount status in one call
         local current_mount=$(validate_and_get_mount_point "$volume_name")
         local vol_status=$?
@@ -1538,14 +1546,6 @@ launch_app() {
         local internal_path="/Users/$(whoami)/Library/Containers/${bundle_id}"
         if [[ -e "$internal_path" ]] && [[ "$container_path" != "$internal_path" ]]; then
             print_warning "⚠️ 内蔵側にもデータが存在します（現在使用: 外部ストレージ）"
-        fi
-    fi
-    
-    # For internal mode, just verify path exists
-    if [[ "$storage_mode" == "internal_intentional"* ]]; then
-        if [[ ! -e "$container_path" ]]; then
-            print_error "内蔵コンテナパスが見つかりません"
-            return 1
         fi
     fi
     
