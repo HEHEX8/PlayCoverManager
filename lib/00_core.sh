@@ -1104,29 +1104,16 @@ preload_all_volume_cache() {
     local start_time=$(date +%s)
     local loaded=0
     
-    # Show initial progress
-    printf "ボリューム情報を読み込み中... "
-    
-    # Preload volumes with progress
+    # Preload volumes (silent mode, no progress display when called from startup)
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
-        
         get_volume_info_cached "$volume_name" >/dev/null
-        ((loaded++))
-        
-        # Show simple counter progress (fast, minimal overhead)
-        printf "\rボリューム情報を読み込み中... %d/%d" "$loaded" "$total_volumes"
     done < "$MAPPING_FILE"
     
     # Also preload PlayCover main volume
     if [[ -n "$PLAYCOVER_VOLUME_NAME" ]]; then
         get_volume_info_cached "$PLAYCOVER_VOLUME_NAME" >/dev/null
-        ((loaded++))
-        printf "\rボリューム情報を読み込み中... %d/%d" "$loaded" "$total_volumes"
     fi
-    
-    # Clear progress line and show completion
-    printf "\r%*s\r" 50 ""
     
     # Mark as preloaded
     CACHE_PRELOADED=true

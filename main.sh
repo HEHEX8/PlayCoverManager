@@ -35,12 +35,17 @@ main() {
     echo ""
     
     # Step 1: Ensure data directory exists
-    printf "  ${DIM_GRAY}1/4${NC} データディレクトリ確認... "
+    printf "  ${DIM_GRAY}1/5${NC} データディレクトリ確認... "
     ensure_data_directory
     echo "${GREEN}✓${NC}"
     
-    # Step 2: PlayCover環境が準備できているか確認
-    printf "  ${DIM_GRAY}2/4${NC} PlayCover環境確認... "
+    # Step 2: Preload volume cache (speeds up all subsequent checks)
+    printf "  ${DIM_GRAY}2/5${NC} ボリューム情報キャッシュ... "
+    preload_all_volume_cache
+    echo "${GREEN}✓${NC}"
+    
+    # Step 3: PlayCover環境が準備できているか確認
+    printf "  ${DIM_GRAY}3/5${NC} PlayCover環境確認... "
     if ! is_playcover_environment_ready; then
         echo "${YELLOW}!${NC}"
         run_initial_setup
@@ -58,13 +63,13 @@ main() {
         echo "${GREEN}✓${NC}"
     fi
     
-    # Step 3: Clean up duplicate entries in mapping file
-    printf "  ${DIM_GRAY}3/4${NC} マッピングファイル整理... "
+    # Step 4: Clean up duplicate entries in mapping file
+    printf "  ${DIM_GRAY}4/5${NC} マッピングファイル整理... "
     deduplicate_mappings
     echo "${GREEN}✓${NC}"
     
-    # Step 4: Check and mount PlayCover volume if needed
-    printf "  ${DIM_GRAY}4/4${NC} PlayCoverボリューム確認... "
+    # Step 5: Check and mount PlayCover volume if needed
+    printf "  ${DIM_GRAY}5/5${NC} PlayCoverボリューム確認... "
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
@@ -81,12 +86,19 @@ main() {
     
     echo ""
     echo "${GREEN}起動完了${NC}"
+    echo ""
     
     # Show quick launcher if launchable apps exist
+    printf "アプリケーションをスキャン中... "
     local -a launchable_apps=()
+    local scan_start=$(date +%s)
     while IFS= read -r line; do
         [[ -n "$line" ]] && launchable_apps+=("$line")
     done < <(get_launchable_apps)
+    local scan_end=$(date +%s)
+    local scan_time=$((scan_end - scan_start))
+    
+    printf "\r%*s\r" 50 ""  # Clear scan message
     
     if [[ ${#launchable_apps[@]} -gt 0 ]]; then
         # Quick launcher mode: show app list first
