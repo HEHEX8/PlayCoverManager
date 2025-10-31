@@ -833,8 +833,8 @@ switch_storage_location() {
         # Check current storage mode (enhanced with external volume mount check)
         local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
         
-        # Handle unmounted external volume (except intentional internal modes)
-        if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_intentional_empty" ]]; then
+        # Handle unmounted external volume (except intentional internal modes and none)
+        if [[ $vol_status -eq 2 ]] && [[ "$storage_mode" != "internal_intentional" ]] && [[ "$storage_mode" != "internal_intentional_empty" ]] && [[ "$storage_mode" != "none" ]]; then
             clear
             print_header "${display_name} のストレージ切替"
             echo ""
