@@ -130,6 +130,9 @@ main() {
             5)
                 eject_disk
                 ;;
+            6)
+                system_maintenance_menu
+                ;;
             [qQ])
                 clear
                 # Close Terminal window using AppleScript

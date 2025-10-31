@@ -376,11 +376,12 @@ show_menu() {
     fi
     
     echo "  ${LIGHT_GREEN}5.${NC} ${eject_label}"
+    echo "  ${LIGHT_GREEN}6.${NC} システムメンテナンス ${GRAY}(APFS修復)${NC}"
     echo "  ${LIGHT_GRAY}q.${NC} 終了"
     echo ""
     echo "${DIM_GRAY}空Enterで最新の情報に更新${NC}"
     echo ""
-    echo -n "${CYAN}選択 (1-5/q):${NC} "
+    echo -n "${CYAN}選択 (1-6/q):${NC} "
 }
 
 #######################################################

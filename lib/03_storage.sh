@@ -498,6 +498,8 @@ _perform_rsync_transfer() {
     local initial_count=$(/usr/bin/find "$dest_path" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
     
     echo ""  # New line before progress bar
+    
+    # Monitor progress while rsync is running
     local copied=$(monitor_file_progress "$dest_path" "$total_files" "$initial_count" "$start_time" "$rsync_pid" 0.2)
     
     # Wait for rsync to finish and get exit code
@@ -510,7 +512,6 @@ _perform_rsync_transfer() {
     
     # Clear progress line and add newline
     clear_progress_bar
-    echo ""
     
     # Clean up output file
     /bin/rm -f "$rsync_output"
@@ -520,16 +521,16 @@ _perform_rsync_transfer() {
     
     # Check rsync exit code (0, 23, 24 are acceptable)
     if [[ $rsync_exit -eq 0 ]] || [[ $rsync_exit -eq 23 ]] || [[ $rsync_exit -eq 24 ]]; then
-        echo ""
         print_success "データのコピーが完了しました"
         
         local copied_size=$(get_container_size "$dest_path")
         print_info "  コピー完了: ${final_count} ファイル (${copied_size})"
         print_info "  処理時間: ${elapsed}秒"
+        echo ""
         return 0
     else
-        echo ""
         print_error "データのコピーに失敗しました"
+        echo ""
         return 1
     fi
 }
@@ -1108,7 +1109,6 @@ perform_internal_to_external_migration() {
     
     # Unmount after check
     if [[ "$check_mount" == /tmp/playcover_check_* ]]; then
-        print_info "容量チェック完了、一時マウントをクリーンアップ中..."
         unmount_volume "$check_mount" "silent"
         /bin/sleep 1
         cleanup_temp_dir "$check_mount" true
@@ -1147,10 +1147,8 @@ perform_internal_to_external_migration() {
     print_info "  ファイル数: ${file_count}"
     print_info "  データサイズ: ${total_size}"
     
-    # Copy data from internal to external using ditto (macOS native, fastest)
-    print_info "データを同期転送中..."
+    # Copy data from internal to external
     if ! _perform_data_transfer "$source_path" "$temp_mount" "sync"; then
-        print_info "一時マウントをクリーンアップ中..."
         unmount_with_fallback "$temp_mount" "silent" "$volume_name" || true
         /bin/sleep 1
         cleanup_temp_dir "$temp_mount" true
@@ -1192,11 +1190,16 @@ perform_internal_to_external_migration() {
         echo "${YELLOW}📊 容量表示について${NC}"
         echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
-        echo "${ORANGE}⚠️  内蔵ストレージの使用容量が増えて見える場合がありますが、${NC}"
+        echo "${ORANGE}⚠️  内蔵ストレージの使用容量が増えて見える場合:${NC}"
+        echo ""
+        echo "${WHITE}原因1: ${GRAY}APFSの仕様により論理サイズが重複カウント${NC}"
+        echo "${WHITE}原因2: ${GRAY}Time MachineのAPFSスナップショットが容量を保持${NC}"
+        echo ""
         echo "${GREEN}✅ 外部ボリューム使用により内蔵ストレージは節約されています${NC}"
         echo ""
-        echo "${GRAY}詳細: APFSの仕様により論理サイズが重複カウントされています。${NC}"
-        echo "${WHITE}使用容量表示が実容量を超えて表示される場合もありますが、仕様です。${NC}"
+        echo "${YELLOW}💡 容量が解放されない場合の対処法:${NC}"
+        echo "   ${SKY_BLUE}メインメニュー → [6] システムメンテナンス${NC}"
+        echo "   ${GRAY}→ APFSスナップショットの削除で容量を回復できます${NC}"
         echo ""
         echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         
@@ -1382,7 +1385,6 @@ perform_external_to_internal_migration() {
     if ! _perform_data_transfer "$source_mount" "$target_path" "copy"; then
         # Cleanup on failure
         if [[ "$temp_mount_created" == true ]]; then
-            print_info "一時マウントをクリーンアップ中..."
             unmount_with_fallback "$source_mount" "silent" "$volume_name" || true
             /bin/sleep 1
             /usr/bin/sudo /bin/rm -rf "$source_mount" 2>/dev/null || true

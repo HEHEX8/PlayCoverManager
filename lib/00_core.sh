@@ -1265,7 +1265,7 @@ clear_progress_bar() {
 
 # Monitor file count progress in a directory
 # Usage: monitor_file_progress <dest_dir> <total_files> <initial_count> <start_time> <pid_to_monitor> [interval]
-# Returns: Final file count
+# Returns: Final file count (via stdout redirection to /dev/fd/3)
 monitor_file_progress() {
     local dest_dir=$1
     local total_files=$2
@@ -1276,6 +1276,7 @@ monitor_file_progress() {
     
     local copied=0
     
+    # Monitor while process is running
     while kill -0 $monitor_pid 2>/dev/null; do
         # Count files copied so far
         local current_count=$(/usr/bin/find "$dest_dir" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
@@ -1286,15 +1287,23 @@ monitor_file_progress() {
             copied=$total_files
         fi
         
-        show_progress_bar "$copied" "$total_files" "$start_time" 50 "files"
+        # Show progress bar on stderr to avoid interfering with stdout
+        show_progress_bar "$copied" "$total_files" "$start_time" 50 "files" >&2
         
         sleep $interval
     done
     
-    # Final count
+    # Show final progress bar
     local final_count=$(/usr/bin/find "$dest_dir" -type f 2>/dev/null | wc -l | /usr/bin/xargs)
     copied=$((final_count - initial_count))
     
+    if (( copied > total_files )); then
+        copied=$total_files
+    fi
+    
+    show_progress_bar "$copied" "$total_files" "$start_time" 50 "files" >&2
+    
+    # Return final count via stdout (without interfering with progress bar)
     echo "$copied"
 }
 
