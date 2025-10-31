@@ -1361,8 +1361,12 @@ load_mappings_array() {
     
     local -a mappings_array=()
     while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        # Skip empty lines
+        # Skip empty lines and invalid entries
         [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Skip entries with whitespace-only volume_name (trim and check)
+        local trimmed_volume_name="${volume_name// /}"
+        [[ -z "$trimmed_volume_name" ]] && continue
         
         # Add to array (only first 3 columns)
         mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
