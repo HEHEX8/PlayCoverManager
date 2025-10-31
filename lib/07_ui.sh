@@ -1074,41 +1074,36 @@ show_quick_launcher() {
             local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
             
-            # Storage type icon (simple)
-            local storage_icon=""
+            # Title color based on storage mode
+            local title_color=""
             case "$storage_mode" in
                 "external"|"external_wrong_location"|"none")
-                    storage_icon="⚡"
+                    title_color="${CYAN}"  # 外部ストレージ：シアン
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
-                    storage_icon="🍎"
+                    title_color="${GREEN}"  # 内部ストレージ（意図的）：グリーン
                     ;;
                 "internal_contaminated")
-                    storage_icon="⚠️"
+                    title_color="${ORANGE}"  # 内部ストレージ（汚染）：オレンジ
                     ;;
             esac
             
-            # Check sudo necessity
-            local sudo_mark=""
+            # Index color based on sudo necessity
+            local index_color="${WHITE}"  # デフォルト：白
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                sudo_mark="🔐"
+                index_color="${YELLOW}"  # 管理者権限必要：黄色
             fi
             
-            # Recent mark
+            # Recent mark (only visible indicator)
             local recent_display=""
             if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                recent_display="⭐"
+                recent_display="⭐ "
                 recent_count=1
             fi
             
-            # Format: [storage][sudo][recent] index. name
-            # Order: データ位置、要管理者権限、前回起動
-            local slot1="${storage_icon:-  }"  # Storage icon or 2 spaces
-            local slot2="${sudo_mark:-  }"     # Sudo icon or 2 spaces  
-            local slot3="${recent_display:-  }" # Recent icon or 2 spaces
-            
+            # Format: [recent] index. name (with colors)
             # Store formatted line for column display
-            app_display_lines+=("${slot1}${slot2}${slot3} $index. $display_name")
+            app_display_lines+=("${recent_display}${index_color}${index}.${NC} ${title_color}${display_name}${NC}")
             ((index++))
         done
         
@@ -1144,8 +1139,8 @@ show_quick_launcher() {
         
         echo ""
         print_separator
-        # Compact help line
-        printf "  🔐:要管理者権限"
+        # Compact help line with color legends
+        printf "  ${YELLOW}番号黄色${NC}:要管理者権限  ${CYAN}タイトル色${NC}:外部/${GREEN}内部${NC}/${ORANGE}汚染${NC}"
         if [[ $recent_count -gt 0 ]]; then
             printf "  ⭐:前回起動 Enterで起動"
         fi
