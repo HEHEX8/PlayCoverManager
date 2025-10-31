@@ -103,14 +103,14 @@ main() {
     echo ""
     
     # Step 1: データディレクトリ確認
-    printf "  ${DIM_GRAY}1/6${NC} データディレクトリ確認..."
+    printf "  ${DIM_GRAY}1/6${NC} データディレクトリ確認"
     ensure_data_directory
-    printf "\r  ✅  \n"
+    printf "\033[40G✅\n"
     
     # Step 2: PlayCover アプリ確認
-    printf "  ${DIM_GRAY}2/6${NC} PlayCover アプリ確認..."
+    printf "  ${DIM_GRAY}2/6${NC} PlayCover アプリ確認"
     if [[ ! -d "/Applications/PlayCover.app" ]]; then
-        printf "\r  ⚠️  \n"
+        printf "\033[40G⚠️\n"
         run_initial_setup
         
         # Re-check after setup
@@ -123,18 +123,18 @@ main() {
             exit 1
         fi
     else
-        printf "\r  ✅  \n"
+        printf "\033[40G✅\n"
     fi
     
     # Step 3: ボリューム情報キャッシュ（以降のチェックを高速化）
-    printf "  ${DIM_GRAY}3/6${NC} ボリューム情報キャッシュ..."
+    printf "  ${DIM_GRAY}3/6${NC} ボリューム情報取得"
     preload_all_volume_cache
-    printf "\r  ✅  \n"
+    printf "\033[40G✅\n"
     
     # Step 4: PlayCover ボリューム確認
-    printf "  ${DIM_GRAY}4/6${NC} PlayCover ボリューム確認..."
+    printf "  ${DIM_GRAY}4/6${NC} PlayCover ボリューム確認"
     if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
-        printf "\r  ⚠️  \n"
+        printf "\033[40G⚠️\n"
         run_initial_setup
         
         # Re-check after setup
@@ -150,13 +150,13 @@ main() {
         # Refresh cache after volume creation
         preload_all_volume_cache
     else
-        printf "\r  ✅  \n"
+        printf "\033[40G✅\n"
     fi
     
     # Step 5: マッピングファイル確認・整理
-    printf "  ${DIM_GRAY}5/6${NC} マッピングファイル確認..."
+    printf "  ${DIM_GRAY}5/6${NC} マッピングファイル確認"
     if [[ ! -f "$MAPPING_FILE" ]] || [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
-        printf "\r  ⚠️  \n"
+        printf "\033[40G⚠️\n"
         run_initial_setup
         
         # Re-check after setup
@@ -169,28 +169,27 @@ main() {
             exit 1
         fi
     else
-        printf "\r  ✅  \n"
+        printf "\033[40G✅\n"
     fi
     
     # マッピングファイルの重複を整理
     deduplicate_mappings
     
-    # Step 6: デバイス名キャッシュとマウント確認
-    printf "  ${DIM_GRAY}6/6${NC} PlayCover マウント確認..."
-    cache_external_drive_name  # Cache device name for menu display
+    # Step 6: マウント確認（キャッシュは管理画面初回表示時に更新）
+    printf "  ${DIM_GRAY}6/6${NC} PlayCover マウント確認"
     
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
-            printf "\r  🔄  \n"
+            printf "\033[40G🔄\n"
             echo ""
             mount_app_volume "$PLAYCOVER_VOLUME_NAME" "$PLAYCOVER_CONTAINER" "$PLAYCOVER_BUNDLE_ID"
             echo ""
         else
-            printf "\r  ✅  \n"
+            printf "\033[40G✅\n"
         fi
     else
-        printf "\r  ✅  \n"
+        printf "\033[40G✅\n"
     fi
     
     echo ""
@@ -216,6 +215,12 @@ main() {
     fi
     
     while true; do
+        # Update drive name cache only on first menu display (after quick launcher)
+        if [[ "$DRIVE_NAME_CACHE_UPDATED" == "false" ]]; then
+            cache_external_drive_name
+            DRIVE_NAME_CACHE_UPDATED=true
+        fi
+        
         show_menu
         read choice
         

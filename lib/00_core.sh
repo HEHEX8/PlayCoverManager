@@ -181,6 +181,9 @@ CACHE_PRELOADED=false  # Track if cache has been preloaded at least once
 # External drive name cache (set once at startup, never changes)
 EXTERNAL_DRIVE_NAME=""
 
+# Cache update flag for lazy loading (only update when entering main menu)
+DRIVE_NAME_CACHE_UPDATED=false
+
 #######################################################
 # Basic Print Functions
 #######################################################
