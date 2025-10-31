@@ -1385,6 +1385,19 @@ get_launchable_apps() {
         return 1
     fi
     
+    # Load mappings for display_name lookup (single file read)
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
+    
+    # Build bundle_id → display_name lookup table
+    declare -A bundle_to_display
+    for mapping in "${mappings_array[@]}"; do
+        IFS='|' read -r _ map_bundle_id map_display_name <<< "$mapping"
+        bundle_to_display["$map_bundle_id"]="$map_display_name"
+    done
+    
     local app_count=0
     
     while IFS= read -r app_path; do
@@ -1393,6 +1406,12 @@ get_launchable_apps() {
         
         if [[ -z "$bundle_id" ]]; then
             continue
+        fi
+        
+        # Get display name from mapping (O(1) lookup)
+        local display_name="${bundle_to_display[$bundle_id]}"
+        if [[ -z "$display_name" ]]; then
+            display_name="$app_name"
         fi
         
         # Only include apps that have mapping (external) or intentional internal mode
@@ -1407,25 +1426,37 @@ get_launchable_apps() {
                 continue
             fi
             
-            # Fast contamination check: Only check if internal data exists
-            # Skip expensive get_storage_mode() call here
-            # Contamination will be handled at launch time by auto_mount_if_contaminated()
+            # Fast storage mode determination (without expensive get_storage_mode())
+            local storage_mode="external"
             if [[ -d "$container_path" ]] && [[ ! -L "$container_path" ]]; then
-                # Has internal data - might be contaminated, but allow launch attempt
-                # Launch workflow will handle contamination with auto-mount
-                :
+                # Has internal data - contaminated
+                storage_mode="internal_contaminated"
+            elif [[ -L "$container_path" ]]; then
+                # Symlink exists - check mount status
+                local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
+                if [[ $? -eq 0 ]] && [[ -n "$current_mount" ]]; then
+                    storage_mode="external"
+                else
+                    storage_mode="external_wrong_location"
+                fi
             fi
             
-            # Include all external storage apps (contamination handled at launch)
-            echo "${app_name}|${bundle_id}|${app_path}"
+            # Include all external storage apps (format: app_name|bundle_id|app_path|display_name|storage_mode)
+            echo "${app_name}|${bundle_id}|${app_path}|${display_name}|${storage_mode}"
             ((app_count++))
             continue
         fi
         
         # No external mapping - check for internal intentional mode
         if [[ -f "${container_path}/.internal_storage" ]]; then
-            # Internal intentional mode - include
-            echo "${app_name}|${bundle_id}|${app_path}"
+            # Internal intentional mode - determine if empty or has data
+            local storage_mode="internal_intentional"
+            if [[ ! -d "${container_path}/Data/Documents" ]] || [[ -z "$(ls -A "${container_path}/Data/Documents" 2>/dev/null)" ]]; then
+                storage_mode="internal_intentional_empty"
+            fi
+            
+            # Include internal intentional apps
+            echo "${app_name}|${bundle_id}|${app_path}|${display_name}|${storage_mode}"
             ((app_count++))
             continue
         fi

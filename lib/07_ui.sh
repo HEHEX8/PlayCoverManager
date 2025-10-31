@@ -884,26 +884,11 @@ show_quick_launcher() {
         local -a app_display_lines=()  # Store formatted display lines for column layout
         local recent_count=0
         
-        # Load mappings using common function (single file read)
-        local -a mappings_array=()
-        while IFS= read -r line; do
-            [[ -n "$line" ]] && mappings_array+=("$line")
-        done < <(load_mappings_array)
-        
-        # Build bundle_id → display_name lookup table
-        declare -A bundle_to_display
-        for mapping in "${mappings_array[@]}"; do
-            IFS='|' read -r _ map_bundle_id map_display_name <<< "$mapping"
-            bundle_to_display["$map_bundle_id"]="$map_display_name"
-        done
-        
         for app_info in "${apps_info[@]}"; do
-            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            # Parse extended format: app_name|bundle_id|app_path|display_name|storage_mode
+            IFS='|' read -r app_name bundle_id app_path display_name storage_mode <<< "$app_info"
             
-            # Get display name from lookup table (O(1) instead of O(n) file read)
-            local display_name="${bundle_to_display[$bundle_id]}"
-            
-            # Fallback to app_name if no display name found
+            # Fallback to app_name if display_name is empty
             if [[ -z "$display_name" ]]; then
                 display_name=$app_name
             fi
@@ -911,11 +896,6 @@ show_quick_launcher() {
             app_names+=("$display_name")
             bundle_ids+=("$bundle_id")
             app_paths+=("$app_path")
-            
-            # Get storage state
-            local container_path=$(get_container_path "$bundle_id")
-            local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
-            local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
             
             # Title color and decoration based on storage mode
             local title_style=""
