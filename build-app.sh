@@ -47,8 +47,8 @@ echo "🚀 ランチャースクリプトを作成中..."
 cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
 #!/bin/bash
 #######################################################
-# PlayCover Manager - Single Instance Launcher
-# Prevents multiple Terminal windows
+# PlayCover Manager - Simple Launcher
+# Single instance with process monitoring
 #######################################################
 
 # Resourcesディレクトリを取得
@@ -61,76 +61,31 @@ if [ ! -f "$MAIN_SCRIPT" ]; then
     exit 1
 fi
 
-# Lock file to prevent multiple instances
-LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-app.lock"
-LOCK_PID_FILE="${TMPDIR:-/tmp}/playcover-manager-app.pid"
-
-# Check if already running
-if [[ -f "$LOCK_FILE" ]] && [[ -f "$LOCK_PID_FILE" ]]; then
-    EXISTING_PID=$(cat "$LOCK_PID_FILE" 2>/dev/null)
-    
-    # Check if the process is actually running
-    if kill -0 "$EXISTING_PID" 2>/dev/null; then
-        # Already running - bring Terminal to front
-        osascript <<'APPLESCRIPT' 2>/dev/null
+# Check if already running by looking for the process
+if pgrep -f "main-script.sh" >/dev/null 2>&1; then
+    # Already running - bring Terminal to front
+    osascript <<'APPLESCRIPT' 2>/dev/null
 tell application "Terminal"
     activate
-    -- Find and activate the PlayCover Manager window
-    set foundWindow to false
+    -- Try to find PlayCover window
     repeat with w in windows
-        set windowName to name of w
-        if windowName contains "PlayCover" then
-            set foundWindow to true
+        if (name of w) contains "PlayCover" then
             set index of w to 1
             exit repeat
         end if
     end repeat
-    
-    -- If window not found, just activate Terminal
-    if not foundWindow then
-        tell application "System Events"
-            tell process "Terminal"
-                set frontmost to true
-            end tell
-        end tell
-    end if
 end tell
 APPLESCRIPT
-        exit 0
-    else
-        # Stale lock - remove it
-        rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-    fi
+    exit 0
 fi
-
-# Create lock with PID
-echo $$ > "$LOCK_PID_FILE"
-touch "$LOCK_FILE"
-
-# Cleanup on exit
-cleanup_lock() {
-    rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-}
-
-trap cleanup_lock EXIT INT TERM
 
 # Launch in Terminal with custom title
 osascript <<APPLESCRIPT
 tell application "Terminal"
     activate
-    do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; /bin/zsh '$MAIN_SCRIPT'; exit"
+    do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; /bin/zsh '$MAIN_SCRIPT'"
 end tell
 APPLESCRIPT
-
-# Monitor the Terminal process
-while kill -0 $$ 2>/dev/null; do
-    # Check if Terminal window is still open by checking if script is running
-    if ! pgrep -f "$MAIN_SCRIPT" >/dev/null 2>&1; then
-        # Script finished - clean up and exit
-        break
-    fi
-    sleep 1
-done
 
 LAUNCHER_EOF
 

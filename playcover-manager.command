@@ -6,45 +6,25 @@
 #######################################################
 
 #######################################################
-# Single Instance Lock
+# Single Instance Check
 #######################################################
 
-# Lock file location
-LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager.lock"
-LOCK_PID_FILE="${TMPDIR:-/tmp}/playcover-manager.pid"
-
-# Check if already running
-if [[ -f "$LOCK_FILE" ]]; then
-    # Read the PID from lock file
-    if [[ -f "$LOCK_PID_FILE" ]]; then
-        EXISTING_PID=$(cat "$LOCK_PID_FILE" 2>/dev/null)
-        
-        # Check if the process is actually running
-        if kill -0 "$EXISTING_PID" 2>/dev/null; then
-            # Process is running - bring Terminal to front and exit
-            osascript <<EOF 2>/dev/null
+# Check if already running by process name
+if pgrep -f "playcover-manager.command" | grep -v $$ >/dev/null 2>&1; then
+    # Already running - activate Terminal
+    osascript <<'EOF' 2>/dev/null
 tell application "Terminal"
     activate
+    repeat with w in windows
+        if (name of w) contains "PlayCover" then
+            set index of w to 1
+            exit repeat
+        end if
+    end repeat
 end tell
 EOF
-            exit 0
-        else
-            # Stale lock file - remove it
-            rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-        fi
-    fi
+    exit 0
 fi
-
-# Create lock file with current PID
-echo $$ > "$LOCK_PID_FILE"
-touch "$LOCK_FILE"
-
-# Clean up lock on exit
-cleanup_lock() {
-    rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-}
-
-trap cleanup_lock EXIT INT TERM
 
 #######################################################
 # Launch Application

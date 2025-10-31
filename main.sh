@@ -7,41 +7,16 @@
 #
 
 #######################################################
-# Single Instance Lock (when executed directly)
+# Single Instance Check (when executed directly)
 #######################################################
 
-# Only apply lock when NOT called from playcover-manager.command
-if [[ ! -f "${TMPDIR:-/tmp}/playcover-manager.lock" ]]; then
-    LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-direct.lock"
-    LOCK_PID_FILE="${TMPDIR:-/tmp}/playcover-manager-direct.pid"
-    
-    # Check if already running
-    if [[ -f "$LOCK_FILE" ]]; then
-        if [[ -f "$LOCK_PID_FILE" ]]; then
-            EXISTING_PID=$(cat "$LOCK_PID_FILE" 2>/dev/null)
-            
-            # Check if the process is actually running
-            if kill -0 "$EXISTING_PID" 2>/dev/null; then
-                echo "PlayCover Manager は既に実行中です (PID: $EXISTING_PID)"
-                echo "既存のウィンドウを使用してください。"
-                exit 0
-            else
-                # Stale lock file - remove it
-                rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-            fi
-        fi
+# Check if already running (only when executed directly, not from playcover-manager.command)
+if [[ "$0" == *"main.sh" ]]; then
+    if pgrep -f "main.sh" | grep -v $$ >/dev/null 2>&1; then
+        echo "PlayCover Manager は既に実行中です"
+        echo "既存のウィンドウを使用してください。"
+        exit 0
     fi
-    
-    # Create lock file with current PID
-    echo $$ > "$LOCK_PID_FILE"
-    touch "$LOCK_FILE"
-    
-    # Clean up lock on exit
-    cleanup_direct_lock() {
-        rm -f "$LOCK_FILE" "$LOCK_PID_FILE"
-    }
-    
-    trap cleanup_direct_lock EXIT INT TERM
 fi
 
 #######################################################
