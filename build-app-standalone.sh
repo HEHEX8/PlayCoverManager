@@ -228,13 +228,37 @@ if [[ ! -f "$MAIN_SCRIPT" ]]; then
 fi
 
 # ============================================================================
-# プロセス名を設定してメインスクリプトを実行
+# Terminal ウィンドウで実行（インタラクティブモード必須）
 # ============================================================================
 
-# プロセス名を "PlayCover Manager" に設定
-# これにより Activity Monitor で正しい名前が表示される
-cd "$RESOURCES_DIR"
-exec -a "PlayCover Manager" /bin/zsh "$MAIN_SCRIPT"
+echo "Opening Terminal window for interactive execution..." >> "$LOG_FILE"
+
+# AppleScript で新しい Terminal ウィンドウを開く
+osascript <<APPLESCRIPT 2>> "$LOG_FILE"
+tell application "Terminal"
+    set wasRunning to (count of windows) > 0
+    
+    -- 新しいウィンドウでスクリプトを実行
+    set newWindow to do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
+    
+    -- 起動時に開いた空のウィンドウを閉じる
+    if not wasRunning then
+        delay 0.5
+        repeat with w in (get windows)
+            try
+                if (name of w) does not contain "PlayCover" then
+                    close w
+                end if
+            end try
+        end repeat
+    end if
+    
+    activate
+    set frontmost of newWindow to true
+end tell
+APPLESCRIPT
+
+echo "Terminal window opened successfully" >> "$LOG_FILE"
 
 LAUNCHER_EOF
 
