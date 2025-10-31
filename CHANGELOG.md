@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Standalone版アプリビルダー**: Terminal.appに依存しない独立したmacOSアプリケーションを作成
+  - 新しいビルドスクリプト: `build-app-standalone.sh`
+  - Activity Monitorで "PlayCover Manager" として表示（Terminalではない）
+  - Dockで PlayCover Manager アイコンとして表示
+  - `exec -a` によるプロセス名の明示的な設定
+  - 外部ツール不要（Platypus不要）
+  - 配布用に最適化された.appバンドル構造
+  - 詳細ドキュメント: `STANDALONE_BUILD.md`
+
+### Documentation
+- **STANDALONE_BUILD.md**: Standalone版ビルドの完全ガイドを追加
+  - ビルド方法、テスト手順、配布方法
+  - トラブルシューティングガイド
+  - Terminal版との比較表
+- **README.md**: Standalone版ビルドの説明を追加
+  - インストール方法3にStandalone版とTerminal版の比較表を追加
+  - ビルド方式の違いを明記
+
 ## [5.2.0] - 2025-01-31
 
 ### Added

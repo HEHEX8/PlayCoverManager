@@ -27,5 +27,7 @@ archive/
 
 # Build artifacts
 build/
+build-standalone/
+build-platypus/
 *.zip
 *.dmg

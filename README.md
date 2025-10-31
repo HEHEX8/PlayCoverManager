@@ -94,7 +94,10 @@ chmod +x main.sh
 git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
-# アプリケーションをビルド
+# 【推奨】Standalone版アプリをビルド（独立プロセス）
+./build-app-standalone.sh
+
+# または、Terminal版アプリをビルド
 ./build-app.sh
 
 # DMGインストーラーを作成（オプション）
@@ -103,8 +106,23 @@ cd PlayCoverManager
 ./create-dmg-appdmg.sh             # DMGを作成
 
 # ビルドされたアプリをインストール
+# Standalone版の場合:
+mv "build-standalone/PlayCover Manager.app" /Applications/
+# Terminal版の場合:
 mv "build/PlayCover Manager.app" /Applications/
 ```
+
+**ビルド方式の違い**:
+
+| 項目 | Standalone版 (推奨) | Terminal版 |
+|------|---------------------|-----------|
+| **ビルドコマンド** | `./build-app-standalone.sh` | `./build-app.sh` |
+| **プロセス表示** | PlayCover Manager | Terminal |
+| **Dockアイコン** | PlayCover Manager | Terminal |
+| **外部依存** | なし | Terminal.app |
+| **配布** | そのまま配布可能 | そのまま配布可能 |
+
+詳細は [STANDALONE_BUILD.md](STANDALONE_BUILD.md) を参照してください。
 
 **DMG作成の要件**:
 - Node.js がインストールされていること
@@ -122,16 +140,20 @@ mv "build/PlayCover Manager.app" /Applications/
 アプリは**シングルインスタンス設計**になっており、複数起動を自動的に防ぎます：
 
 - ロックファイル（`/tmp/playcover-manager-running.lock`）で実行状態を管理
-- 既に起動している場合は、既存のTerminalウィンドウをフォアグラウンドに表示
+- 既に起動している場合は、既存のウィンドウをフォアグラウンドに表示
 - プロセスIDで有効性を確認（ゾンビロック自動検出）
 - プロセス終了時に自動的にロックを解放
 
 **仕組み:**
 1. 起動時に`/tmp/playcover-manager-running.lock`をチェック
 2. ロックファイルからPIDを読み取り、プロセスの存在を確認
-3. 有効なプロセスが実行中 → AppleScriptでTerminalを前面に表示
+3. 有効なプロセスが実行中 → AppleScriptで既存ウィンドウを前面に表示
 4. ゾンビロック（プロセス不在） → 自動削除して新規起動
 5. `trap EXIT INT TERM QUIT`でクリーンアップを保証
+
+**Standalone版とTerminal版の違い**:
+- **Standalone版**: `System Events` でプロセスをアクティベート
+- **Terminal版**: `Terminal.app` のウィンドウをアクティベート
 
 **トラブルシューティング:**
 

@@ -1,0 +1,320 @@
+#!/bin/bash
+# PlayCover Manager - Standalone App Builder
+# Creates independent macOS app without Terminal.app dependency
+
+set -e
+
+# ============================================================================
+# 設定
+# ============================================================================
+
+APP_NAME="PlayCover Manager"
+APP_VERSION="5.2.0"
+BUNDLE_ID="com.playcover.manager"
+BUILD_DIR="build-standalone"
+APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+
+# カラー出力
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# ============================================================================
+# ヘルパー関数
+# ============================================================================
+
+print_header() {
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  $1${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_info() {
+    echo -e "${YELLOW}ℹ️  $1${NC}"
+}
+
+# ============================================================================
+# ビルド開始
+# ============================================================================
+
+print_header "PlayCover Manager - Standalone App Builder v${APP_VERSION}"
+
+# 古いビルドをクリーンアップ
+if [[ -d "$BUILD_DIR" ]]; then
+    print_info "既存のビルドディレクトリをクリーンアップ中..."
+    rm -rf "$BUILD_DIR"
+fi
+
+# ディレクトリ構造を作成
+print_info ".app バンドル構造を作成中..."
+mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+mkdir -p "${APP_BUNDLE}/Contents/Resources"
+
+print_success "ディレクトリ構造作成完了"
+
+# ============================================================================
+# Info.plist を作成
+# ============================================================================
+
+print_info "Info.plist を生成中..."
+
+cat > "${APP_BUNDLE}/Contents/Info.plist" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>ja_JP</string>
+    <key>CFBundleExecutable</key>
+    <string>PlayCoverManager</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.playcover.manager</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>PlayCover Manager</string>
+    <key>CFBundleDisplayName</key>
+    <string>PlayCover Manager</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>5.2.0</string>
+    <key>CFBundleVersion</key>
+    <string>5.2.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSUIElement</key>
+    <false/>
+    <key>NSAppleScriptEnabled</key>
+    <true/>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+</dict>
+</plist>
+EOF
+
+print_success "Info.plist 生成完了"
+
+# ============================================================================
+# PkgInfo を作成
+# ============================================================================
+
+print_info "PkgInfo を生成中..."
+echo -n "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
+print_success "PkgInfo 生成完了"
+
+# ============================================================================
+# Launcher スクリプトを作成
+# ============================================================================
+
+print_info "ランチャースクリプトを作成中..."
+
+cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
+#!/bin/zsh
+# PlayCover Manager - Standalone Launcher
+# Runs as independent app process
+
+# ============================================================================
+# エラーログ設定
+# ============================================================================
+
+LOG_FILE="${TMPDIR:-/tmp}/playcover-manager-standalone.log"
+exec 2>> "$LOG_FILE"
+
+echo "===== PlayCover Manager Standalone Launch =====" >> "$LOG_FILE"
+echo "Launch Time: $(date)" >> "$LOG_FILE"
+echo "Bundle Path: ${0:A:h:h}" >> "$LOG_FILE"
+
+# ============================================================================
+# シングルインスタンスチェック
+# ============================================================================
+
+LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-running.lock"
+
+is_lock_stale() {
+    local lock_file="$1"
+    if [[ ! -f "$lock_file" ]]; then
+        return 0  # No lock file = not stale
+    fi
+    
+    local lock_pid=$(cat "$lock_file" 2>/dev/null)
+    if [[ -z "$lock_pid" ]]; then
+        return 0  # Empty lock = stale
+    fi
+    
+    # Check if process exists
+    if ps -p "$lock_pid" >/dev/null 2>&1; then
+        return 1  # Process exists = not stale
+    else
+        return 0  # Process doesn't exist = stale
+    fi
+}
+
+# 既存インスタンスのチェック
+if [[ -f "$LOCK_FILE" ]]; then
+    if is_lock_stale "$LOCK_FILE"; then
+        echo "Removing stale lock file" >> "$LOG_FILE"
+        rm -f "$LOCK_FILE"
+    else
+        echo "Another instance is already running" >> "$LOG_FILE"
+        
+        # Activate existing instance
+        osascript <<'ACTIVATE_EOF' 2>> "$LOG_FILE"
+tell application "System Events"
+    set pcmProcesses to every process whose name contains "PlayCover Manager"
+    if (count of pcmProcesses) > 0 then
+        set frontmost of item 1 of pcmProcesses to true
+    end if
+end tell
+ACTIVATE_EOF
+        
+        # Show notification
+        osascript -e 'display notification "PlayCover Manager は既に実行中です" with title "PlayCover Manager"' 2>> "$LOG_FILE"
+        
+        exit 0
+    fi
+fi
+
+# ロックファイルを作成
+echo $$ > "$LOCK_FILE"
+echo "Created lock file with PID: $$" >> "$LOG_FILE"
+
+# 終了時のクリーンアップ
+cleanup_lock() {
+    echo "Cleaning up lock file" >> "$LOG_FILE"
+    rm -f "$LOCK_FILE"
+}
+
+trap cleanup_lock EXIT INT TERM QUIT
+
+# ============================================================================
+# プロセス名を設定
+# ============================================================================
+
+# プロセス名を "PlayCover Manager" に設定
+# これにより Activity Monitor で正しい名前が表示される
+exec -a "PlayCover Manager" /bin/zsh <<'MAIN_SCRIPT_EOF'
+
+# ============================================================================
+# メインスクリプトの実行
+# ============================================================================
+
+# Resourcesディレクトリを取得
+BUNDLE_CONTENTS="${0:A:h:h}"
+RESOURCES_DIR="${BUNDLE_CONTENTS}/Resources"
+MAIN_SCRIPT="${RESOURCES_DIR}/main.sh"
+
+# ログ設定
+LOG_FILE="${TMPDIR:-/tmp}/playcover-manager-standalone.log"
+exec 2>> "$LOG_FILE"
+
+echo "Resources Directory: ${RESOURCES_DIR}" >> "$LOG_FILE"
+echo "Main Script: ${MAIN_SCRIPT}" >> "$LOG_FILE"
+
+# メインスクリプトの存在確認
+if [[ ! -f "$MAIN_SCRIPT" ]]; then
+    echo "❌ エラー: メインスクリプトが見つかりません: $MAIN_SCRIPT" >> "$LOG_FILE"
+    osascript -e 'display alert "PlayCover Manager エラー" message "メインスクリプトが見つかりません" as critical' 2>> "$LOG_FILE"
+    exit 1
+fi
+
+# メインスクリプトを実行
+cd "$RESOURCES_DIR"
+source "$MAIN_SCRIPT"
+
+MAIN_SCRIPT_EOF
+
+LAUNCHER_EOF
+
+# 実行権限を付与
+chmod +x "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager"
+
+print_success "ランチャースクリプト作成完了"
+
+# ============================================================================
+# リソースファイルをコピー
+# ============================================================================
+
+print_info "リソースファイルをコピー中..."
+
+# main.sh をコピー
+if [[ -f "main.sh" ]]; then
+    cp "main.sh" "${APP_BUNDLE}/Contents/Resources/"
+    print_success "main.sh をコピー"
+else
+    print_error "main.sh が見つかりません"
+    exit 1
+fi
+
+# lib ディレクトリをコピー
+if [[ -d "lib" ]]; then
+    cp -r "lib" "${APP_BUNDLE}/Contents/Resources/"
+    print_success "lib/ をコピー"
+else
+    print_error "lib/ ディレクトリが見つかりません"
+    exit 1
+fi
+
+# アイコンファイルをコピー（存在する場合）
+if [[ -f "app-icon.png" ]]; then
+    cp "app-icon.png" "${APP_BUNDLE}/Contents/Resources/AppIcon.png"
+    print_success "アイコンファイルをコピー"
+fi
+
+# ============================================================================
+# Quarantine 属性を削除
+# ============================================================================
+
+print_info "Quarantine 属性を削除中..."
+xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
+print_success "Quarantine 属性削除完了"
+
+# ============================================================================
+# ビルド完了
+# ============================================================================
+
+print_header "ビルド完了！"
+
+echo ""
+echo -e "${GREEN}✅ アプリケーションが正常に作成されました${NC}"
+echo ""
+echo -e "📦 出力先: ${BLUE}${APP_BUNDLE}${NC}"
+echo -e "📄 バージョン: ${BLUE}${APP_VERSION}${NC}"
+echo -e "🆔 Bundle ID: ${BLUE}${BUNDLE_ID}${NC}"
+echo ""
+
+print_header "テスト方法"
+
+echo "1. ターミナルから起動:"
+echo -e "   ${YELLOW}open '${APP_BUNDLE}'${NC}"
+echo ""
+echo "2. Finder からダブルクリック:"
+echo -e "   ${YELLOW}open '${BUILD_DIR}'${NC}"
+echo ""
+echo "3. プロセス確認:"
+echo -e "   ${YELLOW}ps aux | grep 'PlayCover Manager'${NC}"
+echo ""
+
+print_header "配布用パッケージ作成"
+
+echo "ZIP ファイルを作成:"
+echo -e "   ${YELLOW}cd '${BUILD_DIR}' && zip -r 'PlayCover-Manager-${APP_VERSION}.zip' '${APP_NAME}.app'${NC}"
+echo ""
+
+print_info "ログファイル: \${TMPDIR:-/tmp}/playcover-manager-standalone.log"
+
+echo ""
