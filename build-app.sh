@@ -75,7 +75,63 @@ if [ ! -f "$MAIN_SCRIPT" ]; then
     exit 1
 fi
 
-echo "Main script found, launching..." >> "$LOG_FILE"
+echo "Main script found" >> "$LOG_FILE"
+
+# ============================================================
+# Single Instance Check (BEFORE opening Terminal window)
+# ============================================================
+LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-running.lock"
+
+# Function to check if lock is stale
+is_lock_stale() {
+    local lock_file="$1"
+    if [ ! -f "$lock_file" ]; then
+        return 0  # No lock = not stale
+    fi
+    
+    local lock_pid=$(cat "$lock_file" 2>/dev/null)
+    if [ -z "$lock_pid" ]; then
+        return 0  # Empty lock = stale
+    fi
+    
+    # Check if process exists
+    if ps -p "$lock_pid" >/dev/null 2>&1; then
+        return 1  # Process exists = not stale
+    else
+        return 0  # Process doesn't exist = stale
+    fi
+}
+
+echo "Checking for existing instance..." >> "$LOG_FILE"
+
+if [ -f "$LOCK_FILE" ]; then
+    if is_lock_stale "$LOCK_FILE"; then
+        echo "Found stale lock, removing..." >> "$LOG_FILE"
+        rm -f "$LOCK_FILE"
+    else
+        # Another instance is running
+        EXISTING_PID=$(cat "$LOCK_FILE" 2>/dev/null)
+        echo "Instance already running (PID: $EXISTING_PID)" >> "$LOG_FILE"
+        
+        # Activate existing Terminal window
+        osascript <<ACTIVATE_EOF 2>> "$LOG_FILE"
+tell application "Terminal"
+    activate
+    repeat with w in windows
+        if (name of w) contains "PlayCover" then
+            set index of w to 1
+            exit repeat
+        end if
+    end repeat
+end tell
+ACTIVATE_EOF
+        
+        echo "Activated existing window" >> "$LOG_FILE"
+        exit 0
+    fi
+fi
+
+echo "No existing instance, launching new window..." >> "$LOG_FILE"
 
 # Create a wrapper script that sets the window title
 WRAPPER_SCRIPT="${TMPDIR:-/tmp}/playcover-manager-wrapper-$$.sh"
