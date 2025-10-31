@@ -193,6 +193,9 @@ main() {
     # This eliminates cache loading delay when entering submenus
     preload_all_volume_cache
     
+    # Preload internal storage free space cache (for internal mode displays)
+    get_storage_free_space_cached "$HOME" >/dev/null
+    
     # Preload launchable apps cache (no need to show scanning message)
     local -a launchable_apps=()
     while IFS= read -r line; do

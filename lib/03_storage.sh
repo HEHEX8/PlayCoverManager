@@ -755,17 +755,17 @@ switch_storage_location() {
                     ;;
                 "internal_intentional")
                     location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
+                    free_space=$(get_storage_free_space_cached "$HOME")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_intentional_empty")
                     location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
+                    free_space=$(get_storage_free_space_cached "$HOME")
                     usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_contaminated")
                     location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
-                    free_space=$(get_storage_free_space "$HOME")
+                    free_space=$(get_storage_free_space_cached "$HOME")
                     usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "none")

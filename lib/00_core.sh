@@ -178,6 +178,10 @@ DRIVE_NAME_CACHE_UPDATED=false
 declare -a LAUNCHABLE_APPS_CACHE
 LAUNCHABLE_APPS_CACHE_VALID=false
 
+# Internal storage free space cache (reduces df command calls)
+INTERNAL_STORAGE_FREE_SPACE_CACHE=""
+INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=false
+
 #######################################################
 # Basic Print Functions
 #######################################################
@@ -1039,6 +1043,9 @@ invalidate_volume_cache() {
 invalidate_all_volume_caches() {
     VOLUME_STATE_CACHE=()
     CACHE_PRELOADED=false  # Reset preload flag to allow next preload
+    
+    # Also invalidate storage free space cache
+    invalidate_storage_free_space_cache
 }
 
 # Refresh cache by invalidating and immediately reloading
@@ -1144,6 +1151,37 @@ get_launchable_apps_cached() {
 # Invalidate launchable apps cache (call after app install/uninstall)
 invalidate_launchable_apps_cache() {
     LAUNCHABLE_APPS_CACHE_VALID=false
+}
+
+# Get internal storage free space with caching
+# This reduces df command calls for internal storage mode displays
+get_storage_free_space_cached() {
+    local target_path="${1:-$HOME}"
+    
+    # Only cache HOME directory queries (most common case)
+    if [[ "$target_path" != "$HOME" ]]; then
+        # For non-HOME paths, call non-cached version
+        get_storage_free_space "$target_path"
+        return
+    fi
+    
+    # Return cached value if valid
+    if [[ "$INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID" == true ]] && [[ -n "$INTERNAL_STORAGE_FREE_SPACE_CACHE" ]]; then
+        echo "$INTERNAL_STORAGE_FREE_SPACE_CACHE"
+        return 0
+    fi
+    
+    # Cache miss or invalid - get fresh data
+    INTERNAL_STORAGE_FREE_SPACE_CACHE=$(get_storage_free_space "$target_path")
+    INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=true
+    
+    echo "$INTERNAL_STORAGE_FREE_SPACE_CACHE"
+    return 0
+}
+
+# Invalidate internal storage free space cache
+invalidate_storage_free_space_cache() {
+    INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=false
 }
 
 # Temporarily disable cache for a code block
