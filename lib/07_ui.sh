@@ -1154,7 +1154,8 @@ show_quick_launcher() {
         echo ""
         
         # User input
-        read "choice?選択: "
+        printf "選択: "
+        read choice
         
         case "$choice" in
             [rR])
