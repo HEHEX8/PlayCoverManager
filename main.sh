@@ -102,28 +102,22 @@ main() {
     echo "起動中..."
     echo ""
     
-    # Step 1: Ensure data directory exists
-    printf "  ${DIM_GRAY}1/5${NC} データディレクトリ確認... "
+    # Step 1: データディレクトリ確認
+    printf "  ${DIM_GRAY}1/6${NC} データディレクトリ確認... "
     ensure_data_directory
     echo "${GREEN}✓${NC}"
     
-    # Step 2: Preload volume cache (speeds up all subsequent checks)
-    printf "  ${DIM_GRAY}2/5${NC} ボリューム情報キャッシュ... "
-    preload_all_volume_cache
-    cache_external_drive_name
-    echo "${GREEN}✓${NC}"
-    
-    # Step 3: PlayCover環境が準備できているか確認
-    printf "  ${DIM_GRAY}3/5${NC} PlayCover環境確認... "
-    if ! is_playcover_environment_ready; then
+    # Step 2: PlayCover アプリ確認
+    printf "  ${DIM_GRAY}2/6${NC} PlayCover アプリ確認... "
+    if [[ ! -d "/Applications/PlayCover.app" ]]; then
         echo "${YELLOW}!${NC}"
         run_initial_setup
         
         # Re-check after setup
-        if ! is_playcover_environment_ready; then
+        if [[ ! -d "/Applications/PlayCover.app" ]]; then
             echo ""
-            print_error "初期セットアップが完了しましたが、環境が正しく構成されていません"
-            print_info "PlayCoverが正しくインストールされているか確認してください"
+            print_error "PlayCoverがインストールされていません"
+            print_info "PlayCoverを /Applications にインストールしてください"
             echo ""
             wait_for_enter
             exit 1
@@ -132,13 +126,59 @@ main() {
         echo "${GREEN}✓${NC}"
     fi
     
-    # Step 4: Clean up duplicate entries in mapping file
-    printf "  ${DIM_GRAY}4/5${NC} マッピングファイル整理... "
-    deduplicate_mappings
+    # Step 3: ボリューム情報キャッシュ（以降のチェックを高速化）
+    printf "  ${DIM_GRAY}3/6${NC} ボリューム情報キャッシュ... "
+    preload_all_volume_cache
     echo "${GREEN}✓${NC}"
     
-    # Step 5: Check and mount PlayCover volume if needed
-    printf "  ${DIM_GRAY}5/5${NC} PlayCoverボリューム確認... "
+    # Step 4: PlayCover ボリューム確認
+    printf "  ${DIM_GRAY}4/6${NC} PlayCover ボリューム確認... "
+    if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+        echo "${YELLOW}!${NC}"
+        run_initial_setup
+        
+        # Re-check after setup
+        if ! volume_exists "${PLAYCOVER_VOLUME_NAME}"; then
+            echo ""
+            print_error "PlayCoverボリュームが作成されていません"
+            print_info "セットアップを完了してください"
+            echo ""
+            wait_for_enter
+            exit 1
+        fi
+        
+        # Refresh cache after volume creation
+        preload_all_volume_cache
+    else
+        echo "${GREEN}✓${NC}"
+    fi
+    
+    # Step 5: マッピングファイル確認・整理
+    printf "  ${DIM_GRAY}5/6${NC} マッピングファイル確認... "
+    if [[ ! -f "$MAPPING_FILE" ]] || [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
+        echo "${YELLOW}!${NC}"
+        run_initial_setup
+        
+        # Re-check after setup
+        if [[ ! -f "$MAPPING_FILE" ]] || [[ ! -s "$MAPPING_FILE" ]] || ! /usr/bin/grep -q $'\t' "$MAPPING_FILE" 2>/dev/null; then
+            echo ""
+            print_error "マッピングファイルが正しく構成されていません"
+            print_info "セットアップを完了してください"
+            echo ""
+            wait_for_enter
+            exit 1
+        fi
+    else
+        echo "${GREEN}✓${NC}"
+    fi
+    
+    # マッピングファイルの重複を整理
+    deduplicate_mappings
+    
+    # Step 6: デバイス名キャッシュとマウント確認
+    printf "  ${DIM_GRAY}6/6${NC} PlayCover マウント確認... "
+    cache_external_drive_name  # Cache device name for menu display
+    
     if volume_exists "$PLAYCOVER_VOLUME_NAME"; then
         local playcover_mount=$(get_mount_point "$PLAYCOVER_VOLUME_NAME")
         if [[ -z "$playcover_mount" ]] || [[ "$playcover_mount" != "$PLAYCOVER_CONTAINER" ]]; then
