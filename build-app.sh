@@ -133,34 +133,25 @@ fi
 
 echo "No existing instance, launching new window..." >> "$LOG_FILE"
 
-# Create a wrapper script that sets the window title
-WRAPPER_SCRIPT="${TMPDIR:-/tmp}/playcover-manager-wrapper-$$.sh"
-cat > "$WRAPPER_SCRIPT" << WRAPPER
-#!/bin/zsh
-# Set window title
-printf '\\033]0;PlayCover Manager\\007'
-# Change to resources directory
-cd '$RESOURCES_DIR'
-# Execute main script
-exec /bin/zsh '$MAIN_SCRIPT'
-WRAPPER
-chmod +x "$WRAPPER_SCRIPT"
-
-echo "Wrapper script created: $WRAPPER_SCRIPT" >> "$LOG_FILE"
-
-# Open in a NEW Terminal window using -n flag (new instance)
-# This ALWAYS creates a new window, never reuses existing ones
-if /usr/bin/open -n -a Terminal.app "$WRAPPER_SCRIPT" >> "$LOG_FILE" 2>&1; then
-    echo "Launch successful" >> "$LOG_FILE"
-else
-    echo "ERROR: open command failed!" >> "$LOG_FILE"
+# Launch in a NEW Terminal window using AppleScript
+# Note: do script creates a new window/tab based on Terminal preferences
+if ! osascript <<APPLESCRIPT 2>> "$LOG_FILE"
+tell application "Terminal"
+    -- Create a new window with our script
+    set newWindow to do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
+    
+    -- Bring Terminal to front and focus the new window
+    activate
+    set frontmost of newWindow to true
+end tell
+APPLESCRIPT
+then
+    echo "ERROR: AppleScript failed!" >> "$LOG_FILE"
     osascript -e 'display dialog "Terminalの起動に失敗しました\n\nログ: '"$LOG_FILE"'" buttons {"OK"} default button 1 with icon stop'
-    rm -f "$WRAPPER_SCRIPT"
     exit 1
 fi
 
-# Clean up wrapper script after a delay (in background)
-(sleep 2; rm -f "$WRAPPER_SCRIPT") &
+echo "Launch successful" >> "$LOG_FILE"
 
 LAUNCHER_EOF
 
