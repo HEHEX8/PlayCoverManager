@@ -86,9 +86,13 @@ generate_dummy_data() {
         
         # Create .app bundle structure
         local app_path="${PLAYCOVER_APPS_DIR}/${app_name}.app"
+        echo "DEBUG: Creating directory: ${app_path}/Contents/MacOS" >&2
         mkdir -p "${app_path}/Contents/MacOS"
+        echo "DEBUG: Directory created, checking..." >&2
+        ls -ld "${app_path}/Contents/MacOS" >&2
         
         # Create dummy executable
+        echo "DEBUG: Creating executable: ${app_path}/Contents/MacOS/${app_name}" >&2
         cat > "${app_path}/Contents/MacOS/${app_name}" << 'EXEC_EOF'
 #!/bin/zsh
 echo "Dummy app launched: $0"
