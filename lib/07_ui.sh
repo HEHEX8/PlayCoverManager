@@ -785,9 +785,24 @@ show_quick_launcher() {
         clear
         print_header "🚀 PlayCover クイックランチャー"
         
-        # Selective preload: Only load volumes needed for launchable apps
-        # First, ensure PlayCover volume is cached
-        preload_selective_volumes "$PLAYCOVER_VOLUME_NAME"
+        # Smart cache strategy: Check if cache is already warm (from main menu)
+        # Count cached volumes to determine if we need selective preload
+        local cached_count=0
+        for key in "${(@k)VOLUME_STATE_CACHE}"; do
+            ((cached_count++))
+        done
+        
+        # If cache is cold (<3 volumes), do selective preload
+        # If cache is warm (≥3 volumes, likely from main menu), skip preload
+        local need_selective_preload=false
+        if [[ $cached_count -lt 3 ]]; then
+            need_selective_preload=true
+        fi
+        
+        # Ensure PlayCover volume is cached (always needed)
+        if [[ -z "${VOLUME_STATE_CACHE[$PLAYCOVER_VOLUME_NAME]}" ]]; then
+            preload_selective_volumes "$PLAYCOVER_VOLUME_NAME"
+        fi
         
         # Check PlayCover volume mount status using cached data
         local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
@@ -840,19 +855,22 @@ show_quick_launcher() {
             return 0  # Go to main menu
         fi
         
-        # Selective preload: Load volumes for launchable apps only
-        local -a volume_names_to_preload=()
-        for app_info in "${apps_info[@]}"; do
-            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
-            local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
-            if [[ -n "$volume_name" ]]; then
-                volume_names_to_preload+=("$volume_name")
+        # Conditional selective preload: Only if cache is cold
+        if [[ "$need_selective_preload" == true ]]; then
+            # Build list of volumes to preload
+            local -a volume_names_to_preload=()
+            for app_info in "${apps_info[@]}"; do
+                IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+                local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
+                if [[ -n "$volume_name" ]]; then
+                    volume_names_to_preload+=("$volume_name")
+                fi
+            done
+            
+            # Preload only the needed volumes
+            if [[ ${#volume_names_to_preload[@]} -gt 0 ]]; then
+                preload_selective_volumes "${volume_names_to_preload[@]}"
             fi
-        done
-        
-        # Preload only the needed volumes
-        if [[ ${#volume_names_to_preload[@]} -gt 0 ]]; then
-            preload_selective_volumes "${volume_names_to_preload[@]}"
         fi
         
         # Get most recent app (only 1 app stored)
@@ -866,19 +884,24 @@ show_quick_launcher() {
         local -a app_display_lines=()  # Store formatted display lines for column layout
         local recent_count=0
         
+        # Load mappings using common function (single file read)
+        local -a mappings_array=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && mappings_array+=("$line")
+        done < <(load_mappings_array)
+        
+        # Build bundle_id → display_name lookup table
+        declare -A bundle_to_display
+        for mapping in "${mappings_array[@]}"; do
+            IFS='|' read -r _ map_bundle_id map_display_name <<< "$mapping"
+            bundle_to_display["$map_bundle_id"]="$map_display_name"
+        done
+        
         for app_info in "${apps_info[@]}"; do
             IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
             
-            # Get display name from mapping file
-            local display_name=""
-            if [[ -f "$MAPPING_FILE" ]]; then
-                while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
-                    if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
-                        display_name=$stored_display_name
-                        break
-                    fi
-                done < "$MAPPING_FILE"
-            fi
+            # Get display name from lookup table (O(1) instead of O(n) file read)
+            local display_name="${bundle_to_display[$bundle_id]}"
             
             # Fallback to app_name if no display name found
             if [[ -z "$display_name" ]]; then

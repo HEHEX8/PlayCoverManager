@@ -69,7 +69,7 @@ _should_skip_batch_volume() {
     local check_type="$4"  # "mount" or "unmount"
     
     # Get volume info in one call (more efficient than separate existence + mount checks)
-    local actual_mount=$(validate_and_get_mount_point "$volume_name")
+    local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
     local vol_status=$?
     
     if [[ $vol_status -eq 1 ]]; then
@@ -289,8 +289,8 @@ unmount_app_volume() {
     local bundle_id=$2
     local diskutil_cache="${3:-}"
     
-    # Get all volume info in one diskutil call (more efficient)
-    local vol_info=$(get_volume_info "$volume_name")
+    # Get all volume info from cache (more efficient)
+    local vol_info=$(get_volume_info_cached "$volume_name")
     local vol_status=$?
     
     if [[ $vol_status -eq 1 ]]; then
@@ -589,7 +589,7 @@ batch_mount_all() {
         fi
         
         # Check current mount status
-        local actual_mount=$(validate_and_get_mount_point "$volume_name")
+        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
         
         # Unmount if mounted elsewhere
         if [[ -n "$actual_mount" ]] && [[ "$actual_mount" != "$target_path" ]]; then

@@ -49,7 +49,7 @@ nuclear_cleanup() {
             [[ -z "$volume_name" ]] || [[ -z "$bundle_id" ]] && continue
             
             # Get device in one call (validates existence)
-            local device=$(validate_and_get_device "$volume_name")
+            local device=$(validate_and_get_device_cached "$volume_name")
             if [[ $? -eq 0 ]] && [[ -n "$device" ]]; then
                 mapped_volumes+=("${display_name:-$volume_name}|${volume_name}|${device}|${bundle_id}")
             fi

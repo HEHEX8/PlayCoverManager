@@ -440,7 +440,7 @@ create_playcover_volume_setup() {
     print_header "PlayCover ボリュームの作成"
     
     # Check if PlayCover volume already exists (get device in one call)
-    local existing_device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
+    local existing_device=$(validate_and_get_device_cached "$PLAYCOVER_VOLUME_NAME")
     if [[ $? -eq 0 ]] && [[ -n "$existing_device" ]]; then
         print_info "PlayCover ボリュームは既に存在します"
         print_info "デバイス: $existing_device"

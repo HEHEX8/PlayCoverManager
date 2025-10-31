@@ -141,7 +141,7 @@ check_playcover_volume_mount_install() {
     fi
     
     # Get device in one call (validates existence)
-    local volume_device=$(validate_and_get_device "$PLAYCOVER_VOLUME_NAME")
+    local volume_device=$(validate_and_get_device_cached "$PLAYCOVER_VOLUME_NAME")
     
     if [[ $? -ne 0 ]] || [[ -z "$volume_device" ]]; then
         print_error "PlayCover ボリュームが見つかりません"
@@ -1530,7 +1530,7 @@ launch_app() {
     # Handle external storage mode
     elif [[ "$storage_mode" == "external"* ]] || is_app_registered_as_external "$bundle_id"; then
         # Get volume mount status in one call
-        local current_mount=$(validate_and_get_mount_point "$volume_name")
+        local current_mount=$(validate_and_get_mount_point_cached "$volume_name")
         local vol_status=$?
         
         if [[ $vol_status -eq 1 ]]; then

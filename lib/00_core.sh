@@ -931,59 +931,21 @@ get_volume_info() {
     fi
 }
 
-# Validate volume and get device in one call
-# More efficient than separate volume_exists + get_volume_device calls
-# Args: $1 = volume_name
-# Returns: 0 if exists, 1 if not
-# Output: device node (e.g., /dev/disk3s1) or empty string
-# Usage:
-#   local device=$(validate_and_get_device "$volume_name")
-#   if [[ $? -eq 0 ]] && [[ -n "$device" ]]; then
-#       # Use device...
-#   fi
+# ================================================================
+# DEPRECATED: Non-cached functions removed for performance
+# ================================================================
+# All volume queries now use cached versions:
+# - validate_and_get_device_cached() instead of validate_and_get_device()
+# - validate_and_get_mount_point_cached() instead of validate_and_get_mount_point()
+# This eliminates redundant diskutil calls and improves performance
+
+# Backward compatibility: Redirect old function names to cached versions
 validate_and_get_device() {
-    local volume_name="$1"
-    
-    local device=$(/usr/sbin/diskutil info "$volume_name" 2>/dev/null | /usr/bin/grep "Device Node:" | /usr/bin/awk '{print $3}')
-    
-    if [[ -z "$device" ]]; then
-        return 1
-    fi
-    
-    echo "$device"
-    return 0
+    validate_and_get_device_cached "$@"
 }
 
-# Validate volume existence and get mount point in one call
-# More efficient than separate volume_exists + get_mount_point calls
-# Args: $1 = volume_name
-# Returns: 0 if exists and mounted, 1 if not exists, 2 if exists but not mounted
-# Output: mount point path or empty string
-# Usage:
-#   local mount_point=$(validate_and_get_mount_point "$volume_name")
-#   local status=$?
-#   if [[ $status -eq 0 ]]; then
-#       # Volume is mounted at $mount_point
-#   elif [[ $status -eq 2 ]]; then
-#       # Volume exists but not mounted
-#   fi
 validate_and_get_mount_point() {
-    local volume_name="$1"
-    
-    local diskutil_output=$(/usr/sbin/diskutil info "$volume_name" 2>/dev/null)
-    
-    if [[ $? -ne 0 ]] || [[ -z "$diskutil_output" ]]; then
-        return 1  # Volume doesn't exist
-    fi
-    
-    local mount_point=$(/usr/bin/grep -E "Mount Point:" <<< "$diskutil_output" | /usr/bin/sed 's/^[[:space:]]*Mount Point:[[:space:]]*//')
-    
-    if [[ -n "$mount_point" ]]; then
-        echo "$mount_point"
-        return 0  # Mounted
-    else
-        return 2  # Exists but not mounted
-    fi
+    validate_and_get_mount_point_cached "$@"
 }
 
 # ================================================================
@@ -1166,7 +1128,11 @@ with_cache_disabled() {
 # Wrapper functions for backward compatibility with caching support
 # These can be used as drop-in replacements for the original functions
 
-# Cached version of validate_and_get_device
+# Validate volume and get device (cached version)
+# Uses shared cache to avoid redundant diskutil calls
+# Args: $1 = volume_name
+# Returns: 0 if exists, 1 if not
+# Output: device node (e.g., disk3s1) or empty string
 validate_and_get_device_cached() {
     local volume_name="$1"
     
@@ -1182,7 +1148,11 @@ validate_and_get_device_cached() {
     return 0
 }
 
-# Cached version of validate_and_get_mount_point
+# Validate volume and get mount point (cached version)
+# Uses shared cache to avoid redundant diskutil calls
+# Args: $1 = volume_name
+# Returns: 0 if exists and mounted, 1 if not exists, 2 if exists but not mounted
+# Output: mount point path or empty string
 validate_and_get_mount_point_cached() {
     local volume_name="$1"
     
@@ -1203,7 +1173,8 @@ validate_and_get_mount_point_cached() {
     fi
 }
 
-# Cached version of volume_exists (for backward compatibility)
+# Check if volume exists (cached version)
+# Uses shared cache to avoid redundant diskutil calls
 # Returns: 0 if exists, 1 if not exists
 volume_exists_cached() {
     local volume_name="$1"
