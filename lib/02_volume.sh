@@ -533,9 +533,14 @@ batch_mount_all() {
     local skipped_count=0
     local failed_count=0
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        # Skip empty lines
-        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+    # Load mappings using common function
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
+    
+    for mapping in "${mappings_array[@]}"; do
+        IFS='|' read -r volume_name bundle_id display_name <<< "$mapping"
         
         # Check common skip conditions
         if _should_skip_batch_volume "$volume_name" "$bundle_id" "$display_name" "mount"; then
