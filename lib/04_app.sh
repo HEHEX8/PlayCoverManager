@@ -1284,9 +1284,16 @@ uninstall_all_apps() {
     echo ""
     print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
     echo ""
+    print_info "2秒後にウィンドウを閉じます..."
     /bin/sleep 2
-    echo ""
-    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "System Events"
+    tell process "Terminal"
+        keystroke "w" using command down
+    end tell
+end tell
+CLOSE_WINDOW
+    /bin/sleep 0.2
     exit 0
 }
 

@@ -817,10 +817,16 @@ switch_storage_location() {
         if [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
             clear
             echo ""
-            print_info "終了しました"
-            echo ""
-            echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-            echo ""
+            print_info "終了します..."
+            /bin/sleep 0.3
+            osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "System Events"
+    tell process "Terminal"
+        keystroke "w" using command down
+    end tell
+end tell
+CLOSE_WINDOW
+            /bin/sleep 0.2
             exit 0
         fi
         

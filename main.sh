@@ -205,10 +205,17 @@ main() {
                 clear
                 echo ""
                 print_info "終了します..."
-                /bin/sleep 0.5
-                # Kill the shell process to trigger window close
-                # This works because do script with exec creates a clean process tree
-                kill -TERM $$ 2>/dev/null
+                /bin/sleep 0.3
+                # Simulate ⌘+W keystroke to close window
+                osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "System Events"
+    tell process "Terminal"
+        keystroke "w" using command down
+    end tell
+end tell
+CLOSE_WINDOW
+                /bin/sleep 0.2
+                exit 0
                 ;;
             X|x|RESET|reset)
                 echo ""
@@ -232,10 +239,16 @@ main() {
 # Graceful exit function
 graceful_exit() {
     echo ""
-    print_info "終了しました"
-    echo ""
-    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-    /bin/sleep 1
+    print_info "終了します..."
+    /bin/sleep 0.3
+    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "System Events"
+    tell process "Terminal"
+        keystroke "w" using command down
+    end tell
+end tell
+CLOSE_WINDOW
+    /bin/sleep 0.2
     exit 0
 }
 
