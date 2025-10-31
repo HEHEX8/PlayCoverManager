@@ -111,8 +111,16 @@ generate_mapping_file() {
     
     # Generate entries
     # zsh: ${#array} で要素数取得（@は不要）
+    echo "DEBUG: SAMPLE_APPS size = ${#SAMPLE_APPS}" >&2
+    echo "DEBUG: First element = ${SAMPLE_APPS[1]}" >&2
+    
     local total_samples=${#SAMPLE_APPS}
-    print_success "DEBUG: total_samples=$total_samples"  # デバッグ用
+    echo "DEBUG: total_samples=$total_samples" >&2
+    
+    if [[ $total_samples -eq 0 ]]; then
+        print_error "配列が空です！"
+        return 1
+    fi
     
     for ((i=1; i<=count; i++)); do
         local app_index=$(( ((i - 1) % total_samples) + 1 ))
