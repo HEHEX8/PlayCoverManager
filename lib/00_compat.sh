@@ -11,6 +11,15 @@
 # - macOS本番環境: zshで実行（このファイルは不要）
 # - sandbox環境: bashで実行（このファイルで互換性を提供）
 #
+# 使い方:
+# 1. sandbox環境でmain.shをテストする場合:
+#    source lib/00_compat.sh
+#    bash_exec_zsh_script main.sh
+#
+# 2. 個別スクリプトをテストする場合:
+#    source lib/00_compat.sh
+#    SCRIPT_DIR=$(get_script_dir_compat)
+#
 
 #######################################################
 # シェル検出
@@ -109,6 +118,44 @@ get_script_dir() {
     fi
 }
 
+# SCRIPT_DIR互換関数: ${0:A:h} のbash版
+# zshの ${0:A:h} は「$0の絶対パス(:A)のディレクトリ部分(:h)」を意味する
+# bashでこれを再現する
+get_script_dir_compat() {
+    local script_path=""
+    
+    # スクリプトパスを取得
+    if [[ -n "${BASH_SOURCE[1]}" ]]; then
+        # 呼び出し元のスクリプトパス（BASH_SOURCE[1]）
+        script_path="${BASH_SOURCE[1]}"
+    elif [[ -n "$0" ]]; then
+        script_path="$0"
+    else
+        echo "."
+        return 1
+    fi
+    
+    # 絶対パスに変換してディレクトリを取得
+    # realpath -s は macOS 12+ で利用可能
+    if command -v realpath &>/dev/null; then
+        local abs_path=$(realpath -s "$script_path" 2>/dev/null)
+        if [[ -n "$abs_path" ]]; then
+            dirname "$abs_path"
+            return 0
+        fi
+    fi
+    
+    # fallback: cd + pwd
+    local dir_path=$(cd "$(dirname "$script_path")" 2>/dev/null && pwd)
+    if [[ -n "$dir_path" ]]; then
+        echo "$dir_path"
+        return 0
+    fi
+    
+    echo "."
+    return 1
+}
+
 #######################################################
 # 配列操作互換関数
 #######################################################
@@ -190,7 +237,75 @@ if [[ "${AUTO_CHECK_COMPAT:-1}" == "1" ]]; then
     fi
 fi
 
+#######################################################
+# Zshスクリプト実行関数（Bash環境用）
+#######################################################
+
+# zshスクリプトをbash環境で実行する
+# 使用例: bash_exec_zsh_script main.sh
+bash_exec_zsh_script() {
+    local target_script="$1"
+    shift  # 残りの引数
+    
+    if [[ ! -f "$target_script" ]]; then
+        echo "❌ エラー: スクリプトが見つかりません: $target_script" >&2
+        return 1
+    fi
+    
+    # 一時ファイルを作成してzsh構文をbash互換に変換
+    local temp_script=$(mktemp)
+    trap "rm -f $temp_script" RETURN
+    
+    # zsh構文を変換
+    sed -e '1s|^#!/bin/zsh|#!/bin/bash|' \
+        -e '1s|^#!/usr/bin/env zsh|#!/bin/bash|' \
+        -e 's|\${0:A:h}|$(get_script_dir_compat)|g' \
+        -e 's|\${(%):-%x}|${BASH_SOURCE[0]}|g' \
+        "$target_script" > "$temp_script"
+    
+    # 互換性レイヤーを注入
+    {
+        echo "# Auto-injected compatibility layer"
+        echo "source '$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/00_compat.sh'"
+        echo ""
+        cat "$temp_script"
+    } > "${temp_script}.final"
+    
+    # 実行
+    bash "${temp_script}.final" "$@"
+    local exit_code=$?
+    
+    # クリーンアップ
+    rm -f "${temp_script}.final"
+    
+    return $exit_code
+}
+
+# テストヘルパー: main.shを実行
+test_main_sh() {
+    echo "🧪 Testing main.sh in bash environment..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    local main_sh_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/main.sh"
+    
+    if [[ ! -f "$main_sh_path" ]]; then
+        echo "❌ main.sh not found at: $main_sh_path" >&2
+        return 1
+    fi
+    
+    bash_exec_zsh_script "$main_sh_path" "$@"
+}
+
+#######################################################
+# 互換性レイヤーの初期化
+#######################################################
+
 # デバッグ情報
 if [[ "${DEBUG_COMPAT:-}" == "1" ]]; then
     echo "✅ Compatibility layer loaded successfully"
+    echo "   Functions available:"
+    echo "     - get_script_dir_compat"
+    echo "     - bash_exec_zsh_script"
+    echo "     - test_main_sh"
 fi
