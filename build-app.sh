@@ -47,8 +47,8 @@ echo "🚀 ランチャースクリプトを作成中..."
 cat > "${APP_BUNDLE}/Contents/MacOS/PlayCoverManager" << 'LAUNCHER_EOF'
 #!/bin/bash
 #######################################################
-# PlayCover Manager - Simple Launcher
-# Single instance with process monitoring
+# PlayCover Manager - App Launcher
+# Launches in Terminal with single instance checking
 #######################################################
 
 # Resourcesディレクトリを取得
@@ -61,25 +61,8 @@ if [ ! -f "$MAIN_SCRIPT" ]; then
     exit 1
 fi
 
-# Check if already running by looking for the process
-if pgrep -f "main-script.sh" >/dev/null 2>&1; then
-    # Already running - bring Terminal to front
-    osascript <<'APPLESCRIPT' 2>/dev/null
-tell application "Terminal"
-    activate
-    -- Try to find PlayCover window
-    repeat with w in windows
-        if (name of w) contains "PlayCover" then
-            set index of w to 1
-            exit repeat
-        end if
-    end repeat
-end tell
-APPLESCRIPT
-    exit 0
-fi
-
 # Launch in Terminal with custom title
+# Single instance checking is handled by main-script.sh itself
 osascript <<APPLESCRIPT
 tell application "Terminal"
     activate

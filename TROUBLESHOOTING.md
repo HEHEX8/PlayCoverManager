@@ -1,0 +1,175 @@
+# トラブルシューティングガイド
+
+## アプリが起動しない問題
+
+### 症状
+アプリアイコンをクリックしても何も起動しない
+
+### 原因と解決方法
+
+#### 1. ロックファイルの確認
+
+ロックファイルが残っている可能性があります：
+
+```bash
+# ロックファイルを確認
+ls -la /tmp/playcover-manager-running.lock
+
+# ロックファイルを削除
+rm -f /tmp/playcover-manager-running.lock
+```
+
+#### 2. プロセスの確認
+
+既にプロセスが実行中の可能性：
+
+```bash
+# PlayCover Managerプロセスを確認
+ps aux | grep -i playcover
+
+# プロセスを強制終了
+pkill -f "playcover-manager"
+pkill -f "main.sh"
+```
+
+#### 3. アプリバンドルの再ビルド
+
+アプリバンドルが壊れている可能性：
+
+```bash
+cd /path/to/PlayCoverManager
+
+# 既存ビルドを削除
+rm -rf build/
+
+# 再ビルド
+./build-app.sh
+
+# アプリを再インストール
+rm -rf "/Applications/PlayCover Manager.app"
+cp -r "build/PlayCover Manager.app" /Applications/
+```
+
+#### 4. 実行権限の確認
+
+スクリプトに実行権限がない可能性：
+
+```bash
+# アプリ内のスクリプトに実行権限を付与
+chmod +x "/Applications/PlayCover Manager.app/Contents/MacOS/PlayCoverManager"
+chmod +x "/Applications/PlayCover Manager.app/Contents/Resources/main-script.sh"
+```
+
+#### 5. ログの確認
+
+Terminalから直接実行してエラーを確認：
+
+```bash
+# 直接実行してエラーメッセージを確認
+cd /path/to/PlayCoverManager
+./playcover-manager.command
+```
+
+または
+
+```bash
+# main.shを直接実行
+./main.sh
+```
+
+#### 6. macOSセキュリティ設定
+
+Gatekeeperが実行をブロックしている可能性：
+
+1. システム設定 → プライバシーとセキュリティ
+2. 「"PlayCover Manager"は開発元を確認できないため、使用がブロックされました」と表示されている場合
+3. 「このまま開く」をクリック
+
+または、ターミナルから：
+
+```bash
+# Quarantine属性を削除
+xattr -dr com.apple.quarantine "/Applications/PlayCover Manager.app"
+```
+
+### デバッグモード
+
+詳細なログを確認するには：
+
+```bash
+# デバッグ出力を有効にして実行
+cd /path/to/PlayCoverManager
+DEBUG=1 ./main.sh
+```
+
+### 完全リセット
+
+全てをリセットして再スタート：
+
+```bash
+# 1. アプリを削除
+rm -rf "/Applications/PlayCover Manager.app"
+
+# 2. ロックファイルを削除
+rm -f /tmp/playcover-manager*.lock
+rm -f /tmp/playcover-manager*.pid
+
+# 3. プロセスを終了
+pkill -9 -f "playcover-manager"
+pkill -9 -f "main.sh"
+
+# 4. ソースから再ビルド
+cd /path/to/PlayCoverManager
+rm -rf build/
+./build-app.sh
+cp -r "build/PlayCover Manager.app" /Applications/
+
+# 5. 再起動
+open "/Applications/PlayCover Manager.app"
+```
+
+## よくある問題
+
+### Q: ロックファイルエラーが表示される
+
+**A:** ロックファイルを手動で削除してください：
+
+```bash
+rm -f /tmp/playcover-manager-running.lock
+```
+
+### Q: 「既に実行中です」と表示されるが、ウィンドウが見つからない
+
+**A:** ゾンビプロセスを終了してください：
+
+```bash
+ps aux | grep "main.sh"
+kill -9 <PID>
+```
+
+### Q: Terminalウィンドウが開かない
+
+**A:** AppleScriptの権限を確認：
+
+1. システム設定 → プライバシーとセキュリティ → オートメーション
+2. Terminalにチェックが入っているか確認
+
+### Q: 複数のTerminalウィンドウが開く
+
+**A:** これは現在の実装では完全には防げません。以下の対処法があります：
+
+1. 一度に1回だけクリック（連打しない）
+2. 既にウィンドウが開いている場合は、そのウィンドウを使用
+3. 不要なウィンドウは手動で閉じる
+
+## サポート情報
+
+問題が解決しない場合：
+
+1. GitHubでIssueを作成：https://github.com/HEHEX8/PlayCoverManager/issues
+2. 以下の情報を含めてください：
+   - macOSバージョン
+   - エラーメッセージ
+   - 実行したコマンド
+   - `ps aux | grep playcover`の出力
+   - `/tmp/`のロックファイル状況

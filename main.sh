@@ -7,17 +7,68 @@
 #
 
 #######################################################
-# Single Instance Check (when executed directly)
+# Single Instance Check
 #######################################################
 
-# Check if already running (only when executed directly, not from playcover-manager.command)
-if [[ "$0" == *"main.sh" ]]; then
-    if pgrep -f "main.sh" | grep -v $$ >/dev/null 2>&1; then
+# Use a more reliable lock file approach
+LOCK_DIR="${TMPDIR:-/tmp}"
+LOCK_FILE="${LOCK_DIR}/playcover-manager-running.lock"
+
+# Function to check if the lock is stale
+is_lock_stale() {
+    local lock_file=$1
+    if [[ ! -f "$lock_file" ]]; then
+        return 0  # No lock file = not stale
+    fi
+    
+    local lock_pid=$(cat "$lock_file" 2>/dev/null)
+    if [[ -z "$lock_pid" ]]; then
+        return 0  # Empty lock = stale
+    fi
+    
+    # Check if process exists
+    if ps -p "$lock_pid" >/dev/null 2>&1; then
+        return 1  # Process exists = not stale
+    else
+        return 0  # Process doesn't exist = stale
+    fi
+}
+
+# Check for existing instance
+if [[ -f "$LOCK_FILE" ]]; then
+    if is_lock_stale "$LOCK_FILE"; then
+        # Stale lock, remove it
+        rm -f "$LOCK_FILE"
+    else
+        # Another instance is running
         echo "PlayCover Manager は既に実行中です"
         echo "既存のウィンドウを使用してください。"
+        
+        # Try to activate existing window
+        osascript <<'EOF' 2>/dev/null
+tell application "Terminal"
+    activate
+    repeat with w in windows
+        if (name of w) contains "PlayCover" then
+            set index of w to 1
+            exit repeat
+        end if
+    end repeat
+end tell
+EOF
         exit 0
     fi
 fi
+
+# Create lock file with current PID
+echo $$ > "$LOCK_FILE"
+
+# Clean up lock on exit
+cleanup_lock() {
+    rm -f "$LOCK_FILE"
+}
+
+trap cleanup_lock EXIT INT TERM QUIT
 
 #######################################################
 # Load Modules

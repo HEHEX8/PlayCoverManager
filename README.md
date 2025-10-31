@@ -121,16 +121,30 @@ mv "build/PlayCover Manager.app" /Applications/
 
 アプリは**シングルインスタンス設計**になっており、複数起動を自動的に防ぎます：
 
-- アイコンを複数回クリックしても、新しいウィンドウは開かない
+- ロックファイル（`/tmp/playcover-manager-running.lock`）で実行状態を管理
 - 既に起動している場合は、既存のTerminalウィンドウをフォアグラウンドに表示
-- ロックファイル方式（`/tmp/playcover-manager-app.lock`）で実装
+- プロセスIDで有効性を確認（ゾンビロック自動検出）
 - プロセス終了時に自動的にロックを解放
 
-**技術的な仕組み:**
-1. 起動時にロックファイルの存在をチェック
-2. 既存プロセスが実行中の場合、AppleScriptでTerminalを前面に表示
-3. プロセスが終了している場合（ゾンビロック）は自動削除して新規起動
-4. `trap EXIT INT TERM`でクリーンアップを保証
+**仕組み:**
+1. 起動時に`/tmp/playcover-manager-running.lock`をチェック
+2. ロックファイルからPIDを読み取り、プロセスの存在を確認
+3. 有効なプロセスが実行中 → AppleScriptでTerminalを前面に表示
+4. ゾンビロック（プロセス不在） → 自動削除して新規起動
+5. `trap EXIT INT TERM QUIT`でクリーンアップを保証
+
+**トラブルシューティング:**
+
+起動しない場合は、[TROUBLESHOOTING.md](TROUBLESHOOTING.md)を参照してください。
+
+よくある解決方法：
+```bash
+# ロックファイルを削除
+rm -f /tmp/playcover-manager-running.lock
+
+# アプリを再起動
+open "/Applications/PlayCover Manager.app"
+```
 
 ---
 
