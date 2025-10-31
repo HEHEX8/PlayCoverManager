@@ -58,11 +58,15 @@ generate_dummy_data() {
     print_info "ダミーデータを生成中... (${count}アプリ)"
     
     # Ensure directories exist
+    echo "DEBUG: Creating DATA_DIR: $DATA_DIR" >&2
     mkdir -p "$DATA_DIR"
+    echo "DEBUG: Creating PLAYCOVER_APPS_DIR: $PLAYCOVER_APPS_DIR" >&2
     mkdir -p "$PLAYCOVER_APPS_DIR"
     
     # Clear mapping file
-    > "$MAPPING_FILE"
+    echo "DEBUG: Clearing mapping file: $MAPPING_FILE" >&2
+    : > "$MAPPING_FILE"
+    echo "DEBUG: Mapping file cleared" >&2
     
     # Generate apps
     for ((i=1; i<=count; i++)); do
