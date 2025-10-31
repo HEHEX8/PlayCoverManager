@@ -204,12 +204,11 @@ main() {
             [qQ])
                 clear
                 echo ""
-                print_info "終了しました"
-                echo ""
-                echo "${DIM_GRAY}このウィンドウを閉じるには:${NC}"
-                echo "  ${CYAN}⌘ + W${NC} または 赤い×ボタンをクリック"
-                echo ""
-                exit 0
+                print_info "終了します..."
+                /bin/sleep 0.5
+                # Kill the shell process to trigger window close
+                # This works because do script with exec creates a clean process tree
+                kill -TERM $$ 2>/dev/null
                 ;;
             X|x|RESET|reset)
                 echo ""
