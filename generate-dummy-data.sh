@@ -70,7 +70,8 @@ generate_dummy_data() {
         # Use existing volume name from user's environment
         # Cycle through known volumes to avoid conflicts
         local volume_names=("原神" "ゼンレスゾーンゼロ" "崩壊：スターレイル")
-        local vol_index=$(( (i - 1) % 3 ))
+        # zsh arrays are 1-indexed, calculate index as 1-3
+        local vol_index=$(( ((i - 1) % 3) + 1 ))
         local volume_name="${volume_names[$vol_index]}"
         
         # Recent flag (first app only)
