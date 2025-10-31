@@ -384,42 +384,19 @@ show_menu() {
 #######################################################
 
 show_installed_apps() {
-    local playcover_apps="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}/Applications"
     local display_only="${1:-true}"  # Default to display mode
     
-    # Check if mapping file exists
-    if [[ ! -f "$MAPPING_FILE" ]]; then
+    # Use get_launchable_apps() for consistency with quick launcher
+    local -a apps_info=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && apps_info+=("$line")
+    done < <(get_launchable_apps)
+    
+    if [[ ${#apps_info} -eq 0 ]]; then
         if [[ "$display_only" == "true" ]]; then
             echo "${ORANGE}インストール済みアプリ:${NC} ${SKY_BLUE}0個${NC}"
         fi
         return
-    fi
-    
-    local mappings_content=$(read_mappings)
-    
-    if [[ -z "$mappings_content" ]]; then
-        if [[ "$display_only" == "true" ]]; then
-            echo "${ORANGE}インストール済みアプリ:${NC} ${SKY_BLUE}0個${NC}"
-        fi
-        return
-    fi
-    
-    # Check if PlayCover Applications directory exists
-    # Create it if PlayCover container is mounted but directory doesn't exist
-    if [[ ! -d "$playcover_apps" ]]; then
-        local playcover_container="${HOME}/Library/Containers/${PLAYCOVER_BUNDLE_ID}"
-        if [[ -d "$playcover_container" ]]; then
-            # Container exists (mounted), create Applications directory
-            /bin/mkdir -p "$playcover_apps" 2>/dev/null || true
-        fi
-        
-        # Check again after creation attempt
-        if [[ ! -d "$playcover_apps" ]]; then
-            if [[ "$display_only" == "true" ]]; then
-                echo "${ORANGE}インストール済みアプリ:${NC} ${RED}PlayCoverコンテナが見つかりません${NC}"
-            fi
-            return
-        fi
     fi
     
     if [[ "$display_only" == "true" ]]; then
@@ -428,7 +405,6 @@ show_installed_apps() {
     fi
     
     local installed_count=0
-    local missing_count=0
     local index=1
     
     # Global arrays for uninstall workflow (declared in main if needed)
@@ -439,129 +415,80 @@ show_installed_apps() {
         versions_list=()
     fi
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+    for app_info in "${apps_info[@]}"; do
+        IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+        
+        # Get display name and volume name from mapping file
+        local display_name="$app_name"
+        local volume_name=""
+        if [[ -f "$MAPPING_FILE" ]]; then
+            while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
+                if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+                    display_name="$stored_display_name"
+                    volume_name="$vol_name"
+                    break
+                fi
+            done < "$MAPPING_FILE"
+        fi
+        
         # Skip PlayCover itself (it's not an iOS app)
         if [[ "$volume_name" == "PlayCover" ]]; then
             continue
         fi
         
-        # Search for app in PlayCover Applications
-        local app_found=false
-        local app_version=""
+        # Get app version from Info.plist
+        local app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null || echo "不明")
         
-        if [[ -d "$playcover_apps" ]]; then
-            while IFS= read -r app_path; do
-                if [[ -f "${app_path}/Info.plist" ]]; then
-                    local found_bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${app_path}/Info.plist" 2>/dev/null)
-                    
-                    if [[ "$found_bundle_id" == "$bundle_id" ]]; then
-                        app_found=true
-                        app_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${app_path}/Info.plist" 2>/dev/null || echo "不明")
-                        break
-                    fi
-                fi
-            done < <(find "$playcover_apps" -maxdepth 1 -name "*.app" -type d 2>/dev/null)
-        fi
+        # Already validated by get_launchable_apps(), so app is definitely launchable
+        # Get container path and size
+        local container_path=$(get_container_path "$bundle_id")
+        local container_size=$(get_container_size "$container_path")
         
-        if [[ "$app_found" == true ]]; then
-            # Get container path and size
-            local container_path="${HOME}/Library/Containers/${bundle_id}"
-            local container_size=$(get_container_size "$container_path")
-            
-            # Check actual mount status using cached data for performance
-            local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
-            local vol_status=$?
-            local storage_icon=""
-            
-            # Check storage mode to determine icon
-            local storage_mode=""
-            if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$container_path" ]]; then
-                # Volume is mounted at correct location = external storage
+        # Get storage mode using same logic as quick launcher
+        local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
+        local storage_icon=""
+        
+        # Determine storage icon based on storage mode
+        case "$storage_mode" in
+            "external")
                 storage_icon="⚡ 外部"
-            elif [[ -n "$actual_mount" ]]; then
-                # Volume is mounted but at wrong location
+                ;;
+            "external_wrong_location")
                 storage_icon="⚠️  位置異常"
-            elif [[ $vol_status -eq 2 ]]; then
-                # Volume exists but not mounted
-                storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-                
-                case "$storage_mode" in
-                    "internal_intentional")
-                        storage_icon="🍎 内部"
-                        ;;
-                    "internal_intentional_empty")
-                        storage_icon="🍎 内部(空)"
-                        ;;
-                    "internal_contaminated")
-                        storage_icon="⚠️  内蔵データ検出"
-                        ;;
-                    "none")
-                        storage_icon="💤 未マウント"
-                        ;;
-                    *)
-                        storage_icon="？ 不明"
-                        ;;
-                esac
-            else
-                # Volume not mounted - check if internal storage has data
-                storage_mode=$(get_storage_mode "$container_path" "$volume_name")
-                
-                # Skip apps with no data and unknown storage mode
-                if [[ "$storage_mode" == "none" ]] || [[ "$storage_mode" == "unknown" ]]; then
-                    continue
-                fi
-                
-                case "$storage_mode" in
-                    "internal_intentional")
-                        storage_icon="🍎 内部"
-                        ;;
-                    "internal_intentional_empty")
-                        storage_icon="🍎 内部(空)"
-                        ;;
-                    "internal_contaminated")
-                        storage_icon="⚠️  内蔵データ検出"
-                        ;;
-                    *)
-                        storage_icon="？ 不明"
-                        ;;
-                esac
-            fi
-            
-            if [[ "$display_only" == "true" ]]; then
-                printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
-            else
-                echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}(v${app_version})${NC}"
-                echo "      ${GRAY}Bundle ID:${NC} ${LIGHT_GRAY}${bundle_id}${NC}"
-                echo "      ${GRAY}ボリューム:${NC} ${LIGHT_GRAY}${volume_name}${NC}"
-                echo "      ${GRAY}使用容量:${NC} ${BOLD}${storage_icon}${NC} ${BOLD}${WHITE}${container_size}${NC}"
-                echo ""
-                apps_list+=("$display_name")
-                volumes_list+=("$volume_name")
-                bundles_list+=("$bundle_id")
-                versions_list+=("$app_version")
-                ((index++))
-            fi
-            ((installed_count++))
+                ;;
+            "internal_intentional")
+                storage_icon="🍎 内部"
+                ;;
+            "internal_intentional_empty")
+                storage_icon="🍎 内部(空)"
+                ;;
+            "internal_contaminated")
+                storage_icon="⚠️  内蔵データ検出"
+                ;;
+            "none")
+                storage_icon="💤 未マウント"
+                ;;
+            *)
+                storage_icon="？ 不明"
+                ;;
+        esac
+        
+        if [[ "$display_only" == "true" ]]; then
+            printf " ${BOLD}%s${NC} ${LIGHT_GRAY}|${NC} ${BOLD}${WHITE}%s${NC} ${GRAY}(v%s)${NC} ${LIGHT_GRAY}%s${NC}\n" "$storage_icon" "$container_size" "$app_version" "$display_name"
         else
-            if [[ "$display_only" == "true" ]]; then
-                # Check what exactly is missing for detailed error message
-                local volume_exists_check=$(volume_exists_cached "$volume_name" && echo "yes" || echo "no")
-                local container_exists_check=$([[ -d "${HOME}/Library/Containers/${bundle_id}" ]] && echo "yes" || echo "no")
-                
-                local missing_reason=""
-                if [[ "$volume_exists_check" == "no" ]] && [[ "$container_exists_check" == "no" ]]; then
-                    missing_reason="${RED}(ボリュームとアプリ本体が見つかりません - マッピングデータが古い可能性)${NC}"
-                elif [[ "$volume_exists_check" == "no" ]]; then
-                    missing_reason="${RED}(ボリュームが見つかりません)${NC}"
-                else
-                    missing_reason="${RED}(アプリ本体.appが見つかりません)${NC}"
-                fi
-                
-                echo "  ${BOLD}${RED}❌${NC} ${STRIKETHROUGH}${GRAY}${display_name}${NC} ${BOLD}${missing_reason}"
-            fi
-            ((missing_count++))
+            echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}(v${app_version})${NC}"
+            echo "      ${GRAY}Bundle ID:${NC} ${LIGHT_GRAY}${bundle_id}${NC}"
+            echo "      ${GRAY}ボリューム:${NC} ${LIGHT_GRAY}${volume_name}${NC}"
+            echo "      ${GRAY}使用容量:${NC} ${BOLD}${storage_icon}${NC} ${BOLD}${WHITE}${container_size}${NC}"
+            echo ""
+            apps_list+=("$display_name")
+            volumes_list+=("$volume_name")
+            bundles_list+=("$bundle_id")
+            versions_list+=("$app_version")
+            ((index++))
         fi
-    done <<< "$mappings_content"
+        ((installed_count++))
+    done
     
     if [[ "$display_only" == "true" ]]; then
         print_separator

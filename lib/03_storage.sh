@@ -676,9 +676,13 @@ switch_storage_location() {
         # Preload all volume information into cache for fast display
         preload_all_volume_cache
         
-        local mappings_content=$(read_mappings)
+        # Use get_launchable_apps() for consistency
+        local -a apps_info=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && apps_info+=("$line")
+        done < <(get_launchable_apps)
         
-        if [[ -z "$mappings_content" ]]; then
+        if [[ ${#apps_info} -eq 0 ]]; then
             show_error_and_return "ストレージ切替（内蔵⇄外部）" "$MSG_NO_REGISTERED_VOLUMES"
             return
         fi
@@ -689,24 +693,31 @@ switch_storage_location() {
         
         declare -a mappings_array=()
         local index=1
-        while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+        
+        for app_info in "${apps_info[@]}"; do
+            IFS='|' read -r app_name bundle_id app_path <<< "$app_info"
+            
+            # Get display name and volume name from mapping file
+            local display_name="$app_name"
+            local volume_name=""
+            if [[ -f "$MAPPING_FILE" ]]; then
+                while IFS=$'\t' read -r vol_name stored_bundle_id stored_display_name recent_flag; do
+                    if [[ "$stored_bundle_id" == "$bundle_id" ]]; then
+                        display_name="$stored_display_name"
+                        volume_name="$vol_name"
+                        break
+                    fi
+                done < "$MAPPING_FILE"
+            fi
+            
+            # Skip PlayCover itself
             if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
                 continue
             fi
             
-            local target_path="${HOME}/Library/Containers/${bundle_id}"
+            local target_path=$(get_container_path "$bundle_id")
             
-            # Check actual mount status using cached data
-            local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
-            local vol_status=$?
-            
-            # Skip only non-existent volumes
-            if [[ $vol_status -eq 1 ]]; then
-                # Skip apps with non-existent volumes
-                continue
-            fi
-            
-            # Check storage mode after mount status check
+            # Check storage mode using unified logic
             local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
             
             # Add to selectable array only if it has data
@@ -717,73 +728,42 @@ switch_storage_location() {
             local location_text=""
             local usage_text=""
             
-            if [[ $vol_status -eq 0 ]] && [[ -n "$actual_mount" ]]; then
-                # Volume is mounted somewhere
-                if [[ "$actual_mount" == "$target_path" ]]; then
-                    # Correctly mounted = external storage mode
+            # Use storage_mode (already calculated) to determine display
+            case "$storage_mode" in
+                "external")
                     location_text="${BOLD}${BLUE}⚡ 外部ストレージモード${NC}"
                     free_space=$(get_external_drive_free_space "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                else
-                    # Mounted at wrong location
+                    ;;
+                "external_wrong_location")
                     location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
                     free_space=$(get_external_drive_free_space "$volume_name")
-                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置:${NC} ${DIM_GRAY}${actual_mount}${NC}"
-                fi
-            elif [[ $vol_status -eq 2 ]]; then
-                # Volume exists but not mounted
-                case "$storage_mode" in
-                    "internal_intentional")
-                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "internal_intentional_empty")
-                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "internal_contaminated")
-                        location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "none")
-                        # Volume exists but unmounted, no internal data
-                        location_text="${BOLD}${GRAY}💤 未マウント${NC}"
-                        usage_text="${GRAY}外部ボリュームはマウントされていません${NC}"
-                        ;;
-                esac
-            else
-                # Volume not mounted or mount point empty - check internal storage
-                case "$storage_mode" in
-                    "internal_intentional")
-                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "internal_intentional_empty")
-                        location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "internal_contaminated")
-                        location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
-                        free_space=$(get_storage_free_space "$HOME")
-                        usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
-                        ;;
-                    "none")
-                        # Volume not mounted, no internal data
-                        location_text="${BOLD}${ORANGE}💤 外部ボリューム（未マウント）${NC}"
-                        usage_text="${GRAY}マウントが必要です${NC}"
-                        ;;
-                    *)
-                        # Unknown state
-                        location_text="${BOLD}${RED}？ 不明${NC}"
-                        usage_text="${GRAY}状態を確認してください${NC}"
-                        ;;
-                esac
-            fi
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置${NC}"
+                    ;;
+                "internal_intentional")
+                    location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
+                "internal_intentional_empty")
+                    location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード (空)${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
+                "internal_contaminated")
+                    location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+                    free_space=$(get_storage_free_space "$HOME")
+                    usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
+                    ;;
+                "none")
+                    location_text="${BOLD}${GRAY}💤 未マウント${NC}"
+                    usage_text="${GRAY}外部ボリュームはマウントされていません${NC}"
+                    ;;
+                *)
+                    location_text="${BOLD}${RED}？ 不明${NC}"
+                    usage_text="${GRAY}状態を確認してください${NC}"
+                    ;;
+            esac
             
             # Display formatted output
             echo "  ${BOLD}${CYAN}${index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
@@ -791,7 +771,7 @@ switch_storage_location() {
             echo "      ${GRAY}使用容量:${NC} ${usage_text}"
             echo ""
             ((index++))
-        done <<< "$mappings_content"
+        done
         
         print_separator
         echo ""
