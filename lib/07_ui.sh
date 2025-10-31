@@ -1074,36 +1074,38 @@ show_quick_launcher() {
             local volume_name=$(get_volume_name_from_bundle_id "$bundle_id")
             local storage_mode=$(get_storage_mode "$container_path" "$volume_name")
             
-            # Title color based on storage mode
-            local title_color=""
+            # Title color and decoration based on storage mode
+            local title_style=""
             case "$storage_mode" in
                 "external"|"external_wrong_location"|"none")
-                    title_color="${VIOLET}"  # 外部ストレージ：紫
+                    title_style="${BOLD}${VIOLET}"  # 外部ストレージ：太字紫
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
-                    title_color="${LIGHT_GREEN}"  # 内部ストレージ（意図的）：明るい緑
+                    title_style="${LIGHT_GREEN}"  # 内部ストレージ（意図的）：明るい緑
                     ;;
                 "internal_contaminated")
-                    title_color="${RED}"  # 内部ストレージ（汚染）：赤
+                    title_style="${BOLD}${UNDERLINE}${RED}"  # 内部ストレージ（汚染）：太字下線赤
                     ;;
             esac
             
-            # Index color based on sudo necessity
-            local index_color="${CYAN}"  # デフォルト：シアン
+            # Index color and decoration based on sudo necessity
+            local index_style=""
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                index_color="${GOLD}"  # 管理者権限必要：金
+                index_style="${BOLD}${GOLD}"  # 管理者権限必要：太字金
+            else
+                index_style="${CYAN}"  # 通常：シアン
             fi
             
             # Recent mark (only visible indicator)
             local recent_display=""
             if [[ -n "$most_recent_bundle_id" ]] && [[ "$bundle_id" == "$most_recent_bundle_id" ]]; then
-                recent_display="⭐ "
+                recent_display="${BOLD}⭐${NC} "  # 太字で強調
                 recent_count=1
             fi
             
-            # Format: [recent] index. name (with colors)
+            # Format: [recent] index. name (with colors and styles)
             # Build formatted line with properly expanded color codes
-            local formatted_line="${recent_display}${index_color}${index}.${NC} ${title_color}${display_name}${NC}"
+            local formatted_line="${recent_display}${index_style}${index}.${NC} ${title_style}${display_name}${NC}"
             app_display_lines+=("$formatted_line")
             ((index++))
         done
@@ -1144,13 +1146,13 @@ show_quick_launcher() {
         
         echo ""
         print_separator
-        # Compact help line with color legends
-        printf "  番号 ${CYAN}水色${NC}:通常/${GOLD}金${NC}:要sudo  タイトル ${VIOLET}紫${NC}:外部/${LIGHT_GREEN}緑${NC}:内部/${RED}赤${NC}:汚染"
+        # Compact help line with color legends and decorations
+        printf "  番号 ${CYAN}水色${NC}:通常/${BOLD}${GOLD}金${NC}:要sudo  タイトル ${BOLD}${VIOLET}紫${NC}:外部/${LIGHT_GREEN}緑${NC}:内部/${BOLD}${UNDERLINE}${RED}赤${NC}:汚染"
         if [[ $recent_count -gt 0 ]]; then
-            printf "  ⭐:前回 Enterで起動"
+            printf "  ${BOLD}⭐${NC}:前回 ${DIM}Enterで起動${NC}"
         fi
         printf "\n"
-        echo "  ${BOLD}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}p.${NC}PlayCover  ${BOLD}0.${NC}管理画面  ${BOLD}q.${NC}終了  ${DIM_GRAY}r.更新${NC}"
+        echo "  ${BOLD}${WHITE}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}${WHITE}p.${NC}PlayCover  ${BOLD}${WHITE}0.${NC}管理画面  ${BOLD}${WHITE}q.${NC}終了  ${DIM}r.更新${NC}"
         print_separator
         echo ""
         
