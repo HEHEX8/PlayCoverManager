@@ -74,8 +74,17 @@ trap cleanup_lock EXIT INT TERM QUIT
 # Load Modules
 #######################################################
 
-# スクリプトディレクトリを取得（絶対パス）
-SCRIPT_DIR="${0:A:h}"
+# スクリプトディレクトリを取得（bash/zsh互換）
+if [[ -n "${BASH_SOURCE[0]}" ]]; then
+    # bash
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${ZSH_VERSION}" ]]; then
+    # zsh
+    SCRIPT_DIR="${0:A:h}"
+else
+    # fallback
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 
 # 全てのモジュールを順番に読み込み
 source "${SCRIPT_DIR}/lib/00_core.sh"
