@@ -759,6 +759,8 @@ exit_with_cleanup() {
         echo ""
         print_info "3秒後に終了します..."
         /bin/sleep 3
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
         exit 0
     else
         print_error "$message"
@@ -767,6 +769,8 @@ exit_with_cleanup() {
         echo ""
         echo -n "Enterキーを押すと終了します..."
         read
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
         exit "$exit_code"
     fi
 }

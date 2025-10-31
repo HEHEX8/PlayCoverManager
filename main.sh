@@ -204,11 +204,11 @@ main() {
             [qQ])
                 clear
                 echo ""
-                print_info "終了します..."
-                /bin/sleep 0.3
-                # Close current Terminal window without confirmation
-                osascript -e 'tell application "Terminal" to close (first window whose name contains "PlayCover Manager")' >/dev/null 2>&1 &
-                /bin/sleep 0.1
+                print_info "終了しました"
+                echo ""
+                echo "${DIM_GRAY}このウィンドウを閉じるには:${NC}"
+                echo "  ${CYAN}⌘ + W${NC} または 赤い×ボタンをクリック"
+                echo ""
                 exit 0
                 ;;
             X|x|RESET|reset)
@@ -233,7 +233,9 @@ main() {
 # Graceful exit function
 graceful_exit() {
     echo ""
-    print_info "終了します"
+    print_info "終了しました"
+    echo ""
+    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
     /bin/sleep 1
     exit 0
 }

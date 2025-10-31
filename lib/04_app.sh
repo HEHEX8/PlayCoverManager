@@ -1285,6 +1285,8 @@ uninstall_all_apps() {
     print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
     echo ""
     /bin/sleep 2
+    echo ""
+    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
     exit 0
 }
 
