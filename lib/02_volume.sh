@@ -555,37 +555,22 @@ batch_mount_all() {
             ((skipped_count++))
             continue
         elif [[ "$storage_mode" == "internal_contaminated" ]]; then
-            echo ""
-            echo "  ⚠️  ${YELLOW}${display_name}: 内蔵データが検出されました${NC}"
-            echo ""
-            echo "  ${CYAN}処理方法を選択:${NC}"
-            echo "    ${LIGHT_GREEN}1.${NC} 削除して外部ボリュームをマウント"
-            echo "    ${LIGHT_GREEN}2.${NC} 保持して外部ボリュームと統合"
-            echo "    ${LIGHT_GREEN}3.${NC} スキップ（後で個別に処理）"
-            echo ""
-            echo -n "  選択 (1-3): "
-            read contamination_choice </dev/tty
-            echo ""
+            # Use common contamination handler for batch operations
+            handle_contamination_for_batch_mount "$volume_name" "$bundle_id" "$display_name" "$target_path"
+            local contamination_result=$?
             
-            case "$contamination_choice" in
-                1)
-                    echo "  🗑️  ${display_name}: 内蔵データを削除中..."
-                    if /usr/bin/sudo /bin/rm -rf "$target_path" 2>/dev/null; then
-                        echo "  ✅ 削除完了"
-                        # Continue to mount below
-                    else
-                        echo "  ❌ 削除失敗"
-                        ((failed_count++))
-                        continue
-                    fi
+            case $contamination_result in
+                0|1)
+                    # 0 = merge, 1 = deleted - continue to mount
                     ;;
                 2)
-                    echo "  🔄 ${display_name}: データを統合します（マウント後に外部に移動）"
-                    # Continue to mount, data will be merged
-                    ;;
-                3|*)
-                    echo "  ⏭️  ${display_name}: スキップしました"
+                    # Skip this volume
                     ((skipped_count++))
+                    continue
+                    ;;
+                *)
+                    # Error
+                    ((failed_count++))
                     continue
                     ;;
             esac
