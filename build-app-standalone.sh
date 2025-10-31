@@ -103,6 +103,8 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << 'EOF'
     <true/>
     <key>CFBundleSignature</key>
     <string>????</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
 </dict>
 </plist>
 EOF
@@ -291,10 +293,17 @@ else
     exit 1
 fi
 
-# アイコンファイルをコピー（存在する場合）
-if [[ -f "app-icon.png" ]]; then
+# アイコンファイルをコピー（優先順位: .icns > .png）
+if [[ -f "AppIcon.icns" ]]; then
+    cp "AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+    print_success "AppIcon.icns をコピー"
+elif [[ -f "app-icon.png" ]]; then
     cp "app-icon.png" "${APP_BUNDLE}/Contents/Resources/AppIcon.png"
-    print_success "アイコンファイルをコピー"
+    print_info "警告: AppIcon.icns が見つかりません。./create-icon.sh を実行してください"
+    print_info "現在は app-icon.png をコピーしていますが、macOS はアイコンを表示しない可能性があります"
+else
+    print_info "警告: アイコンファイルが見つかりません"
+    print_info "app-icon.png を配置して ./create-icon.sh を実行してください"
 fi
 
 # ============================================================================
@@ -333,6 +342,20 @@ echo ""
 
 print_header "配布用パッケージ作成"
 
+# アイコンの存在をチェックして警告
+if [[ ! -f "AppIcon.icns" ]]; then
+    echo ""
+    echo -e "${YELLOW}⚠️  注意: AppIcon.icns が見つかりません${NC}"
+    echo ""
+    echo "アイコンを表示するには、以下を実行してください:"
+    echo -e "   ${YELLOW}1. ./create-icon.sh${NC}          # .icns ファイルを生成"
+    echo -e "   ${YELLOW}2. ./build-app-standalone.sh${NC} # アプリを再ビルド"
+    echo ""
+fi
+
+echo "DMG インストーラーを作成:"
+echo -e "   ${YELLOW}./create-dmg-standalone.sh${NC}"
+echo ""
 echo "ZIP ファイルを作成:"
 echo -e "   ${YELLOW}cd '${BUILD_DIR}' && zip -r 'PlayCover-Manager-${APP_VERSION}.zip' '${APP_NAME}.app'${NC}"
 echo ""

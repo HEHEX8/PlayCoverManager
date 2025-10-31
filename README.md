@@ -94,6 +94,9 @@ chmod +x main.sh
 git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
+# **重要**: 最初にアイコンを生成（macOS上で実行）
+./create-icon.sh
+
 # 【推奨】Standalone版アプリをビルド（独立プロセス）
 ./build-app-standalone.sh
 
@@ -103,7 +106,9 @@ cd PlayCoverManager
 # DMGインストーラーを作成（オプション）
 # 注意: Node.jsとappdmgパッケージが必要
 ./create-dmg-background-simple.sh  # 背景画像を生成
-./create-dmg-appdmg.sh             # DMGを作成
+./create-dmg-standalone.sh         # Standalone版のDMGを作成
+# または
+./create-dmg-appdmg.sh             # Terminal版のDMGを作成
 
 # ビルドされたアプリをインストール
 # Standalone版の場合:

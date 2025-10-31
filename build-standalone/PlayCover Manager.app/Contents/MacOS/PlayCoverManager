@@ -79,23 +79,18 @@ trap cleanup_lock EXIT INT TERM QUIT
 # プロセス名を設定
 # ============================================================================
 
-# プロセス名を "PlayCover Manager" に設定
-# これにより Activity Monitor で正しい名前が表示される
-exec -a "PlayCover Manager" /bin/zsh <<'MAIN_SCRIPT_EOF'
-
 # ============================================================================
-# メインスクリプトの実行
+# Resourcesディレクトリのパスを事前に取得
 # ============================================================================
 
-# Resourcesディレクトリを取得
-BUNDLE_CONTENTS="${0:A:h:h}"
+# ランチャースクリプト自身の絶対パスを取得
+LAUNCHER_PATH="${0:A}"
+BUNDLE_CONTENTS="${LAUNCHER_PATH:h:h}"
 RESOURCES_DIR="${BUNDLE_CONTENTS}/Resources"
 MAIN_SCRIPT="${RESOURCES_DIR}/main.sh"
 
-# ログ設定
-LOG_FILE="${TMPDIR:-/tmp}/playcover-manager-standalone.log"
-exec 2>> "$LOG_FILE"
-
+echo "Launcher Path: ${LAUNCHER_PATH}" >> "$LOG_FILE"
+echo "Bundle Contents: ${BUNDLE_CONTENTS}" >> "$LOG_FILE"
 echo "Resources Directory: ${RESOURCES_DIR}" >> "$LOG_FILE"
 echo "Main Script: ${MAIN_SCRIPT}" >> "$LOG_FILE"
 
@@ -106,9 +101,36 @@ if [[ ! -f "$MAIN_SCRIPT" ]]; then
     exit 1
 fi
 
-# メインスクリプトを実行
-cd "$RESOURCES_DIR"
-source "$MAIN_SCRIPT"
+# ============================================================================
+# Terminal ウィンドウで実行（インタラクティブモード必須）
+# ============================================================================
 
-MAIN_SCRIPT_EOF
+echo "Opening Terminal window for interactive execution..." >> "$LOG_FILE"
+
+# AppleScript で新しい Terminal ウィンドウを開く
+osascript 2>> "$LOG_FILE" <<EOF
+tell application "Terminal"
+    set wasRunning to (count of windows) > 0
+    
+    -- 新しいウィンドウでスクリプトを実行
+    set newWindow to do script "clear; printf '\\\\033]0;PlayCover Manager\\\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
+    
+    -- 起動時に開いた空のウィンドウを閉じる
+    if not wasRunning then
+        delay 0.5
+        repeat with w in (get windows)
+            try
+                if (name of w) does not contain "PlayCover" then
+                    close w
+                end if
+            end try
+        end repeat
+    end if
+    
+    activate
+    set frontmost of newWindow to true
+end tell
+EOF
+
+echo "Terminal window opened successfully" >> "$LOG_FILE"
 
