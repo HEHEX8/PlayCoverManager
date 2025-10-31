@@ -1285,7 +1285,7 @@ uninstall_all_apps() {
     print_warning "PlayCoverが削除された為、このスクリプトは使用できません。"
     echo ""
     /bin/sleep 2
-    /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+    exit 0
 }
 
 #######################################################

@@ -757,17 +757,17 @@ exit_with_cleanup() {
     if [[ $exit_code -eq 0 ]]; then
         print_success "$message"
         echo ""
-        print_info "3秒後にターミナルを自動で閉じます..."
+        print_info "3秒後に終了します..."
         /bin/sleep 3
-        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+        exit 0
     else
         print_error "$message"
         echo ""
         print_warning "エラーが発生しました。ログを確認してください。"
         echo ""
-        echo -n "Enterキーを押すとターミナルを閉じます..."
+        echo -n "Enterキーを押すと終了します..."
         read
-        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit "$exit_code"
+        exit "$exit_code"
     fi
 }
 

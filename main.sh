@@ -205,10 +205,10 @@ main() {
                 clear
                 echo ""
                 print_info "終了します..."
-                /bin/sleep 0.5
-                # Close Terminal window using AppleScript
-                osascript -e 'tell application "Terminal" to close first window' 2>/dev/null &
                 /bin/sleep 0.3
+                # Close current Terminal window without confirmation
+                osascript -e 'tell application "Terminal" to close (first window whose name contains "PlayCover Manager")' >/dev/null 2>&1 &
+                /bin/sleep 0.1
                 exit 0
                 ;;
             X|x|RESET|reset)
@@ -235,9 +235,6 @@ graceful_exit() {
     echo ""
     print_info "終了します"
     /bin/sleep 1
-    
-    # Close all PlayCover-related Terminal windows
-    /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' 2>/dev/null &
     exit 0
 }
 

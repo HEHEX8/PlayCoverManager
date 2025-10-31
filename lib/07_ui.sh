@@ -1190,8 +1190,12 @@ show_quick_launcher() {
                 ;;
             [qQ])
                 clear
-                # Close Terminal window using AppleScript
-                osascript -e 'tell application "Terminal" to close first window' & exit 0
+                echo ""
+                print_info "終了します..."
+                /bin/sleep 0.3
+                osascript -e 'tell application "Terminal" to close (first window whose name contains "PlayCover Manager")' >/dev/null 2>&1 &
+                /bin/sleep 0.1
+                exit 0
                 ;;
             [pP])
                 echo ""

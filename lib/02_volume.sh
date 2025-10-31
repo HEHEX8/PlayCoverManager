@@ -509,9 +509,9 @@ eject_disk() {
     if /usr/bin/sudo /usr/sbin/diskutil eject "$disk_id"; then
         print_success "ディスク ${drive_name} を安全に取り外しました"
         echo ""
-        print_info "3秒後にターミナルを自動で閉じます..."
+        print_info "3秒後に終了します..."
         /bin/sleep 3
-        /usr/bin/osascript -e 'tell application "Terminal" to close (every window whose name contains "playcover")' & exit 0
+        exit 0
     else
         print_error "ディスクの取り外しに失敗しました"
         wait_for_enter

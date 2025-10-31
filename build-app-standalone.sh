@@ -235,6 +235,12 @@ tell application "Terminal"
     -- 新しいウィンドウでスクリプトを実行
     set newWindow to do script "clear; printf '\\\\033]0;PlayCover Manager\\\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
     
+    -- シェル終了時にウィンドウを自動的に閉じる設定
+    tell newWindow
+        set current settings to settings set "Basic"
+        set custom title to "PlayCover Manager"
+    end tell
+    
     -- 起動時に開いた空のウィンドウを閉じる
     if not wasRunning then
         delay 0.5
