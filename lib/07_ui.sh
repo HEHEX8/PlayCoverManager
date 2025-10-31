@@ -1113,7 +1113,8 @@ show_quick_launcher() {
         done
         
         # Display apps in 3-column layout with ANSI positioning
-        # Column positions: 2, 42, 82 (40 chars per column)
+        # Optimized for 120x30 terminal (120 chars width)
+        # Column positions: 2, 43, 84 (41 chars per column for balanced spacing)
         local total_apps=${#app_display_lines[@]}
         local rows=$(( (total_apps + 2) / 3 ))  # Ceiling division
         
@@ -1127,14 +1128,14 @@ show_quick_launcher() {
                 printf "  %s" "${app_display_lines[$idx1]}"
             fi
             
-            # Column 2 (position 42)
+            # Column 2 (position 43)
             if [[ $idx2 -lt $total_apps ]]; then
-                printf "\033[42G%s" "${app_display_lines[$idx2]}"
+                printf "\033[43G%s" "${app_display_lines[$idx2]}"
             fi
             
-            # Column 3 (position 82)
+            # Column 3 (position 84)
             if [[ $idx3 -lt $total_apps ]]; then
-                printf "\033[82G%s" "${app_display_lines[$idx3]}"
+                printf "\033[84G%s" "${app_display_lines[$idx3]}"
             fi
             
             printf "\n"
