@@ -101,13 +101,18 @@ backup_files() {
 generate_mapping_file() {
     local count=$1
     
+    echo "DEBUG: 関数内に入りました count=$count" >&2
+    
     print_info "ダミーマッピングファイルを生成中... (${count}アプリ)"
+    echo "DEBUG: print_info完了" >&2
     
     # Ensure data directory exists
     mkdir -p "$DATA_DIR"
+    echo "DEBUG: mkdir完了" >&2
     
     # Clear existing mapping file
     > "$MAPPING_FILE"
+    echo "DEBUG: ファイルクリア完了" >&2
     
     # Generate entries
     # zsh: ${#array} で要素数取得（@は不要）
@@ -256,7 +261,10 @@ main() {
     echo ""
     
     # Generate data
+    echo "DEBUG: generate_mapping_file を呼び出します (count=$app_count)" >&2
     generate_mapping_file "$app_count"
+    echo "DEBUG: generate_mapping_file 完了" >&2
+    
     generate_recent_file
     echo ""
     
