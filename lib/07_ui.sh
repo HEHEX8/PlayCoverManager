@@ -1078,20 +1078,20 @@ show_quick_launcher() {
             local title_color=""
             case "$storage_mode" in
                 "external"|"external_wrong_location"|"none")
-                    title_color="${CYAN}"  # 外部ストレージ：シアン
+                    title_color="${VIOLET}"  # 外部ストレージ：紫
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
-                    title_color="${LIGHT_GREEN}"  # 内部ストレージ（意図的）：ライトグリーン
+                    title_color="${LIGHT_GREEN}"  # 内部ストレージ（意図的）：明るい緑
                     ;;
                 "internal_contaminated")
-                    title_color="${RED}"  # 内部ストレージ（汚染）：赤（警告）
+                    title_color="${RED}"  # 内部ストレージ（汚染）：赤
                     ;;
             esac
             
             # Index color based on sudo necessity
-            local index_color="${BLUE}"  # デフォルト：青
+            local index_color="${CYAN}"  # デフォルト：シアン
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                index_color="${GOLD}"  # 管理者権限必要：ゴールド（明るく目立つ）
+                index_color="${GOLD}"  # 管理者権限必要：金
             fi
             
             # Recent mark (only visible indicator)
@@ -1145,7 +1145,7 @@ show_quick_launcher() {
         echo ""
         print_separator
         # Compact help line with color legends
-        printf "  番号 ${BLUE}青${NC}:通常/${GOLD}金${NC}:要sudo  タイトル ${CYAN}青緑${NC}:外部/${LIGHT_GREEN}緑${NC}:内部/${RED}赤${NC}:汚染"
+        printf "  番号 ${CYAN}水色${NC}:通常/${GOLD}金${NC}:要sudo  タイトル ${VIOLET}紫${NC}:外部/${LIGHT_GREEN}緑${NC}:内部/${RED}赤${NC}:汚染"
         if [[ $recent_count -gt 0 ]]; then
             printf "  ⭐:前回 Enterで起動"
         fi
