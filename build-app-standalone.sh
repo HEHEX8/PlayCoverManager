@@ -234,12 +234,12 @@ fi
 echo "Opening Terminal window for interactive execution..." >> "$LOG_FILE"
 
 # AppleScript で新しい Terminal ウィンドウを開く
-osascript <<APPLESCRIPT 2>> "$LOG_FILE"
+osascript 2>> "$LOG_FILE" <<EOF
 tell application "Terminal"
     set wasRunning to (count of windows) > 0
     
     -- 新しいウィンドウでスクリプトを実行
-    set newWindow to do script "clear; printf '\\033]0;PlayCover Manager\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
+    set newWindow to do script "clear; printf '\\\\033]0;PlayCover Manager\\\\007'; cd '$RESOURCES_DIR'; exec /bin/zsh '$MAIN_SCRIPT'"
     
     -- 起動時に開いた空のウィンドウを閉じる
     if not wasRunning then
@@ -256,7 +256,7 @@ tell application "Terminal"
     activate
     set frontmost of newWindow to true
 end tell
-APPLESCRIPT
+EOF
 
 echo "Terminal window opened successfully" >> "$LOG_FILE"
 
