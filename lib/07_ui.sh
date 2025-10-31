@@ -150,7 +150,7 @@ _handle_contaminated_mount() {
             return $?
             ;;
         3)
-            print_info "マウントをキャンセルしました"
+            print_info "$MSG_CANCELED"
             wait_for_enter
             silent_return_to_menu "individual_volume_control"
             return 0

@@ -1624,7 +1624,7 @@ auto_mount_if_contaminated() {
             print_info "データを統合します（マウント後に外部に移動）"
             ;;
         3|*)
-            print_info "キャンセルしました"
+            print_info "$MSG_CANCELED"
             return 1
             ;;
     esac

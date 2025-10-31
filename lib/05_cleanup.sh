@@ -585,7 +585,7 @@ clear_system_caches() {
     read -r response
     
     if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        print_info "キャンセルしました"
+        print_info "$MSG_CANCELED"
         return 0
     fi
     
