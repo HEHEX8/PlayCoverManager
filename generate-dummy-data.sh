@@ -110,14 +110,15 @@ generate_mapping_file() {
     > "$MAPPING_FILE"
     
     # Generate entries
+    local total_samples=${#SAMPLE_APPS[@]}
     for ((i=1; i<=count; i++)); do
-        local app_index=$(( (i - 1) % ${#SAMPLE_APPS[@]} + 1 ))
+        local app_index=$(( ((i - 1) % total_samples) + 1 ))
         local app_name="${SAMPLE_APPS[$app_index]}"
         local bundle_id="${SAMPLE_BUNDLE_IDS[$app_index]}"
         
-        # Add number suffix if more than 20 apps
-        if [[ $i -gt ${#SAMPLE_APPS[@]} ]]; then
-            local suffix=$(( (i - 1) / ${#SAMPLE_APPS[@]} + 1 ))
+        # Add number suffix if more than available samples
+        if [[ $i -gt $total_samples ]]; then
+            local suffix=$(( (i - 1) / total_samples + 1 ))
             app_name="${app_name} ${suffix}"
             bundle_id="${bundle_id}.dummy${suffix}"
         fi
@@ -135,7 +136,7 @@ generate_mapping_file() {
         fi
         
         # Write to mapping file (tab-separated)
-        echo "${volume_name}\t${bundle_id}\t${app_name}\t${recent_flag}" >> "$MAPPING_FILE"
+        printf "%s\t%s\t%s\t%s\n" "$volume_name" "$bundle_id" "$app_name" "$recent_flag" >> "$MAPPING_FILE"
     done
     
     print_success "マッピングファイル生成完了: $count エントリ"
@@ -166,13 +167,14 @@ create_dummy_app_structure() {
     local playcover_apps_dir="${HOME}/Library/Containers/io.playcover.PlayCover/Applications"
     mkdir -p "$playcover_apps_dir"
     
+    local total_samples=${#SAMPLE_APPS[@]}
     for ((i=1; i<=count; i++)); do
-        local app_index=$(( (i - 1) % ${#SAMPLE_APPS[@]} + 1 ))
+        local app_index=$(( ((i - 1) % total_samples) + 1 ))
         local app_name="${SAMPLE_APPS[$app_index]}"
         local bundle_id="${SAMPLE_BUNDLE_IDS[$app_index]}"
         
-        if [[ $i -gt ${#SAMPLE_APPS[@]} ]]; then
-            local suffix=$(( (i - 1) / ${#SAMPLE_APPS[@]} + 1 ))
+        if [[ $i -gt $total_samples ]]; then
+            local suffix=$(( (i - 1) / total_samples + 1 ))
             app_name="${app_name} ${suffix}"
             bundle_id="${bundle_id}.dummy${suffix}"
         fi
