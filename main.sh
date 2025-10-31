@@ -204,17 +204,10 @@ main() {
             [qQ])
                 clear
                 echo ""
-                print_info "終了します..."
-                /bin/sleep 0.3
-                # Simulate ⌘+W keystroke to close window
-                osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "System Events"
-    tell process "Terminal"
-        keystroke "w" using command down
-    end tell
-end tell
-CLOSE_WINDOW
-                /bin/sleep 0.2
+                print_info "終了しました"
+                echo ""
+                echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+                echo ""
                 exit 0
                 ;;
             X|x|RESET|reset)
@@ -239,16 +232,10 @@ CLOSE_WINDOW
 # Graceful exit function
 graceful_exit() {
     echo ""
-    print_info "終了します..."
-    /bin/sleep 0.3
-    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "System Events"
-    tell process "Terminal"
-        keystroke "w" using command down
-    end tell
-end tell
-CLOSE_WINDOW
-    /bin/sleep 0.2
+    print_info "終了しました"
+    echo ""
+    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+    echo ""
     exit 0
 }
 

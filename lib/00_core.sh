@@ -757,32 +757,20 @@ exit_with_cleanup() {
     if [[ $exit_code -eq 0 ]]; then
         print_success "$message"
         echo ""
-        print_info "3秒後にウィンドウを閉じます..."
+        print_info "3秒後に終了します..."
         /bin/sleep 3
-        osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "System Events"
-    tell process "Terminal"
-        keystroke "w" using command down
-    end tell
-end tell
-CLOSE_WINDOW
-        /bin/sleep 0.2
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
         exit 0
     else
         print_error "$message"
         echo ""
         print_warning "エラーが発生しました。ログを確認してください。"
         echo ""
-        echo -n "Enterキーを押すとウィンドウを閉じます..."
+        echo -n "Enterキーを押すと終了します..."
         read
-        osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "System Events"
-    tell process "Terminal"
-        keystroke "w" using command down
-    end tell
-end tell
-CLOSE_WINDOW
-        /bin/sleep 0.2
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
         exit "$exit_code"
     fi
 }

@@ -509,16 +509,10 @@ eject_disk() {
     if /usr/bin/sudo /usr/sbin/diskutil eject "$disk_id"; then
         print_success "ディスク ${drive_name} を安全に取り外しました"
         echo ""
-        print_info "3秒後にウィンドウを閉じます..."
+        print_info "3秒後に終了します..."
         /bin/sleep 3
-        osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "System Events"
-    tell process "Terminal"
-        keystroke "w" using command down
-    end tell
-end tell
-CLOSE_WINDOW
-        /bin/sleep 0.2
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
         exit 0
     else
         print_error "ディスクの取り外しに失敗しました"
