@@ -255,9 +255,13 @@ _merge_internal_to_external() {
 #######################################################
 
 show_quick_status() {
-    local mappings_content=$(read_mappings)
+    # Load mappings using common function
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
     
-    if [[ -z "$mappings_content" ]]; then
+    if [[ ${#mappings_array} -eq 0 ]]; then
         return
     fi
     
@@ -266,7 +270,9 @@ show_quick_status() {
     local unmounted_count=0
     local total_count=0
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+    for mapping in "${mappings_array[@]}"; do
+        IFS='|' read -r volume_name bundle_id display_name <<< "$mapping"
+        
         # Skip PlayCover itself
         if [[ "$volume_name" == "PlayCover" ]]; then
             continue
@@ -276,17 +282,16 @@ show_quick_status() {
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
         
-        # Check actual mount status using cached data for performance
-        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
-        local vol_status=$?
+        # Get volume detailed status using common function
+        local status_info=$(get_volume_detailed_status "$volume_name" "$target_path")
+        IFS='|' read -r status_type status_message extra_info <<< "$status_info"
         
-        if [[ $vol_status -eq 0 ]] && [[ "$actual_mount" == "$target_path" ]]; then
+        if [[ "$status_type" == "mounted" ]] && [[ "$status_message" == *"${target_path}"* ]]; then
             # Volume is mounted at correct location = external storage
             ((external_count++))
         else
-            # Volume not mounted - check if internal storage has data
-            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-            case "$storage_mode" in
+            # Check storage mode via extra_info
+            case "$extra_info" in
                 "internal_intentional"|"internal_intentional_empty")
                     ((internal_count++))
                     ;;
@@ -299,7 +304,7 @@ show_quick_status() {
                     ;;
             esac
         fi
-    done <<< "$mappings_content"
+    done
     
     if [[ $total_count -gt 0 ]]; then
         echo "${CYAN}コンテナ情報${NC}"
@@ -633,22 +638,11 @@ individual_volume_control() {
     clear
     print_header "ボリューム情報"
     
-    # Read mapping file directly
-    if [[ ! -f "$MAPPING_FILE" ]]; then
-        print_warning "マッピングファイルが見つかりません: $MAPPING_FILE"
-        wait_for_enter
-        return
-    fi
-    
-    # Build array from file (ignore 4th column if present)
+    # Load mappings using common function
     local -a mappings_array=()
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        # Skip empty lines
-        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
-        
-        # Add to array (only first 3 columns)
-        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
-    done < "$MAPPING_FILE"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
     
     # Check if we have any mappings
     if [[ ${#mappings_array} -eq 0 ]]; then
@@ -659,21 +653,11 @@ individual_volume_control() {
     echo "登録ボリューム"
     echo ""
     
-    # Cache diskutil output once for performance
-    local diskutil_cache=$(/usr/sbin/diskutil list 2>/dev/null)
-    local mount_cache=$(/sbin/mount 2>/dev/null)
-    
     # Check if any app is running (affects PlayCover lock status)
     local any_app_running=false
-    for ((j=1; j<=${#mappings_array}; j++)); do
-        IFS='|' read -r _ check_bundle_id _ <<< "${mappings_array[$j]}"
-        if [[ "$check_bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
-            if is_app_running "$check_bundle_id"; then
-                any_app_running=true
-                break
-            fi
-        fi
-    done
+    if check_any_app_running < <(printf '%s\n' "${mappings_array[@]}"); then
+        any_app_running=true
+    fi
     
     # Build selectable array (excluding locked volumes)
     local -a selectable_array=()
@@ -685,126 +669,19 @@ individual_volume_control() {
         IFS='|' read -r volume_name bundle_id display_name <<< "${mappings_array[$i]}"
         
         local target_path="${HOME}/Library/Containers/${bundle_id}"
-        local status_line=""
-        local extra_info=""
-        local is_locked=false
         
-        # Check if app is running (locked)
-        local lock_reason=""
-        if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
-            # PlayCover volume is locked if PlayCover is running OR any app is running
-            if is_playcover_running; then
-                is_locked=true
-                lock_reason="app_running"  # PlayCover自体が動作中
-            elif [[ "$any_app_running" == "true" ]]; then
-                is_locked=true
-                lock_reason="app_storage"  # 配下のアプリが動作中（アプリ本体.appを保管中）
-            fi
-        else
-            if is_app_running "$bundle_id"; then
-                is_locked=true
-                lock_reason="app_running"  # アプリ自体が動作中
-            fi
-        fi
+        # Get lock status using common function
+        local lock_status=$(get_volume_lock_status "$bundle_id" "$any_app_running")
         
-        # Check volume mount status using cached data
-        local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
-        local vol_status=$?
+        # Get volume detailed status using common function
+        local status_info=$(get_volume_detailed_status "$volume_name" "$target_path")
+        IFS='|' read -r status_type status_message extra_info <<< "$status_info"
         
-        if [[ $vol_status -eq 1 ]]; then
-            status_line="❌ ボリュームが見つかりません"
-        elif [[ $vol_status -eq 0 ]]; then
-            # Volume is mounted
-            # Additional check: if mount point is empty, treat as unmounted (stale cache protection)
-            if [[ -z "$actual_mount" ]]; then
-                # Cache might be stale, treat as unmounted
-                local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-                case "$storage_mode" in
-                    "none")
-                        status_line="⚪️ 未マウント"
-                        ;;
-                    "internal_intentional")
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_intentional"
-                        ;;
-                    "internal_intentional_empty")
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_intentional_empty"
-                        ;;
-                    "internal_contaminated")
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_contaminated"
-                        ;;
-                    *)
-                        status_line="⚪️ 未マウント"
-                        ;;
-                esac
-            elif [[ "$actual_mount" == "$target_path" ]]; then
-                status_line="🟢 マウント済: ${actual_mount}"
-            else
-                status_line="⚠️  マウント位置異常: ${actual_mount}"
-            fi
-        else
-            # Volume exists but not mounted (vol_status == 2)
-            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
-                
-                case "$storage_mode" in
-                    "none")
-                        status_line="⚪️ 未マウント"
-                        ;;
-                    "internal_intentional")
-                        # Intentionally switched to internal storage with data
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_intentional"
-                        ;;
-                    "internal_intentional_empty")
-                        # Intentionally switched to internal storage but empty
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_intentional_empty"
-                        ;;
-                    "internal_contaminated")
-                        # Unintended internal data contamination
-                        status_line="⚪️ 未マウント"
-                        extra_info="internal_contaminated"
-                        ;;
-                    *)
-                        status_line="⚪️ 未マウント"
-                        ;;
-                esac
-        fi
-        
-        # Display with lock status or number
-        if $is_locked; then
-            # Locked: show with lock icon, no number
-            if [[ "$lock_reason" == "app_running" ]]; then
-                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ動作中${NC}"
-            elif [[ "$lock_reason" == "app_storage" ]]; then
-                echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🚬 下記アプリの終了待機中${NC}"
-            fi
-            echo "      ${GRAY}${status_line}${NC}"
-            echo ""
-        elif [[ "$extra_info" == "internal_intentional" ]] || [[ "$extra_info" == "internal_intentional_empty" ]]; then
-            # Intentional internal storage mode (with or without data): show as locked
-            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🍎 内蔵ストレージモード${NC}"
-            echo "      ${GRAY}${status_line}${NC}"
-            echo ""
-        elif [[ "$extra_info" == "internal_contaminated" ]]; then
-            # Contaminated: show as warning (selectable)
+        # Display using common function
+        if format_volume_display_entry "$display_index" "$display_name" "$lock_status" "$status_message" "$extra_info"; then
+            # Selectable: add to selectable array
             selectable_array+=("${mappings_array[$i]}")
             selectable_indices+=("$i")
-            
-            echo "  ${BOLD}${YELLOW}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
-            echo "      ${GRAY}${status_line} ${ORANGE}| マウント時に処理方法を確認します${NC}"
-            echo ""
-            ((display_index++))
-        else
-            # Not locked: add to selectable array and show with number
-            selectable_array+=("${mappings_array[$i]}")
-            selectable_indices+=("$i")
-            
-            echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
-            echo "      ${GRAY}${status_line}${NC}"
-            echo ""
             ((display_index++))
         fi
     done

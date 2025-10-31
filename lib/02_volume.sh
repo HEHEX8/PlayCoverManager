@@ -627,7 +627,7 @@ batch_mount_all() {
             ((failed_count++))
         fi
         
-    done < "$MAPPING_FILE"
+    done
     
     _show_batch_summary "マウント" "$mounted_count" "$skipped_count" "$failed_count" "マウント成功"
     
@@ -658,9 +658,14 @@ batch_unmount_all() {
     local skipped_count=0
     local failed_count=0
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-        # Skip empty lines
-        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+    # Load mappings using common function
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
+    
+    for mapping in "${mappings_array[@]}"; do
+        IFS='|' read -r volume_name bundle_id display_name <<< "$mapping"
         
         # Check common skip conditions
         if _should_skip_batch_volume "$volume_name" "$bundle_id" "$display_name" "unmount"; then
@@ -681,7 +686,7 @@ batch_unmount_all() {
             ((failed_count++))
         fi
         
-    done < "$MAPPING_FILE"
+    done
     
     _show_batch_summary "アンマウント" "$unmounted_count" "$skipped_count" "$failed_count" "アンマウント成功"
 }

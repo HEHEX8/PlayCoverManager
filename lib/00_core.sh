@@ -1346,3 +1346,198 @@ show_spinner() {
     # Clear the entire spinner line with extra spaces
     printf "\r%*s\r" 100 ""
 }
+
+#######################################################
+# Volume Operations Common Functions
+#######################################################
+
+# Load all mappings from MAPPING_FILE into an array
+# Returns: Array via stdout in format "volume_name|bundle_id|display_name"
+# Return code: 0 if loaded, 1 if file not found or empty
+load_mappings_array() {
+    if [[ ! -f "$MAPPING_FILE" ]]; then
+        return 1
+    fi
+    
+    local -a mappings_array=()
+    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+        # Skip empty lines
+        [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
+        
+        # Add to array (only first 3 columns)
+        mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
+    done < "$MAPPING_FILE"
+    
+    # Check if we have any mappings
+    if [[ ${#mappings_array} -eq 0 ]]; then
+        return 1
+    fi
+    
+    # Output array elements
+    printf '%s\n' "${mappings_array[@]}"
+    return 0
+}
+
+# Check if any app (excluding PlayCover) is running
+# Returns: 0 if any app is running, 1 if none
+check_any_app_running() {
+    local -a mappings_list=()
+    while IFS= read -r line; do
+        mappings_list+=("$line")
+    done
+    
+    for mapping in "${mappings_list[@]}"; do
+        IFS='|' read -r _ bundle_id _ <<< "$mapping"
+        if [[ "$bundle_id" != "$PLAYCOVER_BUNDLE_ID" ]]; then
+            if is_app_running "$bundle_id"; then
+                return 0  # Found running app
+            fi
+        fi
+    done
+    
+    return 1  # No app running
+}
+
+# Get volume lock status
+# Args: bundle_id, any_app_running_flag (true/false)
+# Returns: Status via stdout - "locked:reason" or "unlocked"
+get_volume_lock_status() {
+    local bundle_id="$1"
+    local any_app_running="${2:-false}"
+    
+    if [[ "$bundle_id" == "$PLAYCOVER_BUNDLE_ID" ]]; then
+        # PlayCover volume is locked if PlayCover is running OR any app is running
+        if is_playcover_running; then
+            echo "locked:app_running"
+            return 0
+        elif [[ "$any_app_running" == "true" ]]; then
+            echo "locked:app_storage"
+            return 0
+        fi
+    else
+        if is_app_running "$bundle_id"; then
+            echo "locked:app_running"
+            return 0
+        fi
+    fi
+    
+    echo "unlocked"
+    return 0
+}
+
+# Get detailed volume status with storage mode
+# Args: volume_name, target_path
+# Returns: Status info via stdout in format "status_type|status_message|extra_info"
+# status_type: not_found, mounted, mounted_wrong, unmounted
+get_volume_detailed_status() {
+    local volume_name="$1"
+    local target_path="$2"
+    
+    local actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+    local vol_status=$?
+    
+    if [[ $vol_status -eq 1 ]]; then
+        # Volume not found
+        echo "not_found|❌ ボリュームが見つかりません|"
+        return 0
+    elif [[ $vol_status -eq 0 ]]; then
+        # Volume is mounted
+        if [[ -z "$actual_mount" ]]; then
+            # Cache might be stale, treat as unmounted
+            local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+            case "$storage_mode" in
+                "none")
+                    echo "unmounted|⚪️ 未マウント|"
+                    ;;
+                "internal_intentional")
+                    echo "unmounted|⚪️ 未マウント|internal_intentional"
+                    ;;
+                "internal_intentional_empty")
+                    echo "unmounted|⚪️ 未マウント|internal_intentional_empty"
+                    ;;
+                "internal_contaminated")
+                    echo "unmounted|⚪️ 未マウント|internal_contaminated"
+                    ;;
+                *)
+                    echo "unmounted|⚪️ 未マウント|"
+                    ;;
+            esac
+        elif [[ "$actual_mount" == "$target_path" ]]; then
+            echo "mounted|🟢 マウント済: ${actual_mount}|"
+        else
+            echo "mounted_wrong|⚠️  マウント位置異常: ${actual_mount}|"
+        fi
+    else
+        # Volume exists but not mounted (vol_status == 2)
+        local storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+        case "$storage_mode" in
+            "none")
+                echo "unmounted|⚪️ 未マウント|"
+                ;;
+            "internal_intentional")
+                echo "unmounted|⚪️ 未マウント|internal_intentional"
+                ;;
+            "internal_intentional_empty")
+                echo "unmounted|⚪️ 未マウント|internal_intentional_empty"
+                ;;
+            "internal_contaminated")
+                echo "unmounted|⚪️ 未マウント|internal_contaminated"
+                ;;
+            *)
+                echo "unmounted|⚪️ 未マウント|"
+                ;;
+        esac
+    fi
+    
+    return 0
+}
+
+# Format and display volume entry with lock/status indicators
+# Args: display_index, display_name, lock_status, status_message, extra_info
+# Returns: 0 if selectable, 1 if locked/non-selectable
+format_volume_display_entry() {
+    local display_index="$1"
+    local display_name="$2"
+    local lock_status="$3"
+    local status_message="$4"
+    local extra_info="$5"
+    
+    # Parse lock status
+    local is_locked=false
+    local lock_reason=""
+    if [[ "$lock_status" == locked:* ]]; then
+        is_locked=true
+        lock_reason="${lock_status#locked:}"
+    fi
+    
+    # Display with lock status or number
+    if $is_locked; then
+        # Locked: show with lock icon, no number
+        if [[ "$lock_reason" == "app_running" ]]; then
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🏃 アプリ動作中${NC}"
+        elif [[ "$lock_reason" == "app_storage" ]]; then
+            echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🚬 下記アプリの終了待機中${NC}"
+        fi
+        echo "      ${GRAY}${status_message}${NC}"
+        echo ""
+        return 1  # Non-selectable
+    elif [[ "$extra_info" == "internal_intentional" ]] || [[ "$extra_info" == "internal_intentional_empty" ]]; then
+        # Intentional internal storage mode: show as locked
+        echo "  ${BOLD}🔒 ${GOLD}ロック中${NC} ${BOLD}${WHITE}${display_name}${NC} ${GRAY}| 🍎 内蔵ストレージモード${NC}"
+        echo "      ${GRAY}${status_message}${NC}"
+        echo ""
+        return 1  # Non-selectable
+    elif [[ "$extra_info" == "internal_contaminated" ]]; then
+        # Contaminated: show as warning (selectable)
+        echo "  ${BOLD}${YELLOW}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC} ${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+        echo "      ${GRAY}${status_message} ${ORANGE}| マウント時に処理方法を確認します${NC}"
+        echo ""
+        return 0  # Selectable
+    else
+        # Not locked: show with number
+        echo "  ${BOLD}${CYAN}${display_index}.${NC} ${BOLD}${WHITE}${display_name}${NC}"
+        echo "      ${GRAY}${status_message}${NC}"
+        echo ""
+        return 0  # Selectable
+    fi
+}
