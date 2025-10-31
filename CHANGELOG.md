@@ -15,9 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `exec -a` によるプロセス名の明示的な設定
   - 外部ツール不要（Platypus不要）
   - 配布用に最適化された.appバンドル構造
+  - **シングルインスタンス機能**: 複数起動を防止
+    - PIDベースのロックファイル管理
+    - ゾンビロック自動検出と削除
+    - `trap EXIT INT TERM QUIT` による確実なクリーンアップ
+    - 既存インスタンスの自動アクティベート
+  - **アイコンサポート**: macOS標準の`.icns`形式アイコンに対応
+    - `CFBundleIconFile` を Info.plist に追加
+    - `.icns` ファイル優先、`.png` フォールバック
+    - アイコン未生成時の警告メッセージ
   - 詳細ドキュメント: `STANDALONE_BUILD.md`
 
+- **Standalone版DMGビルダー**: appdmgを使用したDMGインストーラー作成
+  - 新しいビルドスクリプト: `create-dmg-standalone.sh`
+  - appdmg設定ファイル: `appdmg-config-standalone.json`
+  - build-standalone/ ディレクトリからの自動ビルド
+  - Terminal版と同じ実績あるappdmgソリューションを使用
+
 ### Documentation
+- **ICON_GUIDE.md**: アイコン作成の完全ガイドを追加
+  - `create-icon.sh` の使用方法
+  - `.icns` ファイル生成手順
+  - トラブルシューティング
+  - Finder キャッシュのクリア方法
 - **STANDALONE_BUILD.md**: Standalone版ビルドの完全ガイドを追加
   - ビルド方法、テスト手順、配布方法
   - トラブルシューティングガイド
@@ -25,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **README.md**: Standalone版ビルドの説明を追加
   - インストール方法3にStandalone版とTerminal版の比較表を追加
   - ビルド方式の違いを明記
+  - アイコン生成手順を追記（`./create-icon.sh` を最初に実行）
 
 ## [5.2.0] - 2025-01-31
 
