@@ -142,69 +142,8 @@ echo "Launch Time: $(date)" >> "$LOG_FILE"
 echo "Bundle Path: ${0:A:h:h}" >> "$LOG_FILE"
 
 # ============================================================================
-# シングルインスタンスチェック
-# ============================================================================
-
-LOCK_FILE="${TMPDIR:-/tmp}/playcover-manager-running.lock"
-
-is_lock_stale() {
-    local lock_file="$1"
-    if [[ ! -f "$lock_file" ]]; then
-        return 0  # No lock file = not stale
-    fi
-    
-    local lock_pid=$(cat "$lock_file" 2>/dev/null)
-    if [[ -z "$lock_pid" ]]; then
-        return 0  # Empty lock = stale
-    fi
-    
-    # Check if process exists
-    if ps -p "$lock_pid" >/dev/null 2>&1; then
-        return 1  # Process exists = not stale
-    else
-        return 0  # Process doesn't exist = stale
-    fi
-}
-
-# 既存インスタンスのチェック
-if [[ -f "$LOCK_FILE" ]]; then
-    if is_lock_stale "$LOCK_FILE"; then
-        echo "Removing stale lock file" >> "$LOG_FILE"
-        rm -f "$LOCK_FILE"
-    else
-        echo "Another instance is already running" >> "$LOG_FILE"
-        
-        # Activate existing instance
-        osascript <<'ACTIVATE_EOF' 2>> "$LOG_FILE"
-tell application "System Events"
-    set pcmProcesses to every process whose name contains "PlayCover Manager"
-    if (count of pcmProcesses) > 0 then
-        set frontmost of item 1 of pcmProcesses to true
-    end if
-end tell
-ACTIVATE_EOF
-        
-        # Show notification
-        osascript -e 'display notification "PlayCover Manager は既に実行中です" with title "PlayCover Manager"' 2>> "$LOG_FILE"
-        
-        exit 0
-    fi
-fi
-
-# ロックファイルを作成
-echo $$ > "$LOCK_FILE"
-echo "Created lock file with PID: $$" >> "$LOG_FILE"
-
-# 終了時のクリーンアップ
-cleanup_lock() {
-    echo "Cleaning up lock file" >> "$LOG_FILE"
-    rm -f "$LOCK_FILE"
-}
-
-trap cleanup_lock EXIT INT TERM QUIT
-
-# ============================================================================
-# プロセス名を設定
+# NOTE: Single instance check is handled by main.sh
+# Launcher just opens Terminal - main.sh manages the lock file
 # ============================================================================
 
 # ============================================================================
