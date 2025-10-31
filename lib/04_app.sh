@@ -910,9 +910,13 @@ uninstall_workflow() {
             return
         fi
         
-        local mappings_content=$(read_mappings)
+        # Load mappings using common function
+        local -a mappings_array=()
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && mappings_array+=("$line")
+        done < <(load_mappings_array)
         
-        if [[ -z "$mappings_content" ]]; then
+        if [[ ${#mappings_array} -eq 0 ]]; then
             print_success "すべてのアプリがアンインストールされました"
             echo ""
             echo "インストールされているアプリ: 0個"
@@ -1117,16 +1121,20 @@ uninstall_all_apps() {
         return
     fi
     
-    local mappings_content=$(read_mappings)
+    # Load mappings using common function
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
     
-    if [[ -z "$mappings_content" ]]; then
+    if [[ ${#mappings_array} -eq 0 ]]; then
         print_warning "インストールされているアプリがありません"
         wait_for_enter
         return
     fi
     
     # Count total apps
-    local total_apps=$(echo "$mappings_content" | wc -l | tr -d ' ')
+    local total_apps=${#mappings_array}
     
     # Display all installed apps
     echo ""
@@ -1138,7 +1146,8 @@ uninstall_all_apps() {
     local -a bundles_list=()
     local index=1
     
-    while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
+    for mapping in "${mappings_array[@]}"; do
+        IFS='|' read -r volume_name bundle_id display_name <<< "$mapping"
         apps_list+=("$display_name")
         volumes_list+=("$volume_name")
         bundles_list+=("$bundle_id")
@@ -1147,7 +1156,7 @@ uninstall_all_apps() {
         echo "      ボリューム: ${volume_name}"
         echo ""
         ((index++))
-    done <<< "$mappings_content"
+    done
     
     echo "${ORANGE}合計: ${total_apps} 個のアプリ${NC}"
     echo ""

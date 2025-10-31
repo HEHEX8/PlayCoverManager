@@ -434,15 +434,13 @@ eject_disk() {
     
     echo ""
     
-    # Use existing batch_unmount_all logic to unmount all mapped volumes
-    local mappings_content=$(read_mappings)
+    # Load mappings using common function
+    local -a mappings_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && mappings_array+=("$line")
+    done < <(load_mappings_array)
     
-    if [[ -n "$mappings_content" ]]; then
-        local -a mappings_array=()
-        while IFS=$'\t' read -r volume_name bundle_id display_name recent_flag; do
-            [[ -z "$volume_name" || -z "$bundle_id" ]] && continue
-            mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
-        done <<< "$mappings_content"
+    if [[ ${#mappings_array} -gt 0 ]]; then
         
         if [[ ${#mappings_array} -gt 0 ]]; then
             print_info "登録済みボリュームをアンマウント中..."
