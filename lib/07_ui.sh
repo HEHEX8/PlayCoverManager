@@ -458,10 +458,10 @@ show_installed_apps() {
         # Determine storage icon based on storage mode
         case "$storage_mode" in
             "external")
-                storage_icon="⚡ 外部"
+                storage_icon="⚡️ 外部"
                 ;;
             "external_wrong_location")
-                storage_icon="⚠️  位置異常"
+                storage_icon="⚠️ 位置異常"
                 ;;
             "internal_intentional")
                 storage_icon="🍎 内部"
@@ -470,10 +470,10 @@ show_installed_apps() {
                 storage_icon="🍎 内部(空)"
                 ;;
             "internal_contaminated")
-                storage_icon="⚠️  内蔵データ検出"
+                storage_icon="⚠️ 内蔵データ検出"
                 ;;
             "none")
-                storage_icon="💤 未マウント"
+                storage_icon="⭕️ 未マウント"
                 ;;
             "not_created")
                 storage_icon="📦 未初期化"
@@ -482,7 +482,7 @@ show_installed_apps() {
                 storage_icon="🚫 アクセス不可"
                 ;;
             "unknown")
-                storage_icon="？ 不明"
+                storage_icon="❓ 不明"
                 ;;
             *)
                 storage_icon="❌ エラー"

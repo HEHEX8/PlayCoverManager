@@ -769,22 +769,34 @@ switch_storage_location() {
             # Add to selectable array only if it has data
             mappings_array+=("${volume_name}|${bundle_id}|${display_name}")
             
-            local container_size=$(get_container_size "$target_path")
+            local container_size=""
             local free_space=""
             local location_text=""
             local usage_text=""
             
+            # For external_wrong_location, get size from actual mount point
+            if [[ "$storage_mode" == "external_wrong_location" ]]; then
+                local actual_mount=$(get_mount_point_cached "$volume_name")
+                if [[ -n "$actual_mount" ]] && [[ -d "$actual_mount" ]]; then
+                    container_size=$(get_container_size "$actual_mount")
+                else
+                    container_size="0B"
+                fi
+            else
+                container_size=$(get_container_size "$target_path")
+            fi
+            
             # Use storage_mode (already calculated) to determine display
             case "$storage_mode" in
                 "external")
-                    location_text="${BOLD}${BLUE}⚡ 外部ストレージモード${NC}"
+                    location_text="${BOLD}${BLUE}⚡️ 外部ストレージモード${NC}"
                     free_space=$(get_external_drive_free_space_cached "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "external_wrong_location")
-                    location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
+                    location_text="${BOLD}${ORANGE}⚠️ マウント位置異常（外部）${NC}"
                     free_space=$(get_external_drive_free_space_cached "$volume_name")
-                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置${NC}"
+                    usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置${NC}"
                     ;;
                 "internal_intentional")
                     location_text="${BOLD}${GREEN}🍎 内蔵ストレージモード${NC}"
@@ -797,17 +809,29 @@ switch_storage_location() {
                     usage_text="${GRAY}0B${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "internal_contaminated")
-                    location_text="${BOLD}${ORANGE}⚠️  内蔵データ検出${NC}"
+                    location_text="${BOLD}${ORANGE}⚠️ 内蔵データ検出${NC}"
                     free_space=$(get_storage_free_space_cached "$HOME")
                     usage_text="${GRAY}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "none")
-                    location_text="${BOLD}${GRAY}💤 未マウント${NC}"
+                    location_text="${BOLD}${GRAY}⭕️ 未マウント${NC}"
                     usage_text="${GRAY}外部ボリュームはマウントされていません${NC}"
                     ;;
-                *)
-                    location_text="${BOLD}${RED}？ 不明${NC}"
+                "not_created")
+                    location_text="${BOLD}${GRAY}📦 未初期化${NC}"
+                    usage_text="${GRAY}アプリを起動してデータを作成してください${NC}"
+                    ;;
+                "permission_error")
+                    location_text="${BOLD}${RED}🚫 アクセス不可${NC}"
+                    usage_text="${GRAY}コンテナにアクセスできません${NC}"
+                    ;;
+                "unknown")
+                    location_text="${BOLD}${RED}❓ 不明${NC}"
                     usage_text="${GRAY}状態を確認してください${NC}"
+                    ;;
+                *)
+                    location_text="${BOLD}${RED}❌ エラー${NC}"
+                    usage_text="${GRAY}予期しないエラーが発生しました${NC}"
                     ;;
             esac
             
