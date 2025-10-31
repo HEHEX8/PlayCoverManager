@@ -1081,17 +1081,17 @@ show_quick_launcher() {
                     title_color="${CYAN}"  # 外部ストレージ：シアン
                     ;;
                 "internal_intentional"|"internal_intentional_empty")
-                    title_color="${GREEN}"  # 内部ストレージ（意図的）：グリーン
+                    title_color="${LIGHT_GREEN}"  # 内部ストレージ（意図的）：ライトグリーン
                     ;;
                 "internal_contaminated")
-                    title_color="${ORANGE}"  # 内部ストレージ（汚染）：オレンジ
+                    title_color="${RED}"  # 内部ストレージ（汚染）：赤（警告）
                     ;;
             esac
             
             # Index color based on sudo necessity
-            local index_color="${WHITE}"  # デフォルト：白
+            local index_color="${BLUE}"  # デフォルト：青
             if needs_sudo_for_launch "$bundle_id" "$storage_mode"; then
-                index_color="${YELLOW}"  # 管理者権限必要：黄色
+                index_color="${GOLD}"  # 管理者権限必要：ゴールド（明るく目立つ）
             fi
             
             # Recent mark (only visible indicator)
@@ -1145,9 +1145,9 @@ show_quick_launcher() {
         echo ""
         print_separator
         # Compact help line with color legends
-        printf "  ${YELLOW}番号黄色${NC}:要管理者権限  ${CYAN}タイトル色${NC}:外部/${GREEN}内部${NC}/${ORANGE}汚染${NC}"
+        printf "  番号 ${BLUE}青${NC}:通常/${GOLD}金${NC}:要sudo  タイトル ${CYAN}青緑${NC}:外部/${LIGHT_GREEN}緑${NC}:内部/${RED}赤${NC}:汚染"
         if [[ $recent_count -gt 0 ]]; then
-            printf "  ⭐:前回起動 Enterで起動"
+            printf "  ⭐:前回 Enterで起動"
         fi
         printf "\n"
         echo "  ${BOLD}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}p.${NC}PlayCover  ${BOLD}0.${NC}管理画面  ${BOLD}q.${NC}終了  ${DIM_GRAY}r.更新${NC}"
