@@ -4,9 +4,6 @@
 # クイックランチャー表示検証用のダミーデータ生成
 #######################################################
 
-# Removed set -e to see actual errors
-set -x  # Enable debug mode to trace execution
-
 # Colors
 readonly GREEN='\033[38;2;120;220;120m'
 readonly YELLOW='\033[38;2;230;220;100m'
@@ -58,15 +55,11 @@ generate_dummy_data() {
     print_info "ダミーデータを生成中... (${count}アプリ)"
     
     # Ensure directories exist
-    echo "DEBUG: Creating DATA_DIR: $DATA_DIR" >&2
     mkdir -p "$DATA_DIR"
-    echo "DEBUG: Creating PLAYCOVER_APPS_DIR: $PLAYCOVER_APPS_DIR" >&2
     mkdir -p "$PLAYCOVER_APPS_DIR"
     
     # Clear mapping file
-    echo "DEBUG: Clearing mapping file: $MAPPING_FILE" >&2
     : > "$MAPPING_FILE"
-    echo "DEBUG: Mapping file cleared" >&2
     
     # Generate apps
     for ((i=1; i<=count; i++)); do
@@ -90,41 +83,37 @@ generate_dummy_data() {
         
         # Create .app bundle structure
         local app_path="${PLAYCOVER_APPS_DIR}/${app_name}.app"
-        echo "DEBUG: Creating directory: ${app_path}/Contents/MacOS" >&2
         mkdir -p "${app_path}/Contents/MacOS"
-        echo "DEBUG: Directory created, checking..." >&2
-        ls -ld "${app_path}/Contents/MacOS" >&2
         
         # Create dummy executable
-        echo "DEBUG: Creating executable: ${app_path}/Contents/MacOS/${app_name}" >&2
-        cat > "${app_path}/Contents/MacOS/${app_name}" << 'EXEC_EOF'
-#!/bin/zsh
-echo "Dummy app launched: $0"
-sleep 1
-EXEC_EOF
+        {
+            echo '#!/bin/zsh'
+            echo 'echo "Dummy app launched: $0"'
+            echo 'sleep 1'
+        } > "${app_path}/Contents/MacOS/${app_name}"
         chmod +x "${app_path}/Contents/MacOS/${app_name}"
         
         # Create Info.plist with proper bundle identifier
-        cat > "${app_path}/Contents/Info.plist" << PLIST_EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleIdentifier</key>
-    <string>${bundle_id}</string>
-    <key>CFBundleName</key>
-    <string>${app_name}</string>
-    <key>CFBundleExecutable</key>
-    <string>${app_name}</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-</dict>
-</plist>
-PLIST_EOF
+        {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict>'
+            echo '    <key>CFBundleIdentifier</key>'
+            echo "    <string>${bundle_id}</string>"
+            echo '    <key>CFBundleName</key>'
+            echo "    <string>${app_name}</string>"
+            echo '    <key>CFBundleExecutable</key>'
+            echo "    <string>${app_name}</string>"
+            echo '    <key>CFBundlePackageType</key>'
+            echo '    <string>APPL</string>'
+            echo '    <key>CFBundleVersion</key>'
+            echo '    <string>1.0</string>'
+            echo '    <key>CFBundleShortVersionString</key>'
+            echo '    <string>1.0</string>'
+            echo '</dict>'
+            echo '</plist>'
+        } > "${app_path}/Contents/Info.plist"
         
         # Progress indicator
         printf "."
