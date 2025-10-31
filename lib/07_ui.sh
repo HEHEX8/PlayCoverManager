@@ -351,9 +351,10 @@ show_quick_status() {
 show_menu() {
     clear
     
-    # Preload all volume information into cache for fast menu display
-    # This happens once per menu display cycle
-    preload_all_volume_cache
+    # Note: Cache preloading removed from here for performance
+    # Cache is preloaded once at startup in main()
+    # Cache is invalidated by operations that change state (mount/unmount/storage switch)
+    # User can manually refresh with empty Enter (calls refresh_all_volume_caches)
     
     echo ""
     echo "${GREEN}PlayCover 統合管理ツール${NC}  ${SKY_BLUE}Version 5.2.0${NC}"

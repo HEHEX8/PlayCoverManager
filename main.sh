@@ -189,6 +189,10 @@ main() {
     echo "${GREEN}起動完了${NC}"
     echo ""
     
+    # Preload all volume cache once before main menu loop
+    # This eliminates cache loading delay when entering submenus
+    preload_all_volume_cache
+    
     # Preload launchable apps cache (no need to show scanning message)
     local -a launchable_apps=()
     while IFS= read -r line; do
