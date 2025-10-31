@@ -1119,7 +1119,7 @@ show_quick_launcher() {
         local rows=$(( (total_apps + 2) / 3 ))  # Ceiling division
         
         for ((row=0; row<rows; row++)); do
-            local idx1=$((row))
+            local idx1=$row
             local idx2=$((row + rows))
             local idx3=$((row + rows * 2))
             
@@ -1143,12 +1143,12 @@ show_quick_launcher() {
         
         echo ""
         print_separator
-        # Compact help: icons and actions in one line when possible
-        local help_line="  🔐:要管理者権限"
+        # Compact help line
+        printf "  🔐:要管理者権限"
         if [[ $recent_count -gt 0 ]]; then
-            help_line="${help_line}  ⭐:前回起動 Enterで起動"
+            printf "  ⭐:前回起動 Enterで起動"
         fi
-        echo "$help_line"
+        printf "\n"
         echo "  ${BOLD}1-${#apps_info[@]}.${NC}アプリ起動  ${BOLD}p.${NC}PlayCover  ${BOLD}0.${NC}管理画面  ${BOLD}q.${NC}終了  ${DIM_GRAY}r.更新${NC}"
         print_separator
         echo ""
