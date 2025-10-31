@@ -1115,26 +1115,27 @@ show_quick_launcher() {
         # Display apps in 3-column layout with ANSI positioning
         # Optimized for 120x30 terminal (120 chars width)
         # Column positions: 2, 43, 84 (41 chars per column for balanced spacing)
+        # NOTE: zsh arrays are 1-indexed!
         local total_apps=${#app_display_lines[@]}
         local rows=$(( (total_apps + 2) / 3 ))  # Ceiling division
         
-        for ((row=0; row<rows; row++)); do
+        for ((row=1; row<=rows; row++)); do
             local idx1=$row
             local idx2=$((row + rows))
             local idx3=$((row + rows * 2))
             
             # Column 1 (position 2)
-            if [[ $idx1 -lt $total_apps ]]; then
+            if [[ $idx1 -le $total_apps ]]; then
                 printf "  %s" "${app_display_lines[$idx1]}"
             fi
             
             # Column 2 (position 43)
-            if [[ $idx2 -lt $total_apps ]]; then
+            if [[ $idx2 -le $total_apps ]]; then
                 printf "\033[43G%s" "${app_display_lines[$idx2]}"
             fi
             
             # Column 3 (position 84)
-            if [[ $idx3 -lt $total_apps ]]; then
+            if [[ $idx3 -le $total_apps ]]; then
                 printf "\033[84G%s" "${app_display_lines[$idx3]}"
             fi
             
