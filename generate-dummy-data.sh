@@ -175,14 +175,34 @@ main() {
     print_success "ダミーデータ生成完了！"
     echo ""
     echo "  📄 マッピングファイル: ${MAPPING_FILE}"
-    echo "  📄 recentファイル: ${RECENT_FILE}"
+    echo "  📄 recent ファイル: ${RECENT_FILE}"
     echo "  📁 アプリディレクトリ: ${PLAYCOVER_APPS_DIR}"
+    echo "  📦 コンテナディレクトリ: ${HOME}/Library/Containers/com.dummy.app*"
     echo ""
+    
+    # Verification
+    local mapping_count=$(wc -l < "$MAPPING_FILE" | xargs)
+    local app_count=$(find "$PLAYCOVER_APPS_DIR" -name "DummyApp*.app" -maxdepth 1 2>/dev/null | wc -l | xargs)
+    local container_count=$(find "${HOME}/Library/Containers" -name ".internal_storage" -path "*/com.dummy.app*/.internal_storage" 2>/dev/null | wc -l | xargs)
+    
+    echo "  ✓ マッピングエントリ: ${mapping_count}"
+    echo "  ✓ .app バンドル: ${app_count}"
+    echo "  ✓ コンテナ (.internal_storage): ${container_count}"
+    echo ""
+    
+    if [[ "$mapping_count" -eq "$app_count" ]] && [[ "$app_count" -eq "$container_count" ]]; then
+        print_success "検証完了: すべてのコンポーネントが正常に生成されました"
+    else
+        print_warning "警告: コンポーネント数が一致しません（動作に影響する可能性）"
+    fi
+    echo ""
+    
     print_info "PlayCover Manager を起動してクイックランチャーを確認してください"
     echo ""
     print_warning "元に戻すには:"
     echo "  mv ${MAPPING_FILE}${BACKUP_SUFFIX} ${MAPPING_FILE}"
     echo "  rm -rf ${PLAYCOVER_APPS_DIR}/DummyApp*.app"
+    echo "  rm -rf ${HOME}/Library/Containers/com.dummy.app*"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
