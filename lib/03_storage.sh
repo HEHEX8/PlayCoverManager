@@ -135,6 +135,22 @@ get_external_drive_free_space() {
     get_storage_free_space "$playcover_mount"
 }
 
+# Get external drive free space with caching (performance optimized)
+get_external_drive_free_space_cached() {
+    # Get PlayCover volume mount point using CACHED data
+    local playcover_mount=$(validate_and_get_mount_point_cached "$PLAYCOVER_VOLUME_NAME")
+    local vol_status=$?
+    
+    if [[ $vol_status -ne 0 ]] || [[ -z "$playcover_mount" ]]; then
+        # Volume doesn't exist or not mounted, use cached home directory space
+        get_storage_free_space_cached "$HOME"
+        return
+    fi
+    
+    # Get cached free space from PlayCover volume mount point
+    get_storage_free_space_cached "$playcover_mount"
+}
+
 #######################################################
 # Storage Type Detection
 #######################################################
@@ -745,12 +761,12 @@ switch_storage_location() {
             case "$storage_mode" in
                 "external")
                     location_text="${BOLD}${BLUE}⚡ 外部ストレージモード${NC}"
-                    free_space=$(get_external_drive_free_space "$volume_name")
+                    free_space=$(get_external_drive_free_space_cached "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${free_space}${NC}"
                     ;;
                 "external_wrong_location")
                     location_text="${BOLD}${ORANGE}⚠️  マウント位置異常（外部）${NC}"
-                    free_space=$(get_external_drive_free_space "$volume_name")
+                    free_space=$(get_external_drive_free_space_cached "$volume_name")
                     usage_text="${BOLD}${WHITE}${container_size}${NC} ${GRAY}|${NC} ${ORANGE}誤ったマウント位置${NC}"
                     ;;
                 "internal_intentional")
@@ -935,12 +951,12 @@ switch_storage_location() {
         echo "${BOLD}${UNDERLINE}${CYAN}現在のデータ位置${NC}"
         case "$current_storage" in
             "internal")
-                local internal_free=$(get_storage_free_space "$HOME")
+                local internal_free=$(get_storage_free_space_cached "$HOME")
                 echo "  ${BOLD}🍎 ${CYAN}内蔵ストレージ${NC}"
                 echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${internal_free}${NC}"
                 ;;
             "external")
-                local external_free=$(get_external_drive_free_space "$volume_name")
+                local external_free=$(get_external_drive_free_space_cached "$volume_name")
                 echo "  ${BOLD}⚡ ${CYAN}外部ストレージ${NC}"
                 echo "     ${LIGHT_GRAY}使用容量:${NC} $(get_container_size_styled "$target_path") ${GRAY}/${NC} ${LIGHT_GRAY}残容量:${NC} ${BOLD}${WHITE}${external_free}${NC}"
                 ;;
@@ -980,7 +996,7 @@ switch_storage_location() {
             "external")
                 action="internal"
                 # Moving to internal - show internal drive free space
-                storage_free=$(get_storage_free_space "$HOME")
+                storage_free=$(get_storage_free_space_cached "$HOME")
                 storage_location="内蔵ドライブ"
                 storage_free_bytes=$(get_storage_free_space_bytes "$HOME")
                 

@@ -178,9 +178,10 @@ DRIVE_NAME_CACHE_UPDATED=false
 declare -a LAUNCHABLE_APPS_CACHE
 LAUNCHABLE_APPS_CACHE_VALID=false
 
-# Internal storage free space cache (reduces df command calls)
-INTERNAL_STORAGE_FREE_SPACE_CACHE=""
-INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=false
+# Storage free space cache (reduces df command calls)
+# Unified cache for both internal and external storage
+declare -A STORAGE_FREE_SPACE_CACHE  # Associative array: path => free_space_string
+declare -A STORAGE_FREE_SPACE_CACHE_VALID  # Associative array: path => true/false
 
 #######################################################
 # Basic Print Functions
@@ -1153,35 +1154,44 @@ invalidate_launchable_apps_cache() {
     LAUNCHABLE_APPS_CACHE_VALID=false
 }
 
-# Get internal storage free space with caching
-# This reduces df command calls for internal storage mode displays
+# Get storage free space with caching (unified for internal and external)
+# This reduces df command calls for all storage mode displays
+# Args: target_path (default: $HOME)
+# Returns: Human-readable free space string
 get_storage_free_space_cached() {
     local target_path="${1:-$HOME}"
     
-    # Only cache HOME directory queries (most common case)
-    if [[ "$target_path" != "$HOME" ]]; then
-        # For non-HOME paths, call non-cached version
-        get_storage_free_space "$target_path"
-        return
-    fi
+    # Normalize path for cache key consistency
+    target_path="${target_path%/}"  # Remove trailing slash
     
     # Return cached value if valid
-    if [[ "$INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID" == true ]] && [[ -n "$INTERNAL_STORAGE_FREE_SPACE_CACHE" ]]; then
-        echo "$INTERNAL_STORAGE_FREE_SPACE_CACHE"
+    if [[ "${STORAGE_FREE_SPACE_CACHE_VALID[$target_path]}" == "true" ]] && [[ -n "${STORAGE_FREE_SPACE_CACHE[$target_path]}" ]]; then
+        echo "${STORAGE_FREE_SPACE_CACHE[$target_path]}"
         return 0
     fi
     
     # Cache miss or invalid - get fresh data
-    INTERNAL_STORAGE_FREE_SPACE_CACHE=$(get_storage_free_space "$target_path")
-    INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=true
+    local free_space=$(get_storage_free_space "$target_path")
+    STORAGE_FREE_SPACE_CACHE[$target_path]="$free_space"
+    STORAGE_FREE_SPACE_CACHE_VALID[$target_path]="true"
     
-    echo "$INTERNAL_STORAGE_FREE_SPACE_CACHE"
+    echo "$free_space"
     return 0
 }
 
-# Invalidate internal storage free space cache
+# Invalidate storage free space cache
+# Args: [target_path] - optional, if not provided, invalidates all
 invalidate_storage_free_space_cache() {
-    INTERNAL_STORAGE_FREE_SPACE_CACHE_VALID=false
+    local target_path="${1:-}"
+    
+    if [[ -z "$target_path" ]]; then
+        # Invalidate all caches
+        STORAGE_FREE_SPACE_CACHE_VALID=()
+    else
+        # Invalidate specific path
+        target_path="${target_path%/}"  # Remove trailing slash
+        STORAGE_FREE_SPACE_CACHE_VALID[$target_path]="false"
+    fi
 }
 
 # Temporarily disable cache for a code block
