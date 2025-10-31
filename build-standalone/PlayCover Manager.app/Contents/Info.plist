@@ -30,7 +30,5 @@
     <true/>
     <key>CFBundleSignature</key>
     <string>????</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
 </dict>
 </plist>
