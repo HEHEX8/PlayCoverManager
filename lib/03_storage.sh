@@ -838,16 +838,43 @@ switch_storage_location() {
             clear
             print_header "${display_name} のストレージ切替"
             echo ""
-            print_error "外部ボリュームがマウントされていません"
+            print_warning "外部ボリュームがマウントされていません"
             echo ""
-            echo "${BOLD}推奨される操作:${NC}"
-            echo "  ${LIGHT_GREEN}1.${NC} ボリューム管理 → 個別ボリューム操作 → マウント"
-            echo "  ${LIGHT_GREEN}2.${NC} または、ボリューム管理 → 全ボリュームをマウント"
+            print_info "ストレージ切替を実行するため、外部ボリュームを自動マウントします"
             echo ""
-            if prompt_confirmation "ボリューム管理画面を開きますか？" "y/N"; then
-                individual_volume_control
+            
+            # Attempt automatic mount
+            if prompt_confirmation "外部ボリュームをマウントしますか？" "Y/n"; then
+                # Authenticate sudo if needed
+                if ! authenticate_sudo; then
+                    print_error "sudo認証に失敗しました"
+                    wait_for_enter
+                    continue
+                fi
+                
+                # Mount the volume
+                if mount_app_volume "$volume_name" "$target_path" "$bundle_id"; then
+                    echo ""
+                    print_success "マウントしました"
+                    echo ""
+                    /bin/sleep 1
+                    
+                    # Refresh storage mode after mount
+                    storage_mode=$(get_storage_mode "$target_path" "$volume_name")
+                    actual_mount=$(validate_and_get_mount_point_cached "$volume_name")
+                    vol_status=$?
+                else
+                    echo ""
+                    print_error "マウントに失敗しました"
+                    echo ""
+                    print_info "ボリューム管理画面から手動でマウントしてください"
+                    wait_for_enter
+                    continue
+                fi
+            else
+                # User declined auto-mount
+                continue
             fi
-            continue
         fi
         
         # Handle external volume mounted at wrong location
@@ -948,13 +975,11 @@ switch_storage_location() {
                 echo "  ${BOLD}🍎${CYAN}内蔵ストレージ残容量:${NC} ${BOLD}${WHITE}${storage_free}${NC}"
                 ;;
             "none")
-                print_error "ストレージ切り替えを実行できません"
+                # This should not happen if the previous mount check worked correctly
+                # But handle it as a fallback
+                print_error "データが存在しません（未マウント状態）"
                 echo ""
-                echo "理由: データが存在しません（未マウント）"
-                echo ""
-                echo "推奨される操作:"
-                echo "  ${LIGHT_GREEN}1.${NC} メインメニューのオプション3で外部ボリュームをマウント"
-                echo "  ${LIGHT_GREEN}2.${NC} その後、このストレージ切り替え機能を使用"
+                print_info "外部ボリュームをマウントしてから再度実行してください"
                 wait_for_enter
                 continue
                 ;;
