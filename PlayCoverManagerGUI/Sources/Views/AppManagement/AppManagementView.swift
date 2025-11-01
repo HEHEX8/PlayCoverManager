@@ -292,7 +292,7 @@ class AppManagementViewModel: ObservableObject {
     private let shellExecutor = ShellScriptExecutor.shared
     private let appState = AppState.shared
     private let notificationManager = NotificationManager.shared
-    private let settings = SettingsViewModel()
+    private let settings = SettingsViewModel.shared
     
     init() {
         loadInstalledApps()

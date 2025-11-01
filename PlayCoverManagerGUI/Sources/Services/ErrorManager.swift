@@ -36,7 +36,7 @@ class ErrorManager: ObservableObject {
         logger.error(appError.logType, appError.message)
         
         // Show notification if enabled
-        let settings = SettingsViewModel()
+        let settings = SettingsViewModel.shared
         if settings.notifyOnError {
             notificationManager.notifyError(message: appError.message)
         }
@@ -98,7 +98,7 @@ class ErrorManager: ObservableObject {
     }
     
     /// Open help for specific error
-    private func openHelp(for error: AppError) {
+    func openHelp(for error: AppError) {
         let helpURL: String
         
         switch error.context {

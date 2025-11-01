@@ -8,15 +8,6 @@
 import Foundation
 import SwiftUI
 
-struct ExternalDrive: Identifiable {
-    let id = UUID()
-    let identifier: String  // diskX
-    let name: String
-    let path: String
-    let capacity: String
-    let available: String
-}
-
 @MainActor
 class SetupWizardViewModel: ObservableObject {
     @Published var currentStep: SetupStep = .welcome

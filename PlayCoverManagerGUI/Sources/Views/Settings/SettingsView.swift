@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var viewModel = SettingsViewModel()
+    @ObservedObject private var viewModel = SettingsViewModel.shared
     
     var body: some View {
         ScrollView {
@@ -467,6 +467,8 @@ enum AppTheme: String, CaseIterable {
 // MARK: - View Model
 @MainActor
 class SettingsViewModel: ObservableObject {
+    static let shared = SettingsViewModel()
+    
     private let defaults = UserDefaults.standard
     
     @Published var transferMethod: TransferMethod {
@@ -518,7 +520,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    init() {
+    private init() {
         // Load saved settings
         if let savedMethod = defaults.string(forKey: "transferMethod"),
            let method = TransferMethod(rawValue: savedMethod) {

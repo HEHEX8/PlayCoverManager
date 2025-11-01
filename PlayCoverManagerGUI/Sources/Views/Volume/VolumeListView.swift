@@ -348,16 +348,6 @@ struct VolumeCard: View {
 }
 
 // MARK: - Models
-struct VolumeInfo: Identifiable {
-    let id = UUID()
-    let name: String
-    let app: String
-    var isMounted: Bool
-    let totalSpace: String
-    let usedSpace: String
-    let mountPath: String?
-}
-
 // MARK: - View Model
 @MainActor
 class VolumeViewModel: ObservableObject {
