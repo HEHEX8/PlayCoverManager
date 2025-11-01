@@ -257,32 +257,7 @@ main() {
                 echo ""
                 print_info "終了しました"
                 echo ""
-                print_info "ウィンドウを自動的に閉じます..."
-                /bin/sleep 0.5
-                
-                # Auto-close Terminal window for both .command and .app versions
-                # Use window title-based approach for reliability
-                osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "Terminal"
-    set windowClosed to false
-    repeat with w in windows
-        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
-            close w
-            set windowClosed to true
-            exit repeat
-        end if
-    end repeat
-    
-    -- Fallback: if no window found by title, try closing frontmost window
-    if not windowClosed then
-        try
-            close front window
-        end try
-    end if
-end tell
-CLOSE_WINDOW
-                /bin/sleep 0.3
-                
+                auto_close_terminal_window
                 exit 0
                 ;;
             X|x|RESET|reset)
@@ -309,32 +284,7 @@ graceful_exit() {
     echo ""
     print_info "終了しました"
     echo ""
-    print_info "ウィンドウを自動的に閉じます..."
-    /bin/sleep 0.5
-    
-    # Auto-close Terminal window for both .command and .app versions
-    # Use window title-based approach for reliability
-    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
-tell application "Terminal"
-    set windowClosed to false
-    repeat with w in windows
-        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
-            close w
-            set windowClosed to true
-            exit repeat
-        end if
-    end repeat
-    
-    -- Fallback: if no window found by title, try closing frontmost window
-    if not windowClosed then
-        try
-            close front window
-        end try
-    end if
-end tell
-CLOSE_WINDOW
-    /bin/sleep 0.3
-    
+    auto_close_terminal_window
     exit 0
 }
 

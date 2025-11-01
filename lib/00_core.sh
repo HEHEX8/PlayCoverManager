@@ -778,14 +778,14 @@ auto_close_terminal_window() {
     print_info "ウィンドウを自動的に閉じます..."
     /bin/sleep 0.5
     
-    # Use window title-based approach for reliability
+    # Use window title-based approach with 'saving no' to skip confirmation dialog
     # Works for both .command and .app bundle versions
     osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
 tell application "Terminal"
     set windowClosed to false
     repeat with w in windows
         if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
-            close w
+            close w saving no
             set windowClosed to true
             exit repeat
         end if
@@ -794,7 +794,7 @@ tell application "Terminal"
     -- Fallback: if no window found by title, try closing frontmost window
     if not windowClosed then
         try
-            close front window
+            close front window saving no
         end try
     end if
 end tell
