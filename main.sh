@@ -77,6 +77,16 @@ trap cleanup_lock EXIT INT TERM QUIT
 # スクリプトディレクトリを取得（絶対パス）
 SCRIPT_DIR="${0:A:h}"
 
+# Detect execution environment (for reference only)
+# .command files run in Terminal with clean process tree
+# .app bundle runs with parent process being launchd/Finder
+# Note: Auto-close now works for both .command and .app versions
+if [[ "$0" == *.command ]]; then
+    export RUNNING_FROM_COMMAND=true
+else
+    export RUNNING_FROM_COMMAND=false
+fi
+
 # 全てのモジュールを順番に読み込み
 source "${SCRIPT_DIR}/lib/00_core.sh"
 source "${SCRIPT_DIR}/lib/01_mapping.sh"
@@ -247,8 +257,32 @@ main() {
                 echo ""
                 print_info "終了しました"
                 echo ""
-                echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-                echo ""
+                print_info "ウィンドウを自動的に閉じます..."
+                /bin/sleep 0.5
+                
+                # Auto-close Terminal window for both .command and .app versions
+                # Use window title-based approach for reliability
+                osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "Terminal"
+    set windowClosed to false
+    repeat with w in windows
+        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
+            close w
+            set windowClosed to true
+            exit repeat
+        end if
+    end repeat
+    
+    -- Fallback: if no window found by title, try closing frontmost window
+    if not windowClosed then
+        try
+            close front window
+        end try
+    end if
+end tell
+CLOSE_WINDOW
+                /bin/sleep 0.3
+                
                 exit 0
                 ;;
             X|x|RESET|reset)
@@ -275,8 +309,32 @@ graceful_exit() {
     echo ""
     print_info "終了しました"
     echo ""
-    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-    echo ""
+    print_info "ウィンドウを自動的に閉じます..."
+    /bin/sleep 0.5
+    
+    # Auto-close Terminal window for both .command and .app versions
+    # Use window title-based approach for reliability
+    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "Terminal"
+    set windowClosed to false
+    repeat with w in windows
+        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
+            close w
+            set windowClosed to true
+            exit repeat
+        end if
+    end repeat
+    
+    -- Fallback: if no window found by title, try closing frontmost window
+    if not windowClosed then
+        try
+            close front window
+        end try
+    end if
+end tell
+CLOSE_WINDOW
+    /bin/sleep 0.3
+    
     exit 0
 }
 

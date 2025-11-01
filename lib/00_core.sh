@@ -773,6 +773,35 @@ is_app_running() {
     /usr/bin/pgrep -f "$bundle_id" >/dev/null 2>&1
 }
 
+# Auto-close Terminal window (works for both .command and .app versions)
+auto_close_terminal_window() {
+    print_info "ウィンドウを自動的に閉じます..."
+    /bin/sleep 0.5
+    
+    # Use window title-based approach for reliability
+    # Works for both .command and .app bundle versions
+    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+tell application "Terminal"
+    set windowClosed to false
+    repeat with w in windows
+        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
+            close w
+            set windowClosed to true
+            exit repeat
+        end if
+    end repeat
+    
+    -- Fallback: if no window found by title, try closing frontmost window
+    if not windowClosed then
+        try
+            close front window
+        end try
+    end if
+end tell
+CLOSE_WINDOW
+    /bin/sleep 0.3
+}
+
 # Exit with cleanup
 exit_with_cleanup() {
     local exit_code=$1
@@ -785,7 +814,7 @@ exit_with_cleanup() {
         print_info "3秒後に終了します..."
         /bin/sleep 3
         echo ""
-        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+        auto_close_terminal_window
         exit 0
     else
         print_error "$message"
@@ -795,7 +824,7 @@ exit_with_cleanup() {
         echo -n "Enterキーを押すと終了します..."
         read
         echo ""
-        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+        auto_close_terminal_window
         exit "$exit_code"
     fi
 }

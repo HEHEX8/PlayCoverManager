@@ -1114,6 +1114,8 @@ uninstall_workflow() {
         echo ""
         echo -n "Enterキーでターミナルを終了します..."
         read
+        echo ""
+        auto_close_terminal_window
         exit 0
     fi
     
@@ -1312,7 +1314,7 @@ uninstall_all_apps() {
     echo ""
     /bin/sleep 2
     echo ""
-    echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+    auto_close_terminal_window
     exit 0
 }
 

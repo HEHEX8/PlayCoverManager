@@ -1056,8 +1056,7 @@ show_quick_launcher() {
                 echo ""
                 print_info "終了しました"
                 echo ""
-                echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-                echo ""
+                auto_close_terminal_window
                 exit 0
                 ;;
             [pP])

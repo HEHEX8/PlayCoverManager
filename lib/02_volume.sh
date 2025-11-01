@@ -514,7 +514,7 @@ eject_disk() {
         print_info "3秒後に終了します..."
         /bin/sleep 3
         echo ""
-        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+        auto_close_terminal_window
         exit 0
     else
         print_error "ディスクの取り外しに失敗しました"
