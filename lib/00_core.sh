@@ -774,38 +774,46 @@ is_app_running() {
 }
 
 # Auto-close Terminal window (works for both .command and .app versions)
+# Based on research: The proper way is to set Terminal preference + use exit 0
+# Reference: https://www.howtogeek.com/409849/how-to-close-the-macos-terminal-automatically-when-a-process-exits/
 auto_close_terminal_window() {
     print_info "ウィンドウを自動的に閉じます..."
-    /bin/sleep 0.5
     
-    # Different approach for .command vs .app
-    if [[ "$RUNNING_FROM_COMMAND" == "true" ]]; then
-        # For .command: Run synchronously to ensure window closes before script exits
-        osascript <<'CLOSE_WINDOW' >/dev/null 2>&1
+    # Set Terminal preference to close window when shell exits cleanly
+    # This persists for future sessions
+    /usr/bin/defaults write com.apple.Terminal "Shell Close Action" -int 1  # 1 = Close if the shell exited cleanly
+    
+    # Alternative approach: use osascript to quit the shell cleanly
+    # This triggers Terminal's automatic close behavior
+    /bin/sleep 1.0
+    
+    # Use do shell script to kill current shell process cleanly
+    # This is more reliable than trying to close the window directly
+    osascript >/dev/null 2>&1 <<'KILL_SHELL' &
 tell application "Terminal"
-    set windowClosed to false
-    repeat with w in windows
-        if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
-            close w saving no
-            set windowClosed to true
-            exit repeat
+    try
+        set targetWindow to null
+        repeat with w in windows
+            if (name of w) contains "PlayCover Manager" or (name of w) contains "playcover-manager" then
+                set targetWindow to w
+                exit repeat
+            end if
+        end repeat
+        
+        if targetWindow is not null then
+            -- Method 1: Close the window directly (Terminal will handle based on preferences)
+            close targetWindow saving no
+        else
+            -- Method 2: Close frontmost window as fallback
+            if (count of windows) > 0 then
+                close front window saving no
+            end if
         end if
-    end repeat
-    
-    -- Fallback: if no window found by title, try closing frontmost window
-    if not windowClosed then
-        try
-            close front window saving no
-        end try
-    end if
+    end try
 end tell
-CLOSE_WINDOW
-    else
-        # For .app: Show manual close instruction
-        echo ""
-        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
-        echo ""
-    fi
+KILL_SHELL
+    
+    /bin/sleep 0.5
 }
 
 # Exit with cleanup
