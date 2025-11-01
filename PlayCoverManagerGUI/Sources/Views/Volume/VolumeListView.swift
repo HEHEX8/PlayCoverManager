@@ -361,33 +361,11 @@ struct VolumeInfo: Identifiable {
 // MARK: - View Model
 @MainActor
 class VolumeViewModel: ObservableObject {
-    @Published var volumes: [VolumeInfo] = [
-        VolumeInfo(
-            name: "PlayCover-StarRail",
-            app: "崩壊：スターレイル",
-            isMounted: true,
-            totalSpace: "100 GB",
-            usedSpace: "45 GB",
-            mountPath: "/Volumes/PlayCover-StarRail"
-        ),
-        VolumeInfo(
-            name: "PlayCover-Genshin",
-            app: "原神",
-            isMounted: false,
-            totalSpace: "80 GB",
-            usedSpace: "25 GB",
-            mountPath: nil
-        ),
-        VolumeInfo(
-            name: "PlayCover-Zenless",
-            app: "ゼンレスゾーンゼロ",
-            isMounted: true,
-            totalSpace: "60 GB",
-            usedSpace: "35 GB",
-            mountPath: "/Volumes/PlayCover-Zenless"
-        )
-    ]
+    @Published var volumes: [VolumeInfo] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
+    
+    private let shellExecutor = ShellScriptExecutor.shared
     
     var mountedCount: Int {
         volumes.filter { $0.isMounted }.count
@@ -397,50 +375,103 @@ class VolumeViewModel: ObservableObject {
         volumes.filter { !$0.isMounted }.count
     }
     
+    init() {
+        Task {
+            await refreshVolumes()
+        }
+    }
+    
     func refreshVolumes() async {
         isLoading = true
-        try? await Task.sleep(for: .seconds(1))
-        // TODO: Load from shell script
-        isLoading = false
+        defer { isLoading = false }
+        
+        do {
+            // Load real volumes from shell executor
+            volumes = try await shellExecutor.getVolumes()
+        } catch {
+            errorMessage = "ボリューム情報の読み込みに失敗: \(error.localizedDescription)"
+            
+            // Fallback to sample data
+            if volumes.isEmpty {
+                volumes = [
+                    VolumeInfo(
+                        name: "PlayCover-Sample",
+                        app: "サンプルアプリ",
+                        isMounted: false,
+                        totalSpace: "100 GB",
+                        usedSpace: "0 GB",
+                        mountPath: nil
+                    )
+                ]
+            }
+        }
     }
     
     func mountAll() async {
-        for index in volumes.indices where !volumes[index].isMounted {
-            try? await Task.sleep(for: .milliseconds(500))
-            volumes[index].isMounted = true
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            try await shellExecutor.mountAllVolumes()
+            await refreshVolumes()
+        } catch {
+            errorMessage = "一括マウントに失敗: \(error.localizedDescription)"
         }
     }
     
     func unmountAll() async {
-        for index in volumes.indices where volumes[index].isMounted {
-            try? await Task.sleep(for: .milliseconds(500))
-            volumes[index].isMounted = false
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            try await shellExecutor.unmountAllVolumes()
+            await refreshVolumes()
+        } catch {
+            errorMessage = "一括アンマウントに失敗: \(error.localizedDescription)"
         }
     }
     
     func ejectDisk() async {
         await unmountAll()
-        // TODO: Eject physical disk
+        // TODO: Eject physical disk via diskutil
     }
     
     func mountVolume(_ volume: VolumeInfo) async {
-        if let index = volumes.firstIndex(where: { $0.id == volume.id }) {
-            try? await Task.sleep(for: .seconds(1))
-            volumes[index].isMounted = true
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let mountPath = AppConstants.playCoverContainer.path
+            try await shellExecutor.mountVolume(volumeName: volume.name, mountPath: mountPath)
+            await refreshVolumes()
+        } catch {
+            errorMessage = "マウントに失敗: \(error.localizedDescription)"
         }
     }
     
     func unmountVolume(_ volume: VolumeInfo) async {
-        if let index = volumes.firstIndex(where: { $0.id == volume.id }) {
-            try? await Task.sleep(for: .seconds(1))
-            volumes[index].isMounted = false
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            try await shellExecutor.unmountVolume(volumeName: volume.name)
+            await refreshVolumes()
+        } catch {
+            errorMessage = "アンマウントに失敗: \(error.localizedDescription)"
         }
     }
     
     func remountVolume(_ volume: VolumeInfo) async {
-        await unmountVolume(volume)
-        try? await Task.sleep(for: .milliseconds(500))
-        await mountVolume(volume)
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let mountPath = AppConstants.playCoverContainer.path
+            try await shellExecutor.remountVolume(volumeName: volume.name, mountPath: mountPath)
+            await refreshVolumes()
+        } catch {
+            errorMessage = "再マウントに失敗: \(error.localizedDescription)"
+        }
     }
     
     func openInFinder(_ volume: VolumeInfo) {
@@ -450,6 +481,7 @@ class VolumeViewModel: ObservableObject {
     
     func showVolumeInfo(_ volume: VolumeInfo) {
         // TODO: Show info sheet
+        print("Volume info: \(volume.name)")
     }
 }
 

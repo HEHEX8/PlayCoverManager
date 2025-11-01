@@ -470,17 +470,17 @@ struct SnapshotDetailsSheet: View {
 // MARK: - View Model
 @MainActor
 class MaintenanceViewModel: ObservableObject {
-    @Published var systemUsed = "350 GB"
+    @Published var systemUsed = "0 GB"
     @Published var systemTotal = "500 GB"
-    @Published var systemPercentage: Double = 70
+    @Published var systemPercentage: Double = 0
     
-    @Published var externalUsed = "105 GB"
+    @Published var externalUsed = "0 GB"
     @Published var externalTotal = "200 GB"
-    @Published var externalPercentage: Double = 52.5
+    @Published var externalPercentage: Double = 0
     
-    @Published var snapshotCount = 8
-    @Published var cacheSize = "2.3 GB"
-    @Published var appCacheSize = "856 MB"
+    @Published var snapshotCount = 0
+    @Published var cacheSize = "計算中..."
+    @Published var appCacheSize = "計算中..."
     
     @Published var isDeletingSnapshots = false
     @Published var isClearingCache = false
@@ -490,41 +490,102 @@ class MaintenanceViewModel: ObservableObject {
     
     @Published var showingSnapshotDetails = false
     @Published var showingNukeConfirm = false
+    @Published var errorMessage: String?
     
-    @Published var snapshots: [String] = [
-        "com.apple.TimeMachine.2025-01-01-120000.local",
-        "com.apple.TimeMachine.2025-01-01-150000.local",
-        "com.apple.TimeMachine.2025-01-01-180000.local",
-        "com.apple.TimeMachine.2025-01-02-120000.local",
-        "com.apple.TimeMachine.2025-01-02-150000.local",
-        "com.apple.TimeMachine.2025-01-02-180000.local",
-        "com.apple.TimeMachine.2025-01-03-120000.local",
-        "com.apple.TimeMachine.2025-01-03-150000.local"
-    ]
+    @Published var snapshots: [String] = []
+    
+    private let shellExecutor = ShellScriptExecutor.shared
+    
+    init() {
+        Task {
+            await refreshStorageInfo()
+            await loadSnapshots()
+        }
+    }
     
     func refreshStorageInfo() async {
-        // TODO: Get actual storage info
-        try? await Task.sleep(for: .seconds(1))
+        do {
+            // Get system storage info
+            let (used, total, percentage) = try await shellExecutor.getStorageInfo()
+            systemUsed = used
+            systemTotal = total
+            systemPercentage = percentage
+            
+            // TODO: Get external storage info
+            externalUsed = "105 GB"
+            externalTotal = "200 GB"
+            externalPercentage = 52.5
+            
+        } catch {
+            errorMessage = "ストレージ情報の取得に失敗: \(error.localizedDescription)"
+        }
+    }
+    
+    func loadSnapshots() async {
+        do {
+            snapshots = try await shellExecutor.getAPFSSnapshots()
+            snapshotCount = snapshots.count
+        } catch {
+            snapshots = []
+            snapshotCount = 0
+        }
+    }
+    
+    func deleteAllSnapshots() async {
+        isDeletingSnapshots = true
+        defer { isDeletingSnapshots = false }
+        
+        do {
+            try await shellExecutor.deleteAPFSSnapshots()
+            await loadSnapshots()
+            await refreshStorageInfo()
+        } catch {
+            errorMessage = "スナップショットの削除に失敗: \(error.localizedDescription)"
+        }
     }
     
     func clearSystemCache() async {
         isClearingCache = true
-        try? await Task.sleep(for: .seconds(2))
-        cacheSize = "0 MB"
-        isClearingCache = false
+        defer { isClearingCache = false }
+        
+        do {
+            try await shellExecutor.clearSystemCache()
+            cacheSize = "0 MB"
+        } catch {
+            errorMessage = "キャッシュのクリアに失敗: \(error.localizedDescription)"
+        }
     }
     
     func clearAppCache() async {
         isClearingAppCache = true
-        try? await Task.sleep(for: .seconds(1))
-        appCacheSize = "0 MB"
-        isClearingAppCache = false
+        defer { isClearingAppCache = false }
+        
+        // Clear PlayCover app cache
+        let cachePath = "~/Library/Caches/io.playcover.PlayCover"
+        
+        do {
+            _ = try await shellExecutor.executeCommand("rm -rf \(cachePath)")
+            appCacheSize = "0 MB"
+        } catch {
+            errorMessage = "アプリキャッシュのクリアに失敗: \(error.localizedDescription)"
+        }
     }
     
     func verifyVolumes() async {
         isVerifying = true
-        try? await Task.sleep(for: .seconds(3))
-        isVerifying = false
+        defer { isVerifying = false }
+        
+        do {
+            let volumes = try await shellExecutor.getVolumes()
+            
+            for volume in volumes {
+                // Verify each volume
+                _ = try? await shellExecutor.executeCommand("diskutil verifyVolume '\(volume.name)'")
+            }
+            
+        } catch {
+            errorMessage = "ボリュームの検証に失敗: \(error.localizedDescription)"
+        }
     }
 }
 

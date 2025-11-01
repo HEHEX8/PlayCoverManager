@@ -42,23 +42,33 @@ class AppState: ObservableObject {
     }
     
     private init() {
-        // Load initial data
-        loadApps()
+        // Load initial data asynchronously
+        Task {
+            await loadApps()
+        }
     }
     
-    func loadApps() {
-        // For now, use sample data
-        // TODO: Load from shell script
-        apps = PlayCoverApp.sampleApps
-    }
-    
-    func refreshApps() async {
+    func loadApps() async {
         isLoading = true
         defer { isLoading = false }
         
-        // TODO: Call shell script to refresh app list
-        try? await Task.sleep(for: .seconds(1))
-        loadApps()
+        do {
+            // Load from shell executor
+            let shellExecutor = ShellScriptExecutor.shared
+            apps = try await shellExecutor.getInstalledApps()
+        } catch {
+            // Fallback to sample data on error
+            print("Failed to load apps: \(error)")
+            
+            // Use sample data only if no apps loaded
+            if apps.isEmpty {
+                apps = PlayCoverApp.sampleApps
+            }
+        }
+    }
+    
+    func refreshApps() async {
+        await loadApps()
     }
     
     func markAsRecentlyLaunched(_ appId: UUID) {

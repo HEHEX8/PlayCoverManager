@@ -282,11 +282,33 @@ struct InstalledAppCard: View {
 // MARK: - View Model
 @MainActor
 class AppManagementViewModel: ObservableObject {
-    @Published var installedApps: [PlayCoverApp] = PlayCoverApp.sampleApps
+    @Published var installedApps: [PlayCoverApp] = []
     @Published var isDragOver = false
     @Published var isInstalling = false
     @Published var installProgress: Double = 0.0
     @Published var currentInstallingFile: String?
+    @Published var errorMessage: String?
+    
+    private let shellExecutor = ShellScriptExecutor.shared
+    private let appState = AppState.shared
+    
+    init() {
+        loadInstalledApps()
+    }
+    
+    func loadInstalledApps() {
+        installedApps = appState.apps
+    }
+    
+    func refreshInstalledApps() async {
+        do {
+            let apps = try await shellExecutor.getInstalledApps()
+            installedApps = apps
+            appState.apps = apps
+        } catch {
+            errorMessage = "アプリリストの読み込みに失敗: \(error.localizedDescription)"
+        }
+    }
     
     func handleDrop(providers: [NSItemProvider]) -> Bool {
         for provider in providers {
@@ -324,22 +346,43 @@ class AppManagementViewModel: ObservableObject {
         currentInstallingFile = url.lastPathComponent
         installProgress = 0.0
         
-        // Simulate installation progress
-        for i in 1...100 {
-            try? await Task.sleep(for: .milliseconds(30))
-            installProgress = Double(i) / 100.0
+        do {
+            // Start installation via PlayCover
+            try await shellExecutor.installIPA(ipaPath: url.path)
+            
+            // Simulate progress (actual progress would require monitoring PlayCover)
+            for i in 1...100 {
+                try? await Task.sleep(for: .milliseconds(50))
+                installProgress = Double(i) / 100.0
+            }
+            
+            // Refresh app list
+            await refreshInstalledApps()
+            
+        } catch {
+            errorMessage = "インストールに失敗: \(error.localizedDescription)"
         }
-        
-        // TODO: Actual installation via ShellScriptExecutor
         
         isInstalling = false
         currentInstallingFile = nil
     }
     
     func uninstallApp(_ app: PlayCoverApp) {
-        // TODO: Actual uninstallation
-        if let index = installedApps.firstIndex(where: { $0.id == app.id }) {
-            installedApps.remove(at: index)
+        Task {
+            do {
+                try await shellExecutor.uninstallApp(appName: app.name, volumeName: app.volumeName)
+                
+                // Remove from local list
+                if let index = installedApps.firstIndex(where: { $0.id == app.id }) {
+                    installedApps.remove(at: index)
+                }
+                
+                // Update app state
+                appState.apps = installedApps
+                
+            } catch {
+                errorMessage = "アンインストールに失敗: \(error.localizedDescription)"
+            }
         }
     }
 }
