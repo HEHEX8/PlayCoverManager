@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @StateObject private var errorManager = ErrorManager.shared
     
     var body: some View {
         ZStack {
@@ -25,6 +26,18 @@ struct ContentView: View {
                 .environmentObject(appState)
                 .frame(width: 700, height: 500)
                 .interactiveDismissDisabled(true)  // Prevent dismissing until setup is complete
+        }
+        .sheet(isPresented: $errorManager.showingError) {
+            if let error = errorManager.currentError {
+                ErrorAlertView(
+                    error: error,
+                    onDismiss: {
+                        errorManager.showingError = false
+                        errorManager.currentError = nil
+                    },
+                    onRetry: nil  // TODO: Implement retry logic
+                )
+            }
         }
     }
     

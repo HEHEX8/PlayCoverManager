@@ -427,16 +427,14 @@ extension ShellScriptExecutor {
     
     /// Mount a volume
     func mountVolume(volumeName: String, mountPath: String) async throws {
-        // Create mount point
-        _ = try? await executeCommand("sudo mkdir -p '\(mountPath)'")
-        
-        // Mount volume
-        _ = try await executeCommand("sudo diskutil mount -mountPoint '\(mountPath)' '\(volumeName)'")
+        let privilegedOps = PrivilegedOperationManager.shared
+        try await privilegedOps.mountVolume(volumeName: volumeName, mountPath: mountPath)
     }
     
     /// Unmount a volume
     func unmountVolume(volumeName: String) async throws {
-        _ = try await executeCommand("sudo diskutil unmount '\(volumeName)'")
+        let privilegedOps = PrivilegedOperationManager.shared
+        try await privilegedOps.unmountVolume(volumeName: volumeName)
     }
     
     /// Remount a volume
@@ -476,24 +474,14 @@ extension ShellScriptExecutor {
     
     /// Delete APFS snapshots
     func deleteAPFSSnapshots() async throws {
-        let snapshots = try await getAPFSSnapshots()
-        
-        for snapshot in snapshots {
-            _ = try? await executeCommand("sudo tmutil deletelocalsnapshots \(snapshot)")
-        }
+        let privilegedOps = PrivilegedOperationManager.shared
+        try await privilegedOps.deleteAPFSSnapshots(volume: "/")
     }
     
     /// Clear system cache
     func clearSystemCache() async throws {
-        let cachePaths = [
-            "~/Library/Caches/*",
-            "/tmp/*",
-            "~/Library/Updates/*"
-        ]
-        
-        for path in cachePaths {
-            _ = try? await executeCommand("rm -rf \(path)")
-        }
+        let privilegedOps = PrivilegedOperationManager.shared
+        try await privilegedOps.clearSystemCaches()
     }
     
     /// Get storage info

@@ -28,6 +28,7 @@ class SetupWizardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let shellExecutor = ShellScriptExecutor.shared
+    private let privilegedOps = PrivilegedOperationManager.shared
     
     var canProceed: Bool {
         switch currentStep {
@@ -131,29 +132,43 @@ class SetupWizardViewModel: ObservableObject {
         defer { isCreatingVolume = false }
         
         do {
-            // Create APFS volume
+            // Create APFS volume with sudo privileges
             let volumeName = "PlayCover"
             let sizeGB = Int(volumeSize)
+            let size = "\(sizeGB)g"
             
-            _ = try await shellExecutor.executeCommand(
-                "sudo diskutil apfs addVolume \(drive.identifier) APFS '\(volumeName)' -size \(sizeGB)g"
+            try await privilegedOps.createAPFSVolume(
+                containerDisk: drive.identifier,
+                volumeName: volumeName,
+                size: size
             )
             
             // Wait a bit for volume to be ready
             try await Task.sleep(for: .seconds(2))
             
-            // Mount the volume
+            // Mount the volume with sudo privileges
             let mountPath = AppConstants.playCoverContainer.path
-            try await shellExecutor.mountVolume(volumeName: volumeName, mountPath: mountPath)
+            try await privilegedOps.mountVolume(volumeName: volumeName, mountPath: mountPath)
             
-            // Create data directory
-            try await shellExecutor.executeCommand(
-                "mkdir -p '\(AppConstants.dataDirectory.path)'"
+            // Create data directory (may need sudo)
+            try await privilegedOps.executeSudoCommand(
+                "mkdir",
+                arguments: ["-p", AppConstants.dataDirectory.path]
             )
             
             // Create empty mapping file
-            try await shellExecutor.executeCommand(
-                "touch '\(AppConstants.mappingFile.path)'"
+            try await privilegedOps.executeSudoCommand(
+                "touch",
+                arguments: [AppConstants.mappingFile.path]
+            )
+            
+            // Set proper permissions
+            let currentUser = NSUserName()
+            let currentGroup = "staff"  // Default group on macOS
+            try await privilegedOps.changeOwnership(
+                path: mountPath,
+                owner: currentUser,
+                group: currentGroup
             )
             
             // Success - move to completion
