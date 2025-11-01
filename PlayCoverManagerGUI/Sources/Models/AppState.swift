@@ -17,13 +17,17 @@ class AppState: ObservableObject {
     @Published var errorMessage: String?
     @Published var selectedTab: Tab = .launcher
     @Published var recentlyLaunchedAppId: UUID?
+    @Published var showingSetupWizard: Bool = false
+    @Published var isCheckingSetup: Bool = true
     
     enum Tab: String, CaseIterable {
         case launcher = "ランチャー"
         case appManagement = "アプリ管理"
+        case storageSwitcher = "ストレージ切替"
         case volume = "ボリューム"
-        case settings = "設定"
         case maintenance = "メンテナンス"
+        case logs = "ログ"
+        case settings = "設定"
         
         var icon: String {
             switch self {
@@ -31,20 +35,27 @@ class AppState: ObservableObject {
                 return "rocket.fill"
             case .appManagement:
                 return "shippingbox.fill"
+            case .storageSwitcher:
+                return "arrow.left.arrow.right.circle.fill"
             case .volume:
                 return "externaldrive.fill"
-            case .settings:
-                return "gearshape.fill"
             case .maintenance:
                 return "wrench.and.screwdriver.fill"
+            case .logs:
+                return "doc.text.magnifyingglass"
+            case .settings:
+                return "gearshape.fill"
             }
         }
     }
     
     private init() {
-        // Load initial data asynchronously
+        // Check if initial setup is needed, then load data
         Task {
-            await loadApps()
+            await checkInitialSetup()
+            if !showingSetupWizard {
+                await loadApps()
+            }
         }
     }
     
@@ -78,5 +89,41 @@ class AppState: ObservableObject {
         for index in apps.indices {
             apps[index].isRecentlyLaunched = (apps[index].id == appId)
         }
+    }
+    
+    /// Check if initial setup is needed
+    func checkInitialSetup() async {
+        isCheckingSetup = true
+        defer { isCheckingSetup = false }
+        
+        do {
+            // Check if PlayCover APFS volumes exist
+            let shellExecutor = ShellScriptExecutor.shared
+            let volumes = try await shellExecutor.getVolumes()
+            
+            // Look for any PlayCover-related volumes
+            let hasPlayCoverVolumes = volumes.contains { volume in
+                volume.name.contains("PlayCover") || 
+                volume.mountPoint.contains("/Users/Shared/PlayCover")
+            }
+            
+            if !hasPlayCoverVolumes {
+                // No PlayCover volumes found - show setup wizard
+                showingSetupWizard = true
+            } else {
+                // Volumes exist - skip setup
+                showingSetupWizard = false
+            }
+        } catch {
+            print("Failed to check setup status: \(error)")
+            // On error, assume setup is needed to be safe
+            showingSetupWizard = true
+        }
+    }
+    
+    /// Complete setup and load apps
+    func completeSetup() async {
+        showingSetupWizard = false
+        await loadApps()
     }
 }

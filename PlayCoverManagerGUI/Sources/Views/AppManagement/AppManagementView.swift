@@ -291,6 +291,8 @@ class AppManagementViewModel: ObservableObject {
     
     private let shellExecutor = ShellScriptExecutor.shared
     private let appState = AppState.shared
+    private let notificationManager = NotificationManager.shared
+    private let settings = SettingsViewModel()
     
     init() {
         loadInstalledApps()
@@ -359,8 +361,18 @@ class AppManagementViewModel: ObservableObject {
             // Refresh app list
             await refreshInstalledApps()
             
+            // Send success notification if enabled
+            if settings.notifyOnInstallComplete {
+                notificationManager.notifyInstallComplete(appName: url.deletingPathExtension().lastPathComponent)
+            }
+            
         } catch {
             errorMessage = "インストールに失敗: \(error.localizedDescription)"
+            
+            // Send error notification if enabled
+            if settings.notifyOnError {
+                notificationManager.notifyError(message: errorMessage ?? "インストールに失敗しました")
+            }
         }
         
         isInstalling = false
@@ -380,8 +392,16 @@ class AppManagementViewModel: ObservableObject {
                 // Update app state
                 appState.apps = installedApps
                 
+                // Send success notification
+                notificationManager.notifyUninstallComplete(appName: app.name)
+                
             } catch {
                 errorMessage = "アンインストールに失敗: \(error.localizedDescription)"
+                
+                // Send error notification if enabled
+                if settings.notifyOnError {
+                    notificationManager.notifyError(message: errorMessage ?? "アンインストールに失敗しました")
+                }
             }
         }
     }

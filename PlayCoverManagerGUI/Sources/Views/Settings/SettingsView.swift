@@ -467,18 +467,118 @@ enum AppTheme: String, CaseIterable {
 // MARK: - View Model
 @MainActor
 class SettingsViewModel: ObservableObject {
-    @Published var transferMethod: TransferMethod = .rsync
-    @Published var theme: AppTheme = .auto
-    @Published var accentColor: Color = .blue
-    @Published var notifyOnInstallComplete = true
-    @Published var notifyOnError = true
-    @Published var notifyOnVolumeOperation = false
-    @Published var verboseLogging = false
-    @Published var autoRefresh = true
+    private let defaults = UserDefaults.standard
+    
+    @Published var transferMethod: TransferMethod {
+        didSet {
+            defaults.set(transferMethod.rawValue, forKey: "transferMethod")
+        }
+    }
+    
+    @Published var theme: AppTheme {
+        didSet {
+            defaults.set(theme.rawValue, forKey: "theme")
+            applyTheme()
+        }
+    }
+    
+    @Published var accentColor: Color {
+        didSet {
+            saveAccentColor()
+        }
+    }
+    
+    @Published var notifyOnInstallComplete: Bool {
+        didSet {
+            defaults.set(notifyOnInstallComplete, forKey: "notifyOnInstallComplete")
+        }
+    }
+    
+    @Published var notifyOnError: Bool {
+        didSet {
+            defaults.set(notifyOnError, forKey: "notifyOnError")
+        }
+    }
+    
+    @Published var notifyOnVolumeOperation: Bool {
+        didSet {
+            defaults.set(notifyOnVolumeOperation, forKey: "notifyOnVolumeOperation")
+        }
+    }
+    
+    @Published var verboseLogging: Bool {
+        didSet {
+            defaults.set(verboseLogging, forKey: "verboseLogging")
+        }
+    }
+    
+    @Published var autoRefresh: Bool {
+        didSet {
+            defaults.set(autoRefresh, forKey: "autoRefresh")
+        }
+    }
+    
+    init() {
+        // Load saved settings
+        if let savedMethod = defaults.string(forKey: "transferMethod"),
+           let method = TransferMethod(rawValue: savedMethod) {
+            self.transferMethod = method
+        } else {
+            self.transferMethod = .rsync
+        }
+        
+        if let savedTheme = defaults.string(forKey: "theme"),
+           let theme = AppTheme(rawValue: savedTheme) {
+            self.theme = theme
+        } else {
+            self.theme = .auto
+        }
+        
+        self.accentColor = loadAccentColor()
+        self.notifyOnInstallComplete = defaults.bool(forKey: "notifyOnInstallComplete") || !defaults.object(forKey: "notifyOnInstallComplete") as? Bool != nil
+        self.notifyOnError = defaults.bool(forKey: "notifyOnError") || !defaults.object(forKey: "notifyOnError") as? Bool != nil
+        self.notifyOnVolumeOperation = defaults.bool(forKey: "notifyOnVolumeOperation")
+        self.verboseLogging = defaults.bool(forKey: "verboseLogging")
+        self.autoRefresh = defaults.bool(forKey: "autoRefresh") || !defaults.object(forKey: "autoRefresh") as? Bool != nil
+        
+        applyTheme()
+    }
+    
+    private func loadAccentColor() -> Color {
+        if let data = defaults.data(forKey: "accentColor"),
+           let components = try? JSONDecoder().decode([Double].self, from: data) {
+            return Color(red: components[0], green: components[1], blue: components[2], opacity: components[3])
+        }
+        return .blue
+    }
+    
+    private func saveAccentColor() {
+        if let components = accentColor.cgColor?.components {
+            let data = try? JSONEncoder().encode(components)
+            defaults.set(data, forKey: "accentColor")
+        }
+    }
+    
+    private func applyTheme() {
+        switch theme {
+        case .auto:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
     
     func clearCache() {
-        // TODO: Clear cache
-        print("Cache cleared")
+        Task {
+            do {
+                try await ShellScriptExecutor.shared.clearSystemCache()
+                print("Cache cleared successfully")
+            } catch {
+                print("Failed to clear cache: \(error)")
+            }
+        }
     }
     
     func openGitHub() {
