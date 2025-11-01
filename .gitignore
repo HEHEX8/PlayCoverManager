@@ -31,3 +31,22 @@ build-standalone/
 build-platypus/
 *.zip
 *.dmg
+
+# Swift Package Manager
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.build-debug/
+.build-release/
+
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# App bundles
+*.app
+*.dSYM.zip
+*.dSYM

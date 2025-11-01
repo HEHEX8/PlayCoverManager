@@ -1,212 +1,242 @@
 # PlayCover Manager GUI
 
-**完全なMac用ネイティブGUIアプリケーション**
+SwiftUIベースの完全グラフィカルなmacOSアプリケーション
 
-このプロジェクトは、[PlayCover Manager](https://github.com/HEHEX8/PlayCoverManager)のCLI実装（v5.2.0）を、SwiftUIを使用した完全なmacOS GUIアプリケーションに移植したものです。
+## 📋 必要要件
 
-## 🎯 プロジェクト概要
-
-- **バージョン**: 6.0.0-alpha1 (開発中)
-- **ベース**: PlayCover Manager v5.2.0 (CLI版)
-- **フレームワーク**: SwiftUI
-- **言語**: Swift 5.9+
-- **対応OS**: macOS Sonoma 14.0以降
-- **アーキテクチャ**: Apple Silicon専用 (M1/M2/M3/M4)
-
-## 🏗️ アーキテクチャ
-
-### ハイブリッドアプローチ
-- **フロントエンド**: SwiftUI (ネイティブmacOS UI)
-- **バックエンド**: Swift + 既存Zshスクリプト
-- **統合**: Process経由でZshスクリプトを実行
-
-```
-┌─────────────────────────────────────┐
-│      SwiftUI Views                  │
-│  • QuickLauncher                    │
-│  • AppManagement                    │
-│  • Volume Operations                │
-│  • Settings                         │
-│  • Maintenance                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────┴──────────────────────┐
-│      ViewModels + Services          │
-│  • ShellScriptExecutor              │
-│  • AppState Management              │
-│  • Error Handling                   │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────┴──────────────────────┐
-│      Zsh Scripts (既存)              │
-│  • lib/*.sh (8,682行)               │
-│  • APFS操作、ファイル転送など       │
-└─────────────────────────────────────┘
-```
-
-## 📁 プロジェクト構造
-
-```
-PlayCoverManagerGUI/
-├── Package.swift                      # Swift Package定義
-├── Sources/
-│   ├── App/                          # アプリケーション
-│   │   ├── PlayCoverManagerGUIApp.swift
-│   │   └── AppDelegate.swift         # シングルインスタンス制御
-│   ├── Views/                        # UI層
-│   │   ├── Main/
-│   │   │   ├── ContentView.swift
-│   │   │   └── SidebarView.swift
-│   │   ├── QuickLauncher/            # ✅ 実装済み
-│   │   │   ├── QuickLauncherView.swift
-│   │   │   ├── AppCardView.swift
-│   │   │   └── AppListRowView.swift
-│   │   ├── AppManagement/            # 🚧 実装予定
-│   │   ├── Volume/                   # 🚧 実装予定
-│   │   ├── Settings/                 # 🚧 実装予定
-│   │   └── Maintenance/              # 🚧 実装予定
-│   ├── ViewModels/                   # ビジネスロジック
-│   │   └── QuickLauncherViewModel.swift
-│   ├── Models/                       # データモデル
-│   │   ├── PlayCoverApp.swift
-│   │   └── AppState.swift
-│   ├── Services/                     # サービス層
-│   │   └── ShellScriptExecutor.swift # ✅ 実装済み
-│   ├── Utilities/                    # ユーティリティ
-│   │   ├── Colors.swift
-│   │   ├── Constants.swift
-│   │   └── Extensions.swift
-│   └── Resources/                    # リソース
-│       └── Scripts/                  # 既存のZshスクリプト
-│           ├── main.sh
-│           └── lib/*.sh
-└── README.md
-```
-
-## ✅ 実装状況 (Phase 1)
-
-### 完了した機能
-
-- [x] **基盤構築**
-  - [x] Swift Package構造
-  - [x] AppDelegate（シングルインスタンス制御）
-  - [x] AppState（グローバル状態管理）
-  - [x] ShellScriptExecutor（Zsh実行ラッパー）
-
-- [x] **UI基礎**
-  - [x] ContentView（メインビュー）
-  - [x] SidebarView（ナビゲーション）
-  - [x] カラーシステム（CLI版から移植）
-
-- [x] **クイックランチャー（メイン機能）**
-  - [x] QuickLauncherView
-  - [x] AppCardView（グリッドレイアウト）
-  - [x] AppListRowView（リストレイアウト）
-  - [x] 検索機能
-  - [x] 表示モード切替（グリッド/リスト）
-  - [x] コンテキストメニュー
-
-- [x] **モデル**
-  - [x] PlayCoverApp（アプリモデル）
-  - [x] StorageMode（6パターン）
-  - [x] AppStatus（5種類）
-  - [x] サンプルデータ
-
-### 次のステップ (Phase 2)
-
-- [ ] ShellScriptExecutorと既存Zshスクリプトの統合
-- [ ] アプリ起動機能の実装
-- [ ] マウント/アンマウント操作の統合
-- [ ] ストレージモード検出の統合
+- **macOS:** 13.0 (Ventura) 以降
+- **Swift:** 5.9 以降
+- **Xcode:** 15.0 以降（推奨）
 
 ## 🚀 ビルド方法
 
-### 必要環境
-
-- macOS Sonoma 14.0以降
-- Xcode 15.0以降
-- Swift 5.9以降
-
-### ビルドコマンド
+### 方法1: ビルドスクリプトを使用
 
 ```bash
-# プロジェクトディレクトリに移動
+cd PlayCoverManagerGUI
+./build.sh
+```
+
+### 方法2: Swift Package Managerを直接使用
+
+```bash
 cd PlayCoverManagerGUI
 
-# ビルド
+# デバッグビルド
 swift build
+
+# リリースビルド
+swift build -c release
 
 # 実行
 swift run
 ```
 
-### Xcodeで開く
+### 方法3: Xcodeを使用
 
 ```bash
-# Xcodeプロジェクトを生成
-swift package generate-xcodeproj
-
-# Xcodeで開く
-open PlayCoverManagerGUI.xcodeproj
+cd PlayCoverManagerGUI
+open Package.swift
 ```
 
-## 🎨 デザイン
+Xcodeで開いた後:
+1. スキームで "PlayCoverManagerGUI" を選択
+2. デバイスで "My Mac" を選択
+3. Cmd+R でビルド＆実行
 
-### カラーパレット
+## 📁 プロジェクト構造
 
-CLI版の24色カラーシステムをSwiftUIに移植：
-- 目に優しい低輝度カラー
-- ダークモード最適化
-- アクセシビリティ配慮（コントラスト比）
+```
+PlayCoverManagerGUI/
+├── Package.swift           # SPM設定
+├── Info.plist             # アプリ情報
+├── build.sh               # ビルドスクリプト
+├── Sources/
+│   ├── App/               # アプリエントリーポイント
+│   ├── Models/            # データモデル
+│   ├── Services/          # ビジネスロジック
+│   ├── ViewModels/        # ビューモデル
+│   ├── Views/             # SwiftUI ビュー
+│   ├── Utilities/         # ユーティリティ
+│   └── Resources/         # リソース（Zshスクリプト等）
+└── README.md             # このファイル
+```
 
-### SF Symbols
+## 🏗️ アーキテクチャ
 
-| CLI表示 | SF Symbol | 用途 |
-|--------|-----------|------|
-| 🔌 | `externaldrive.fill` | 外部ストレージ |
-| 🏠 | `internaldrive.fill` | 内蔵ストレージ |
-| ● | `checkmark.circle.fill` | Ready |
-| ⚠️ | `exclamationmark.triangle.fill` | 警告 |
-| 🔄 | `arrow.triangle.2.circlepath` | 再マウント |
-| 📦 | `shippingbox.fill` | 未マウント |
-| 🔐 | `lock.shield.fill` | sudo権限 |
-| ⭐ | `star.fill` | 最近起動 |
+### MVVMパターン with Services
 
-## 📝 開発メモ
+```
+Views (SwiftUI)
+    ↓
+ViewModels (@MainActor, ObservableObject)
+    ↓
+Services (ShellExecutor, PrivilegedOps, etc.)
+    ↓
+Zsh Scripts (Original CLI backend)
+```
 
-### 設計判断
+### 主要サービス
 
-1. **ハイブリッドアーキテクチャ**
-   - 理由: 既存の9,000行のZshロジックを再利用
-   - 利点: 開発速度、段階的な移植が可能
-   - 欠点: Process経由のオーバーヘッド
+- **ShellScriptExecutor**: Zshコマンド実行
+- **PrivilegedOperationManager**: sudo操作
+- **NotificationManager**: macOS通知
+- **ErrorManager**: エラー管理
+- **Logger**: ログ記録
 
-2. **SwiftUI採用**
-   - 理由: 宣言的UI、macOS統合、最新機能
-   - 利点: コード量削減、プレビュー機能
-   - 欠点: 学習曲線（従来のAppKitと比較）
+### 主要ビュー
 
-3. **シングルインスタンス制御**
-   - 実装: AppDelegate + ロックファイル
-   - 互換性: CLI版と同じ仕組み
+- **QuickLauncherView**: アプリランチャー
+- **AppManagementView**: アプリ管理
+- **StorageSwitcherView**: ストレージ切替
+- **VolumeListView**: ボリューム管理
+- **SettingsView**: 設定
+- **MaintenanceView**: メンテナンス
+- **SetupWizardView**: 初期セットアップ
+- **LogViewerView**: ログビューア
 
-### 技術的課題
+## 🛠️ 開発
 
-- [ ] sudo権限の管理（SMJobBless実装予定）
-- [ ] Process実行のエラーハンドリング
-- [ ] リアルタイム進捗表示
-- [ ] 通知センター連携
+### デバッグビルド
 
-## 📚 参考資料
+```bash
+swift build
+swift run
+```
 
-- [GUI移植計画書](../GUI_APP_MIGRATION_PLAN.md) - 完全な移植計画
-- [PlayCover Manager (CLI版)](../README.md) - オリジナルCLI実装
+### リリースビルド
+
+```bash
+swift build -c release
+.build/release/PlayCoverManagerGUI
+```
+
+### クリーン
+
+```bash
+swift package clean
+```
+
+### 依存関係の更新
+
+```bash
+swift package update
+```
+
+## 📝 コーディング規約
+
+### Swift スタイル
+
+- **命名**: キャメルケース（変数・関数）、パスカルケース（型）
+- **アクセス修飾子**: 必要最小限の公開
+- **async/await**: 非同期処理に使用
+- **@MainActor**: UIに関わるクラスに付与
+
+### SwiftUI ベストプラクティス
+
+- **@StateObject**: ViewModelのライフサイクル管理
+- **@ObservedObject**: 外部から渡されるオブジェクト
+- **@EnvironmentObject**: グローバルステート
+- **@Published**: リアクティブなプロパティ
+
+### ファイル構成
+
+```swift
+//
+//  FileName.swift
+//  PlayCoverManagerGUI
+//
+//  Brief description
+//
+
+import Foundation
+import SwiftUI
+
+// MARK: - Main Type
+
+// MARK: - Supporting Types
+
+// MARK: - Extensions
+
+// MARK: - Preview
+```
+
+## 🔍 トラブルシューティング
+
+### ビルドエラー: "Module not found"
+
+```bash
+swift package clean
+swift package resolve
+swift build
+```
+
+### 実行時エラー: "Permission denied"
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+### Xcodeで開けない
+
+Swift Package Managerプロジェクトなので:
+```bash
+open Package.swift  # これが正しい
+```
+
+### シングルトンの初期化エラー
+
+`SettingsViewModel`、`ErrorManager`などはシングルトンです:
+```swift
+// ❌ 間違い
+let settings = SettingsViewModel()
+
+// ✅ 正しい
+let settings = SettingsViewModel.shared
+```
+
+## 📚 追加ドキュメント
+
+- **プロジェクトルートの README.md**: ユーザー向けドキュメント
+- **GUI_APP_MIGRATION_PLAN.md**: 移行計画
+- **IMPLEMENTATION_STATUS.md**: 実装状況
+- **MIGRATION_COMPLETE_SUMMARY.md**: 移行完了サマリー
+
+## 🧪 テスト（予定）
+
+```bash
+# テストの実行
+swift test
+
+# カバレッジ付き
+swift test --enable-code-coverage
+```
+
+## 🚢 リリースビルド（予定）
+
+アプリバンドルの作成:
+
+```bash
+# リリースビルド
+swift build -c release
+
+# アプリバンドル作成（手動）
+# TODO: バンドル作成スクリプトを追加
+```
 
 ## 📄 ライセンス
 
-MIT License
+MIT License - 詳細は LICENSE ファイルを参照
+
+## 🙏 謝辞
+
+- **元のCLI**: [PlayCoverManager](https://github.com/HEHEX8/PlayCoverManager) by HEHEX8
+- **PlayCover**: [PlayCover](https://github.com/PlayCover/PlayCover) - iOS apps on macOS
+- **SwiftUI**: Apple's declarative UI framework
 
 ---
 
-**開発状況**: Phase 1 完了 🎉  
-**次の目標**: Phase 2（Zshスクリプト統合）
+**Version:** 6.0.0-alpha1  
+**Build Date:** 2025-11-01  
+**Status:** Ready for Testing
