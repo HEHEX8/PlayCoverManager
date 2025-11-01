@@ -778,9 +778,10 @@ auto_close_terminal_window() {
     print_info "ウィンドウを自動的に閉じます..."
     /bin/sleep 0.5
     
-    # Use window title-based approach with 'saving no' to skip confirmation dialog
-    # Works for both .command and .app bundle versions
-    osascript <<'CLOSE_WINDOW' >/dev/null 2>&1 &
+    # Different approach for .command vs .app
+    if [[ "$RUNNING_FROM_COMMAND" == "true" ]]; then
+        # For .command: Run synchronously to ensure window closes before script exits
+        osascript <<'CLOSE_WINDOW' >/dev/null 2>&1
 tell application "Terminal"
     set windowClosed to false
     repeat with w in windows
@@ -799,7 +800,12 @@ tell application "Terminal"
     end if
 end tell
 CLOSE_WINDOW
-    /bin/sleep 0.3
+    else
+        # For .app: Show manual close instruction
+        echo ""
+        echo "${DIM_GRAY}このウィンドウを閉じるには: ${CYAN}⌘ + W${NC}"
+        echo ""
+    fi
 }
 
 # Exit with cleanup
