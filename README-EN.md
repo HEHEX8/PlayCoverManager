@@ -1,4 +1,4 @@
-# PlayCover Manager
+# PlayCover Manager (CLI Version)
 
 <div align="center">
 
@@ -15,17 +15,34 @@ English | [日本語](README.md)
 
 ---
 
+## 🎯 GUI Version Available!
+
+**A fully-featured superior GUI version has been developed:**
+
+### 🌟 [PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)
+
+GUI Version Features:
+- 🖥️ **Native SwiftUI Implementation** - Modern macOS app experience
+- 🎨 **Intuitive Interface** - Visual and easy-to-understand operations
+- ⚡ **High Performance** - Same performance as CLI version
+- 🔄 **Real-time Updates** - Instant state change reflection
+- 📊 **Visual Feedback** - Progress bars and animations
+
+**The GUI version is strongly recommended.** This CLI version is maintained for users who prefer command-line interfaces.
+
+---
+
 ## 🎉 v5.0.0 - Stable Release
 
 The first stable release of PlayCover Manager is now available. All critical bugs have been fixed and it is ready for production use.
 
-**Release Details**: [RELEASE_NOTES_5.0.0.md](RELEASE_NOTES_5.0.0.md)
+**Release Details**: [RELEASE_NOTES_v5.2.0.md](RELEASE_NOTES_v5.2.0.md)
 
 ---
 
 ## 📖 Overview
 
-PlayCover Manager is a macOS tool for migrating and managing iOS app data running on PlayCover to external storage. It automates APFS volume creation and mount management to save internal storage space.
+PlayCover Manager is a macOS command-line tool for migrating and managing iOS app data running on PlayCover to external storage. It automates APFS volume creation and mount management to save internal storage space.
 
 ### Key Features
 
@@ -46,25 +63,7 @@ PlayCover Manager is a macOS tool for migrating and managing iOS app data runnin
 - PlayCover 3.0 or later
 - External storage (APFS compatible)
 
-### Installation Method 1: Application Bundle (Recommended)
-
-1. **Download Latest Release**
-   - Download `PlayCover Manager-5.0.0.zip` from [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases)
-
-2. **Extract and Install**
-   ```bash
-   # Extract ZIP (or double-click in Finder)
-   unzip "PlayCover Manager-5.0.0.zip"
-   
-   # Move to Applications folder
-   mv "PlayCover Manager.app" /Applications/
-   ```
-
-3. **First Launch**
-   - Right-click the app → Select "Open"
-   - If Gatekeeper warning appears, click "Open"
-
-### Installation Method 2: From Source
+### Installation
 
 ```bash
 # Clone repository
@@ -72,24 +71,10 @@ git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
 # Grant execution permission
-chmod +x main.sh
+chmod +x playcover-manager.command
 
 # Launch
-./main.sh
-```
-
-### Installation Method 3: Build Yourself
-
-```bash
-# Clone repository
-git clone https://github.com/HEHEX8/PlayCoverManager.git
-cd PlayCoverManager
-
-# Build application
-./build-app.sh
-
-# Install built app
-mv "build/PlayCover Manager.app" /Applications/
+./playcover-manager.command
 ```
 
 ### Initial Setup
@@ -166,25 +151,11 @@ PlayCoverManager/
 
 ### Technical Details
 
-- **Total Lines of Code**: 6,056 lines
+- **Total Lines of Code**: 6,000+ lines
 - **Number of Modules**: 8
 - **Language**: Zsh (macOS standard shell)
 - **Number of Functions**: 91
 - **Testing**: Comprehensively verified
-
-### About the Icon
-
-The project includes a custom icon. To build with icon on macOS:
-
-```bash
-# Generate icon (run on macOS)
-./create-icon.sh
-
-# Build with icon
-./build-app.sh
-```
-
-See [ICON_GUIDE.md](ICON_GUIDE.md) for details.
 
 ---
 
@@ -241,4 +212,4 @@ All critical bugs have been fixed and it is ready for production use.
 
 ---
 
-**Last Updated**: October 28, 2025 | **Version**: 5.0.0
+**Last Updated**: November 7, 2025 | **Version**: 5.2.0 (CLI)

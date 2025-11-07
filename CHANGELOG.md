@@ -7,45 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Standalone版アプリビルダー**: Terminal.appに依存しない独立したmacOSアプリケーションを作成
-  - 新しいビルドスクリプト: `build-app-standalone.sh`
-  - Activity Monitorで "PlayCover Manager" として表示（Terminalではない）
-  - Dockで PlayCover Manager アイコンとして表示
-  - `exec -a` によるプロセス名の明示的な設定
-  - 外部ツール不要（Platypus不要）
-  - 配布用に最適化された.appバンドル構造
-  - **シングルインスタンス機能**: 複数起動を防止
-    - PIDベースのロックファイル管理
-    - ゾンビロック自動検出と削除
-    - `trap EXIT INT TERM QUIT` による確実なクリーンアップ
-    - 既存インスタンスの自動アクティベート
-  - **アイコンサポート**: macOS標準の`.icns`形式アイコンに対応
-    - `CFBundleIconFile` を Info.plist に追加
-    - `.icns` ファイル優先、`.png` フォールバック
-    - アイコン未生成時の警告メッセージ
-  - 詳細ドキュメント: `STANDALONE_BUILD.md`
-
-- **Standalone版DMGビルダー**: appdmgを使用したDMGインストーラー作成
-  - 新しいビルドスクリプト: `create-dmg-standalone.sh`
-  - appdmg設定ファイル: `appdmg-config-standalone.json`
-  - build-standalone/ ディレクトリからの自動ビルド
-  - Terminal版と同じ実績あるappdmgソリューションを使用
-
-### Documentation
-- **ICON_GUIDE.md**: アイコン作成の完全ガイドを追加
-  - `create-icon.sh` の使用方法
-  - `.icns` ファイル生成手順
-  - トラブルシューティング
-  - Finder キャッシュのクリア方法
-- **STANDALONE_BUILD.md**: Standalone版ビルドの完全ガイドを追加
-  - ビルド方法、テスト手順、配布方法
-  - トラブルシューティングガイド
-  - Terminal版との比較表
-- **README.md**: Standalone版ビルドの説明を追加
-  - インストール方法3にStandalone版とTerminal版の比較表を追加
-  - ビルド方式の違いを明記
-  - アイコン生成手順を追記（`./create-icon.sh` を最初に実行）
+### Changed
+- **CLI版への特化**: GUI関連コードを完全削除し、純粋なCLI実装に特化
+  - 完全な上位互換版として[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)を別リポジトリで開発
+  - 削除されたGUI関連ファイル:
+    - ビルドスクリプト: `build-app*.sh`, `create-dmg*.sh`, `create-icon.sh`
+    - ドキュメント: `PLATYPUS_GUIDE.md`, `ICON_GUIDE.md`, `STANDALONE_BUILD.md`, `TESTING_STANDALONE.md`
+    - 設定ファイル: `appdmg-config*.json`
+    - ラッパースクリプト: `app-wrapper.sh`, `launch-wrapper.sh`, `daemon-launcher.sh`, `debug-launcher.sh`
+    - テストスクリプト: `test-standalone-build.sh`, `diagnose-standalone.sh`, `test-single-instance.sh`, `fix-startup.sh`
+    - アセット: `app-icon.png`
+    - ビルドディレクトリ: `build/`, `build-standalone/`
+  - README.mdとREADME-EN.mdにGUI版へのリンクと推奨を追加
+  - このCLI版はコマンドライン環境を好むユーザー向けに保守
 
 ## [5.2.0] - 2025-01-31
 

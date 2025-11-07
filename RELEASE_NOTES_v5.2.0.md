@@ -1,6 +1,8 @@
-# PlayCover Manager v5.2.0 変更点まとめ
+# PlayCover Manager v5.2.0 変更点まとめ (CLI版)
 
 ## 📋 v5.1.0 → v5.2.0 の変更内容
+
+> **注意**: v5.2.0以降、CLI版として特化しました。完全な上位互換版である[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)が別リポジトリで利用可能です。
 
 ---
 
@@ -20,46 +22,6 @@ macOSのストレージ容量問題を解決する新機能を追加
   - システムボリュームと外部ボリュームの容量を表示
 
 メインメニューに `[6] システムメンテナンス` を追加
-
----
-
-### 2. **Standalone版アプリビルダー**
-Terminal.appに依存しない独立したmacOSアプリケーションを作成
-
-**特徴:**
-- ✅ **Terminal ウィンドウで実行**: インタラクティブなUIのためTerminalを使用
-- ✅ ターミナルのタイトルを「PlayCover Manager」に設定
-- ✅ 外部ツール不要（Platypus不要）
-- ✅ 配布用に最適化された.appバンドル構造
-- ✅ **シングルインスタンス機能**で複数起動を防止
-  - **ランチャー**: ロックファイルを読み取り専用でチェック
-  - **main.sh**: ロックファイルを作成・管理、`trap`でクリーンアップ
-  - ゾンビロック自動検出と削除
-  - 既存Terminalウィンドウの自動アクティベート
-  - Terminal終了時の確実なクリーンアップ
-- ✅ **アイコンサポート**（macOS標準の`.icns`形式）
-
-**新しいスクリプト:**
-- `build-app-standalone.sh` - Standalone版ビルダー
-- `create-dmg-standalone.sh` - Standalone版DMG作成
-
-**実際の動作:**
-- アプリを起動 → Terminalウィンドウが開く
-- タイトルバーに「PlayCover Manager」と表示
-- 既に実行中の場合 → 通知を表示 + 既存ウィンドウをアクティベート
-- Terminalを閉じる → ロックファイルが自動削除される
-
----
-
-### 3. **アイコン生成・管理機能**
-カスタムアイコンの作成と統合をサポート
-
-- `create-icon.sh` - PNG/JPEGから`.icns`ファイルを生成（macOS上で実行）
-- 10種類のサイズ（16x16～1024x1024）を自動生成
-- Retina ディスプレイ対応（@2x）
-- ビルドスクリプトが自動的に`.icns`を検出・コピー
-- `.icns`優先、`.png`フォールバック
-- アイコン未生成時の警告メッセージ
 
 ---
 
@@ -92,25 +54,15 @@ rsync転送中にリアルタイムでプログレスバーが表示されるよ
 
 ## 📝 ドキュメント追加・更新
 
-### 新規ドキュメント:
-1. **ICON_GUIDE.md** - アイコン作成の完全ガイド
-   - `create-icon.sh`の使用方法（macOS上で実行）
-   - トラブルシューティング
-   - Finderキャッシュのクリア方法
-
-2. **STANDALONE_BUILD.md** - Standalone版ビルドの詳細ガイド
-   - ビルド方法、テスト手順、配布方法
-   - Terminal版との比較
-
 ### 更新されたドキュメント:
-1. **README.md**
-   - Standalone版ビルドの説明を追加
-   - アイコン生成手順を追記（`./create-icon.sh`を最初に実行）
-   - シングルインスタンス機能の説明
+1. **README.md / README-EN.md**
+   - GUI版([PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI))へのリンクと推奨を追加
+   - CLI版としての位置づけを明確化
+   - インストール方法をCLI版用に簡略化
 
 2. **CHANGELOG.md**
-   - v5.2.0の全変更内容を文書化
-   - 技術的な詳細を記載
+   - v5.2.0の変更内容を文書化
+   - GUI関連コードの削除を記録
 
 ---
 
@@ -138,8 +90,6 @@ rsync転送中にリアルタイムでプログレスバーが表示されるよ
 
 - `lib/07_ui.sh`
 - `main.sh`
-- `build-app.sh`
-- `build-app-standalone.sh`
 
 ---
 
@@ -147,15 +97,7 @@ rsync転送中にリアルタイムでプログレスバーが表示されるよ
 
 ### 主要コミット:
 - システムメンテナンス機能: `060fc24`
-- Standalone版ビルダー: `9aa502b`～`cbbcd5f` (複数回の修正)
-- アイコンサポート: `2c189ee`, `597eccd`
-- シングルインスタンス修正: `cbbcd5f`（最終版）
-
-### 新規ファイル:
-- `build-app-standalone.sh`
-- `create-dmg-standalone.sh`
-- `appdmg-config-standalone.json`
-- `ICON_GUIDE.md`
+- GUI関連コードの削除: 最新コミット
 
 ---
 
@@ -165,30 +107,17 @@ rsync転送中にリアルタイムでプログレスバーが表示されるよ
 # 1. 最新コードを取得
 git pull origin main
 
-# 2. アイコンを生成（macOS上で初回のみ実行）
-./create-icon.sh
-
-# 3. Standalone版をビルド
-./build-app-standalone.sh
-
-# 4. DMGを作成（配布用）
-./create-dmg-standalone.sh
-
-# 5. DMGからインストール
-open PlayCover-Manager-5.2.0-Standalone.dmg
-# → Applications フォルダにドラッグ
+# 2. 実行
+./playcover-manager.command
 ```
 
 ---
 
 ## ✅ 動作確認済み
 
-- ✅ アイコン付きアプリのビルド成功
-- ✅ DMGインストーラーの作成成功
-- ✅ Applicationsフォルダへのインストール成功
-- ✅ 初回起動成功（Terminalウィンドウが開く）
-- ✅ 2回目起動時に通知表示 + 既存ウィンドウアクティベート
-- ✅ Terminal終了後、再起動が正常に動作
+- ✅ システムメンテナンスメニューの動作
+- ✅ プログレスバー表示の改善
+- ✅ CLI版としての全機能動作確認
 
 ---
 
@@ -197,8 +126,8 @@ open PlayCover-Manager-5.2.0-Standalone.dmg
 v5.2.0は、実際の使用経験とデバッグを通じて改善されました。特に：
 
 - ストレージ容量問題の解決（APFSスナップショット削除）
-- 独立したアプリケーションバンドル（Standalone版）
-- 正確なシングルインスタンス実装
-- プロフェッショナルなアイコンサポート
+- プログレスバー表示の改善
+- CLI版としての機能強化
 
-これらの改善により、より使いやすく、信頼性の高いツールになりました。
+このCLI版は、コマンドライン環境を好むユーザー向けに継続して保守されます。
+より高度な機能が必要な場合は、[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)の使用を推奨します。

@@ -1,4 +1,4 @@
-# PlayCover Manager
+# PlayCover Manager (CLI版)
 
 <div align="center">
 
@@ -7,7 +7,7 @@
 ![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-**APFS Volume Management Tool for PlayCover**
+**APFS Volume Management Tool for PlayCover - Command Line Interface**
 
 [English](README-EN.md) | 日本語
 
@@ -15,17 +15,26 @@
 
 ---
 
-## 🎉 最新リリース
+## 🎯 GUI版が利用可能です！
 
-[![GitHub Release](https://img.shields.io/github/v/release/HEHEX8/PlayCoverManager?style=for-the-badge&logo=github)](https://github.com/HEHEX8/PlayCoverManager/releases/latest)
+**完全な上位互換版として GUI 版を開発しました：**
 
-最新版のダウンロードは [Releases](https://github.com/HEHEX8/PlayCoverManager/releases/latest) から。
+### 🌟 [PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)
+
+GUI版の特徴：
+- 🖥️ **ネイティブSwiftUI実装** - モダンなmacOSアプリ体験
+- 🎨 **直感的なUI** - ビジュアルで分かりやすい操作
+- ⚡ **高速動作** - CLI版と同等の性能
+- 🔄 **リアルタイム更新** - 状態変化を即座に反映
+- 📊 **視覚的なフィードバック** - プログレスバーやアニメーション
+
+**GUI版を強く推奨します。** このCLI版は、コマンドラインを好むユーザー向けに保守されています。
 
 ---
 
 ## 📖 概要
 
-PlayCover Manager は、PlayCover で実行する iOS アプリのデータを外部ストレージに移行・管理するための macOS 専用ツールです。APFS ボリュームの作成・マウント管理を自動化し、内蔵ストレージの容量を節約します。
+PlayCover Manager (CLI版) は、PlayCover で実行する iOS アプリのデータを外部ストレージに移行・管理するための macOS 専用コマンドラインツールです。APFS ボリュームの作成・マウント管理を自動化し、内蔵ストレージの容量を節約します。
 
 ### 💡 なぜ v5.0.0 から？
 
@@ -60,20 +69,9 @@ PlayCover Manager は、PlayCover で実行する iOS アプリのデータを�
 - PlayCover 3.0 以降
 - 外部ストレージ（APFS 対応）
 
-### インストール方法1: DMGインストーラー（推奨）
+### インストール方法: ソースコードから実行
 
-1. **最新DMGをダウンロード**
-   - [GitHub Releases](https://github.com/HEHEX8/PlayCoverManager/releases/latest) から最新の `.dmg` をダウンロード
-
-2. **インストール**
-   - DMGをマウント
-   - PlayCover Manager.app を Applications フォルダにドラッグ
-
-3. **初回起動**
-   - アプリを右クリック → 「開く」を選択
-   - Gatekeeper警告が出た場合は「開く」をクリック
-
-### インストール方法2: ソースコードから
+**注意:** GUI版の使用を強く推奨します。CLI版はコマンドライン操作に慣れたユーザー向けです。
 
 ```bash
 # リポジトリをクローン
