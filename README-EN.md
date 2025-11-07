@@ -114,18 +114,43 @@ PlayCover Manager is a macOS command-line tool for migrating and managing iOS ap
 - PlayCover 3.0 or later
 - External storage (APFS compatible)
 
-### Installation
+### Installation Method 1: Run Directly from Source (Recommended)
+
+**Note:** The GUI version is strongly recommended. This CLI version is for users who prefer command-line interfaces.
 
 ```bash
 # Clone repository
 git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
-# Grant execution permission
-chmod +x playcover-manager.command
-
-# Launch
+# Launch (execution permission is automatically granted)
 ./playcover-manager.command
+```
+
+### Installation Method 2: Build as .app Bundle (For Distribution)
+
+Package the CLI version as a distributable .app bundle. **Note: This is unrelated to the GUI version.**
+
+```bash
+# Clone repository
+git clone https://github.com/HEHEX8/PlayCoverManager.git
+cd PlayCoverManager
+
+# Generate icon (optional, run on macOS)
+./create-icon.sh
+
+# Build standalone app (CLI running in Terminal window)
+./build-app-standalone.sh
+
+# Check built .app
+ls -la build-standalone/
+
+# Create DMG installer (optional)
+# Note: Requires Node.js and appdmg package
+./create-dmg-standalone.sh
+
+# Generated DMG
+ls -la PlayCover-Manager-*-Standalone.dmg
 ```
 
 ### Initial Setup

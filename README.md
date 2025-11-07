@@ -120,7 +120,7 @@ PlayCover Manager (CLI版) は、PlayCover で実行する iOS アプリのデ�
 - PlayCover 3.0 以降
 - 外部ストレージ（APFS 対応）
 
-### インストール方法: ソースコードから実行
+### インストール方法 1: ソースコードから直接実行（推奨）
 
 **注意:** GUI版の使用を強く推奨します。CLI版はコマンドライン操作に慣れたユーザー向けです。
 
@@ -129,34 +129,34 @@ PlayCover Manager (CLI版) は、PlayCover で実行する iOS アプリのデ�
 git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
-# 実行権限を付与
-chmod +x main.sh
-
-# 起動
-./main.sh
+# 起動（実行権限は自動的に付与されます）
+./playcover-manager.command
 ```
 
-### インストール方法3: 自分でビルド
+### インストール方法 2: .appバンドルとしてビルド（配布用）
+
+CLI版を配布可能な.appバンドルとしてパッケージ化します。**注意: これはGUI版とは無関係です。**
 
 ```bash
 # リポジトリをクローン
 git clone https://github.com/HEHEX8/PlayCoverManager.git
 cd PlayCoverManager
 
-# **重要**: 最初にアイコンを生成（macOS上で実行）
+# アイコンを生成（macOS上で実行、オプション）
 ./create-icon.sh
 
-# 【推奨】Standalone版アプリをビルド（独立プロセス）
+# Standalone版アプリをビルド（ターミナルウィンドウで動作するCLI）
 ./build-app-standalone.sh
 
-# または、Terminal版アプリをビルド
-./build-app.sh
+# ビルドされた.appを確認
+ls -la build-standalone/
 
 # DMGインストーラーを作成（オプション）
 # 注意: Node.jsとappdmgパッケージが必要
-./create-dmg-background-simple.sh  # 背景画像を生成
-./create-dmg-standalone.sh         # Standalone版のDMGを作成
-# または
+./create-dmg-standalone.sh
+
+# 生成されたDMG
+ls -la PlayCover-Manager-*-Standalone.dmg
 ./create-dmg-appdmg.sh             # Terminal版のDMGを作成
 
 # ビルドされたアプリをインストール
