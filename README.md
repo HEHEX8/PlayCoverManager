@@ -33,16 +33,51 @@
 - 📊 **視覚的なフィードバック** - プログレスバーやアニメーション
 - 🚀 **ワンクリック操作** - すべての機能がGUIから実行可能
 
-#### プロジェクト関係：
-```
-PlayCover Manager (CLI版)          PlayCover Manager GUI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-9,000+ lines Zsh scripts     →     SwiftUI Native App
-Command-line Interface       →     Graphical Interface
-Shell Script Architecture    →     Modern Swift Architecture
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        親プロジェクト        →        超進化版
-```
+#### 🔄 プロジェクト関係と実装の違い：
+
+| 項目 | CLI版（このリポジトリ） | GUI版（超進化版） |
+|------|----------------------|-----------------|
+| **言語** | Zsh (Shell Script) | Swift |
+| **フレームワーク** | - | SwiftUI |
+| **UI** | Terminal（テキストベース） | ネイティブGUI |
+| **コード量** | 9,000+ 行 | 完全再実装 |
+| **アーキテクチャ** | 8モジュール構成（シェルスクリプト） | MVVM + Swift Concurrency |
+| **データ永続化** | ファイルシステム | UserDefaults + CoreData候補 |
+| **並行処理** | サブプロセス | async/await + Actor |
+| **エラーハンドリング** | exit code + trap | Swift Error Protocol |
+| **依存関係** | システムコマンド（diskutil, rsync等） | Foundation + AppKit/SwiftUI |
+| **配布形式** | .command ファイル | .app バンドル |
+| **互換性** | ❌ **なし**（完全に独立した実装） | ❌ **なし**（完全に独立した実装） |
+
+> **重要**: CLI版とGUI版は**実装レベルで完全に独立**しています。コードの共有や互換性は一切ありません。GUI版はCLI版の**コンセプトと機能仕様**を継承し、Swift/SwiftUIで完全にゼロから再実装したものです。
+
+#### 📋 具体的な実装の違い：
+
+**1. APFS操作の実装方法**
+- **CLI版**: `diskutil apfs addVolume`, `diskutil mount/unmount` などのシステムコマンドをシェルから実行
+- **GUI版**: `DiskArbitration.framework` と `diskutil` プロセス実行の組み合わせ、Swiftでラップ
+
+**2. データ転送の実装**
+- **CLI版**: `rsync` コマンドをパイプ経由で実行、標準出力をパースしてプログレスバー表示
+- **GUI版**: `FileManager` + `rsync` プロセス、async/awaitで進捗を監視、SwiftUIで表示
+
+**3. 状態管理**
+- **CLI版**: テキストファイルベースのマッピングファイル (`~/.playcover_volumes`)、毎回ファイルを読み書き
+- **GUI版**: SwiftのCodable、ObservableObjectパターン、リアクティブな状態管理
+
+**4. ボリューム検出**
+- **CLI版**: `diskutil list` の出力をパースして状態判定、キャッシュ機能あり
+- **GUI版**: `DiskArbitration` のコールバックでリアルタイム検出、Publisherパターン
+
+**5. エラー処理**
+- **CLI版**: `set -e` や `trap` を使った終了時クリーンアップ、標準エラー出力
+- **GUI版**: Swift Error Protocol、Result型、structured concurrency
+
+**6. UI更新**
+- **CLI版**: `clear` コマンドで画面クリア、ANSIエスケープシーケンスで色付け、完全再描画
+- **GUI版**: SwiftUIの宣言的UI、状態変化で自動更新、アニメーション
+
+**共通点**: 両バージョンとも、APFS操作の根本的なロジック（外部ボリューム作成、データ転送、シンボリックリンク管理）は同じコンセプトです。
 
 **GUI版を強く推奨します。** このCLI版は、コマンドライン環境を好むユーザーや、元の実装を学びたい開発者向けに保守されています。
 

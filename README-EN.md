@@ -33,16 +33,51 @@ English | [日本語](README.md)
 - 📊 **Visual Feedback** - Progress bars and animations
 - 🚀 **One-Click Operations** - All features accessible from GUI
 
-#### Project Relationship:
-```
-PlayCover Manager (CLI)          PlayCover Manager GUI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-9,000+ lines Zsh scripts     →     SwiftUI Native App
-Command-line Interface       →     Graphical Interface
-Shell Script Architecture    →     Modern Swift Architecture
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      Parent Project         →      Super-evolved Version
-```
+#### 🔄 Project Relationship and Implementation Differences:
+
+| Aspect | CLI Version (This Repository) | GUI Version (Super-evolved) |
+|--------|------------------------------|----------------------------|
+| **Language** | Zsh (Shell Script) | Swift |
+| **Framework** | - | SwiftUI |
+| **UI** | Terminal (Text-based) | Native GUI |
+| **Code Size** | 9,000+ lines | Complete reimplementation |
+| **Architecture** | 8-module structure (Shell scripts) | MVVM + Swift Concurrency |
+| **Data Persistence** | File system | UserDefaults + CoreData candidate |
+| **Concurrency** | Subprocesses | async/await + Actor |
+| **Error Handling** | exit code + trap | Swift Error Protocol |
+| **Dependencies** | System commands (diskutil, rsync, etc.) | Foundation + AppKit/SwiftUI |
+| **Distribution** | .command file | .app bundle |
+| **Compatibility** | ❌ **None** (Completely independent) | ❌ **None** (Completely independent) |
+
+> **Important**: CLI and GUI versions are **completely independent at the implementation level**. There is no code sharing or compatibility. The GUI version inherits the **concept and feature specifications** of the CLI version and is completely reimplemented from scratch in Swift/SwiftUI.
+
+#### 📋 Detailed Implementation Differences:
+
+**1. APFS Operations**
+- **CLI Version**: Execute system commands like `diskutil apfs addVolume`, `diskutil mount/unmount` from shell
+- **GUI Version**: Combination of `DiskArbitration.framework` and `diskutil` process execution, wrapped in Swift
+
+**2. Data Transfer**
+- **CLI Version**: Execute `rsync` via pipe, parse stdout for progress bar display
+- **GUI Version**: `FileManager` + `rsync` process, monitor progress with async/await, display in SwiftUI
+
+**3. State Management**
+- **CLI Version**: Text-based mapping file (`~/.playcover_volumes`), read/write on each operation
+- **GUI Version**: Swift Codable, ObservableObject pattern, reactive state management
+
+**4. Volume Detection**
+- **CLI Version**: Parse `diskutil list` output for state determination, with caching
+- **GUI Version**: Real-time detection via `DiskArbitration` callbacks, Publisher pattern
+
+**5. Error Handling**
+- **CLI Version**: Exit-time cleanup with `set -e` and `trap`, stderr output
+- **GUI Version**: Swift Error Protocol, Result type, structured concurrency
+
+**6. UI Updates**
+- **CLI Version**: Clear screen with `clear`, ANSI escape sequences for colors, complete redraw
+- **GUI Version**: SwiftUI declarative UI, automatic updates on state changes, animations
+
+**Common Ground**: Both versions share the same fundamental APFS operation logic (external volume creation, data transfer, symbolic link management).
 
 **The GUI version is strongly recommended.** This CLI version is maintained for users who prefer command-line interfaces or developers interested in the original implementation.
 
