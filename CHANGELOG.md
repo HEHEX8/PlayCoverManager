@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **CLI版への特化**: GUI関連コードを完全削除し、純粋なCLI実装に特化
-  - 完全な上位互換版として[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)を別リポジトリで開発
+  - このCLI版（9,000+行のZshスクリプト）をベースに、完全な上位互換版として[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)を別リポジトリで開発
+  - GUI版は親プロジェクトであるこのCLI版の全機能を継承し、SwiftUIネイティブアプリとして再実装した超進化版
   - 削除されたGUI関連ファイル:
     - ビルドスクリプト: `build-app*.sh`, `create-dmg*.sh`, `create-icon.sh`
     - ドキュメント: `PLATYPUS_GUIDE.md`, `ICON_GUIDE.md`, `STANDALONE_BUILD.md`, `TESTING_STANDALONE.md`

@@ -9,6 +9,8 @@
 
 **APFS Volume Management Tool for PlayCover - Command Line Interface**
 
+🌟 **[GUI版（超進化版）はこちら](https://github.com/HEHEX8/PlayCoverManagerGUI)** 🌟
+
 [English](README-EN.md) | 日本語
 
 </div>
@@ -17,18 +19,32 @@
 
 ## 🎯 GUI版が利用可能です！
 
-**完全な上位互換版として GUI 版を開発しました：**
+**このCLI版をベースに、完全な上位互換版として GUI 版を開発しました：**
 
 ### 🌟 [PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)
 
-GUI版の特徴：
+> **プロジェクトの進化**: このCLI版（9,000+行のZshスクリプト）の全機能を継承し、SwiftUIネイティブアプリとして完全に再実装した超進化版です。
+
+#### GUI版の特徴：
 - 🖥️ **ネイティブSwiftUI実装** - モダンなmacOSアプリ体験
 - 🎨 **直感的なUI** - ビジュアルで分かりやすい操作
 - ⚡ **高速動作** - CLI版と同等の性能
 - 🔄 **リアルタイム更新** - 状態変化を即座に反映
 - 📊 **視覚的なフィードバック** - プログレスバーやアニメーション
+- 🚀 **ワンクリック操作** - すべての機能がGUIから実行可能
 
-**GUI版を強く推奨します。** このCLI版は、コマンドラインを好むユーザー向けに保守されています。
+#### プロジェクト関係：
+```
+PlayCover Manager (CLI版)          PlayCover Manager GUI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9,000+ lines Zsh scripts     →     SwiftUI Native App
+Command-line Interface       →     Graphical Interface
+Shell Script Architecture    →     Modern Swift Architecture
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        親プロジェクト        →        超進化版
+```
+
+**GUI版を強く推奨します。** このCLI版は、コマンドライン環境を好むユーザーや、元の実装を学びたい開発者向けに保守されています。
 
 ---
 

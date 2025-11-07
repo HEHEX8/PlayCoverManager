@@ -7,7 +7,9 @@
 ![Architecture](https://img.shields.io/badge/architecture-Apple%20Silicon-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-**APFS Volume Management Tool for PlayCover**
+**APFS Volume Management Tool for PlayCover - Command Line Interface**
+
+🌟 **[GUI Version (Super-evolved) Available Here](https://github.com/HEHEX8/PlayCoverManagerGUI)** 🌟
 
 English | [日本語](README.md)
 
@@ -17,18 +19,32 @@ English | [日本語](README.md)
 
 ## 🎯 GUI Version Available!
 
-**A fully-featured superior GUI version has been developed:**
+**Based on this CLI version, a fully-featured superior GUI version has been developed:**
 
 ### 🌟 [PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)
 
-GUI Version Features:
+> **Project Evolution**: This is a complete reimplementation of all features from this CLI version (9,000+ lines of Zsh scripts) as a native SwiftUI application - a super-evolved version.
+
+#### GUI Version Features:
 - 🖥️ **Native SwiftUI Implementation** - Modern macOS app experience
 - 🎨 **Intuitive Interface** - Visual and easy-to-understand operations
 - ⚡ **High Performance** - Same performance as CLI version
 - 🔄 **Real-time Updates** - Instant state change reflection
 - 📊 **Visual Feedback** - Progress bars and animations
+- 🚀 **One-Click Operations** - All features accessible from GUI
 
-**The GUI version is strongly recommended.** This CLI version is maintained for users who prefer command-line interfaces.
+#### Project Relationship:
+```
+PlayCover Manager (CLI)          PlayCover Manager GUI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9,000+ lines Zsh scripts     →     SwiftUI Native App
+Command-line Interface       →     Graphical Interface
+Shell Script Architecture    →     Modern Swift Architecture
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      Parent Project         →      Super-evolved Version
+```
+
+**The GUI version is strongly recommended.** This CLI version is maintained for users who prefer command-line interfaces or developers interested in the original implementation.
 
 ---
 

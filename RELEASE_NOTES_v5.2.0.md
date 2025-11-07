@@ -2,7 +2,9 @@
 
 ## 📋 v5.1.0 → v5.2.0 の変更内容
 
-> **注意**: v5.2.0以降、CLI版として特化しました。完全な上位互換版である[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)が別リポジトリで利用可能です。
+> **注意**: v5.2.0以降、CLI版として特化しました。このCLI版をベースに、完全な上位互換版である[PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)が別リポジトリで利用可能です。
+> 
+> **プロジェクト関係**: GUI版は、この親プロジェクト（CLI版、9,000+行のZshスクリプト）の全機能を継承し、SwiftUIネイティブアプリとして完全に再実装した超進化版です。
 
 ---
 
