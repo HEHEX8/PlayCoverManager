@@ -19,7 +19,7 @@
 
 ## 🎯 GUI版が利用可能です！
 
-**このCLI版をベースに、完全な上位互換版として GUI 版を開発しました：**
+**このCLI版をベースに、完全な上位版として GUI 版を開発しました：**
 
 ### 🌟 [PlayCover Manager GUI](https://github.com/HEHEX8/PlayCoverManagerGUI)
 
